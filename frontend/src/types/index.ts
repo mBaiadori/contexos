@@ -618,6 +618,8 @@ export interface VersionNode {
   behind: number;
   isMerged?: boolean;
   mergedDate?: string;
+  mergeCommitHash?: string;
+  commits?: GitCommitInfo[];
   baseHash?: string;
   baseDate?: string;
   hasStash?: boolean;

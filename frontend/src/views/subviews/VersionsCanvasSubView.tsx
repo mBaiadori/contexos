@@ -860,8 +860,58 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
               )}
             </div>
 
+            {/* LISTA DE MARCOS / COMMITS DA VERSÃO ("Clica commits no detalhe") */}
+            {selectedNode.commits && selectedNode.commits.length > 0 && (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: "6px",
+                  background: "var(--bg-main)",
+                  border: "1px solid var(--border-color)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-heading)" }}>
+                    Marcos desta Versão ({selectedNode.commits.length})
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "160px", overflowY: "auto" }}>
+                  {selectedNode.commits.map((c) => (
+                    <div
+                      key={c.hash}
+                      onClick={() => handleSelectCommit(c)}
+                      style={{
+                        padding: "6px 8px",
+                        borderRadius: "4px",
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border-color)",
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "2px",
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2563eb")}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-color)")}
+                    >
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-heading)" }}>
+                        {cleanCommitTitle(c.message)}
+                      </div>
+                      <div style={{ fontSize: "10px", color: "var(--text-secondary)", display: "flex", justifyContent: "space-between" }}>
+                        <span>{c.author}</span>
+                        <span>{c.shortHash}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* ÚLTIMO MARCO */}
-            {selectedNode.lastCommit && (
+            {selectedNode.lastCommit && (!selectedNode.commits || selectedNode.commits.length === 0) && (
               <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
                 <strong>Último marco:</strong> {cleanCommitTitle(selectedNode.lastCommit.message)} ({selectedNode.lastCommit.author})
               </div>

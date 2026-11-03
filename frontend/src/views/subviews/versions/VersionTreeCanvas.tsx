@@ -10,165 +10,70 @@ export interface VersionTreeCanvasProps {
   onSelectCommit?: (commit: GitCommitInfo) => void;
 }
 
-interface VerticalBranchLayoutItem {
-  node: VersionNode;
-  level: number;
-  side: -1 | 1; // -1 para Esquerda, 1 para Direita
-  branchX: number;
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-  labelTopY: number;
-  mergeY: number;
-  isMerged: boolean;
-  color: string;
-  mergedDate?: string;
+export interface BranchForkCommitItem {
+  id: string;
+  commit: GitCommitInfo;
+  label: string;
+  shortHash: string;
+  author: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  exitX: number;
+  exitY: number;
+  childBranchNames: string[];
 }
 
-// Conector ortogonal vertical com quinas arredondadas a 90 graus (estilo Mind Map vertical Sul -> Norte)
-function getVerticalMindMapPath(
+export interface SankeyBranchLayoutItem {
+  node: VersionNode;
+  level: number;
+  side: -1 | 1; // -1 para Esquerda (Ímpar), 1 para Direita (Par)
+  cardX: number;
+  cardY: number;
+  cardWidth: number;
+  cardHeight: number;
+  entryX: number;
+  entryY: number;
+  exitX: number;
+  exitY: number;
+  sourceX: number;
+  sourceY: number;
+  path: string;
+  hasIntermediateCommitNode: boolean;
+  intermediateCommitPos?: { x: number; y: number };
+  forkCommitLabels?: BranchForkCommitItem[];
+  color: string;
+  isMerged: boolean;
+  mergedDate?: string;
+  mergeCommitHash?: string;
+  commitCount: number;
+}
+
+export interface TrunkCommitItem extends GitCommitInfo {
+  y: number;
+  isMergeCommit: boolean;
+  mergedBranchName?: string;
+}
+
+// Conector horizontal suave estilo Sankey (Curva cúbica de Bézier entre colunas)
+function getSankeyHorizontalPath(
   startX: number,
   startY: number,
   endX: number,
   endY: number,
-  radius = 6,
 ): string {
   if (Math.abs(startX - endX) < 1) {
     return `M ${startX} ${startY} L ${endX} ${endY}`;
   }
 
-  const isGoingUp = endY < startY;
-  const dy = Math.abs(endY - startY);
-  const dirY = isGoingUp ? -1 : 1;
-  const cornerOffset = Math.min(Math.max(dy * 0.35, 8), 20);
-  const cornerY = startY + dirY * cornerOffset;
-  const r = Math.min(radius, Math.abs(endX - startX) / 2, dy / 2);
-  const isGoingRight = endX > startX;
+  const dx = endX - startX;
+  const cp1x = startX + dx * 0.45;
+  const cp1y = startY;
+  const cp2x = startX + dx * 0.55;
+  const cp2y = endY;
 
-  if (isGoingUp) {
-    // Crescendo de baixo para cima (Sul para Norte)
-    if (isGoingRight) {
-      return (
-        `M ${startX} ${startY} ` +
-        `L ${startX} ${cornerY + r} ` +
-        `Q ${startX} ${cornerY}, ${startX + r} ${cornerY} ` +
-        `L ${endX - r} ${cornerY} ` +
-        `Q ${endX} ${cornerY}, ${endX} ${cornerY - r} ` +
-        `L ${endX} ${endY}`
-      );
-    } else {
-      return (
-        `M ${startX} ${startY} ` +
-        `L ${startX} ${cornerY + r} ` +
-        `Q ${startX} ${cornerY}, ${startX - r} ${cornerY} ` +
-        `L ${endX + r} ${cornerY} ` +
-        `Q ${endX} ${cornerY}, ${endX} ${cornerY - r} ` +
-        `L ${endX} ${endY}`
-      );
-    }
-  } else {
-    // Caso padrão descendo
-    if (isGoingRight) {
-      return (
-        `M ${startX} ${startY} ` +
-        `L ${startX} ${cornerY - r} ` +
-        `Q ${startX} ${cornerY}, ${startX + r} ${cornerY} ` +
-        `L ${endX - r} ${cornerY} ` +
-        `Q ${endX} ${cornerY}, ${endX} ${cornerY + r} ` +
-        `L ${endX} ${endY}`
-      );
-    } else {
-      return (
-        `M ${startX} ${startY} ` +
-        `L ${startX} ${cornerY - r} ` +
-        `Q ${startX} ${cornerY}, ${startX - r} ${cornerY} ` +
-        `L ${endX + r} ${cornerY} ` +
-        `Q ${endX} ${cornerY}, ${endX} ${cornerY + r} ` +
-        `L ${endX} ${endY}`
-      );
-    }
-  }
-}
-
-// Retorno ortogonal de Merge para a linha central (Sul -> Norte)
-function getVerticalMergePath(
-  endX: number,
-  endY: number,
-  trunkX: number,
-  mergeY: number,
-  radius = 6,
-): string {
-  if (Math.abs(endX - trunkX) < 1) {
-    return `M ${endX} ${endY} L ${trunkX} ${mergeY}`;
-  }
-
-  const isGoingUp = mergeY < endY;
-  const dy = Math.abs(mergeY - endY);
-  const dirY = isGoingUp ? -1 : 1;
-  const cornerOffset = Math.min(Math.max(dy * 0.5, 8), 18);
-  const cornerY = endY + dirY * cornerOffset;
-  const r = Math.min(radius, Math.abs(trunkX - endX) / 2, dy / 2);
-  const isGoingLeftToCenter = endX > trunkX;
-
-  if (isGoingUp) {
-    // Subindo de volta para o tronco central
-    if (isGoingLeftToCenter) {
-      return (
-        `M ${endX} ${endY} ` +
-        `L ${endX} ${cornerY + r} ` +
-        `Q ${endX} ${cornerY}, ${endX - r} ${cornerY} ` +
-        `L ${trunkX + r} ${cornerY} ` +
-        `Q ${trunkX} ${cornerY}, ${trunkX} ${cornerY - r} ` +
-        `L ${trunkX} ${mergeY}`
-      );
-    } else {
-      return (
-        `M ${endX} ${endY} ` +
-        `L ${endX} ${cornerY + r} ` +
-        `Q ${endX} ${cornerY}, ${endX + r} ${cornerY} ` +
-        `L ${trunkX - r} ${cornerY} ` +
-        `Q ${trunkX} ${cornerY}, ${trunkX} ${cornerY - r} ` +
-        `L ${trunkX} ${mergeY}`
-      );
-    }
-  } else {
-    // Caso padrão descendo
-    if (isGoingLeftToCenter) {
-      return (
-        `M ${endX} ${endY} ` +
-        `L ${endX} ${cornerY - r} ` +
-        `Q ${endX} ${cornerY}, ${endX - r} ${cornerY} ` +
-        `L ${trunkX + r} ${cornerY} ` +
-        `Q ${trunkX} ${cornerY}, ${trunkX} ${cornerY + r} ` +
-        `L ${trunkX} ${mergeY}`
-      );
-    } else {
-      return (
-        `M ${endX} ${endY} ` +
-        `L ${endX} ${cornerY - r} ` +
-        `Q ${endX} ${cornerY}, ${endX + r} ${cornerY} ` +
-        `L ${trunkX - r} ${cornerY} ` +
-        `Q ${trunkX} ${cornerY}, ${trunkX} ${cornerY + r} ` +
-        `L ${trunkX} ${mergeY}`
-      );
-    }
-  }
-}
-
-function formatMergeDate(dateStr?: string): string {
-  if (!dateStr) return "";
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return "";
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return `${day}/${month} ${hours}:${minutes}`;
-  } catch {
-    return "";
-  }
+  return `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
 }
 
 export function cleanCommitTitle(text?: string): string {
@@ -188,6 +93,19 @@ export function cleanCommitTitle(text?: string): string {
   );
 }
 
+// Dimensões Padrão Unificadas (Design Moderno & Compacto com Altura Dinâmica de Níveis)
+const CARD_WIDTH = 152;
+const CARD_HEIGHT = 28;
+const BASE_LEAF_HEIGHT = 46; // Altura base para nós folha (card 28px + respiro)
+const COMMIT_LABEL_WIDTH = 144; // Largura do card/label de commit
+const COMMIT_LABEL_HEIGHT = 22; // Altura do label de commit
+const COMMIT_LABEL_GAP = 6; // Espaço vertical entre múltiplos labels de commit
+const COL_STEP = CARD_WIDTH + 44; // Distância horizontal ampla entre colunas de níveis
+const BASE_OFFSET = 36; // Distância do tronco até a coluna de Nível 1
+const COMMIT_STEP_EMPTY = 26; // Espaço vertical mínimo entre commits do tronco
+const COMMIT_RADIUS = 3.5;
+const NODE_RADIUS = 5.5;
+
 export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
   nodes,
   mainCommits = [],
@@ -196,9 +114,9 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
   onSwitchNode,
   onSelectCommit,
 }) => {
-  // Controle de Pan e Zoom
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 380, y: 80 });
+  // Zoom inicial dobrado conforme solicitação do usuário (2x)
+  const [zoom, setZoom] = useState(2);
+  const [pan, setPan] = useState({ x: 420, y: 80 });
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredNodeName, setHoveredNodeName] = useState<string | null>(null);
   const [hoveredCommitHash, setHoveredCommitHash] = useState<string | null>(
@@ -207,9 +125,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
   const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(
     null,
   );
-  const [scaleMode, setScaleMode] = useState<"compact" | "normal" | "wide">(
-    "normal",
-  );
+
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -234,21 +150,17 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
     setIsDragging(false);
   };
 
-  // Scroll do mouse: sobe e desce verticalmente por padrão. Com Ctrl/Meta faz zoom, com Shift faz horizontal
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) {
-      // Zoom com Ctrl/Cmd ou pinch do trackpad
-      const factor = e.deltaY < 0 ? 1.04 : 0.96;
-      setZoom((prev) => Math.min(Math.max(prev * factor, 0.35), 2.5));
+      const factor = e.deltaY < 0 ? 1.05 : 0.95;
+      setZoom((prev) => Math.min(Math.max(prev * factor, 0.4), 4.0));
     } else if (e.shiftKey) {
-      // Pan horizontal com Shift
       setPan((prev) => ({
         ...prev,
         x: prev.x - e.deltaY,
       }));
     } else {
-      // Pan vertical padrão: sobe e desce o Canvas confortavelmente
       setPan((prev) => ({
         ...prev,
         y: prev.y - e.deltaY,
@@ -256,51 +168,14 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
     }
   };
 
-  // Escala sincronizada: fontes compactas, raios e espaçamentos equilibrados
-  const scaleProps = useMemo(() => {
-    switch (scaleMode) {
-      case "compact":
-        return {
-          stepY: 38,
-          levelWidth: 65,
-          fontSize: 7,
-          labelHeight: 12,
-          nodeRadius: 4.5,
-          commitRadius: 2.8,
-          dateFontSize: 5,
-        };
-      case "wide":
-        return {
-          stepY: 66,
-          levelWidth: 105,
-          fontSize: 8.5,
-          labelHeight: 16,
-          nodeRadius: 6.5,
-          commitRadius: 4,
-          dateFontSize: 6.5,
-        };
-      case "normal":
-      default:
-        return {
-          stepY: 52,
-          levelWidth: 85,
-          fontSize: 7.5,
-          labelHeight: 14,
-          nodeRadius: 5.5,
-          commitRadius: 3.2,
-          dateFontSize: 5.6,
-        };
-    }
-  }, [scaleMode]);
-
-  // Layout Vertical da Árvore: Orientação Sul -> Norte (de Baixo para Cima como uma árvore real)
+  // Layout Estruturado em Colunas de Nível com Altura Dinâmica de Sub-árvore
   const layout = useMemo(() => {
     if (!nodes || nodes.length === 0) {
       return {
         trunkX: 0,
-        trunkBaseY: 500,
+        trunkBaseY: 300,
         trunkTopY: 50,
-        totalHeight: 600,
+        totalHeight: 350,
         defaultNode: null,
         branches: [],
         trunkCommits: [],
@@ -310,300 +185,675 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
     const defaultNode = nodes.find((n) => n.isDefault) || nodes[0];
     const otherNodes = nodes.filter((n) => n.name !== defaultNode.name);
 
-    // Mapeamento de níveis (gerações)
+    // 1. Mapeamento de hierarquia e níveis com sanitização estrita de aciclicidade (DAG)
+    const rawParentMap = new Map<string, string>();
+    nodes.forEach((n) => {
+      if (n.name === defaultNode.name) {
+        rawParentMap.set(n.name, "");
+        return;
+      }
+      const rawParent = n.parentBranch;
+      const validParent =
+        rawParent &&
+        rawParent !== n.name &&
+        nodes.some((x) => x.name === rawParent)
+          ? rawParent
+          : defaultNode.name;
+      rawParentMap.set(n.name, validParent);
+    });
+
+    // Sanitiza parentMap garantindo que todo caminho convirja para defaultNode sem ciclos
+    const parentMap = new Map<string, string>();
+    parentMap.set(defaultNode.name, "");
+
+    nodes.forEach((n) => {
+      if (n.name === defaultNode.name) return;
+      const visited = new Set<string>([n.name]);
+      let curr = rawParentMap.get(n.name) || defaultNode.name;
+      let safeParent = curr;
+
+      while (curr && curr !== defaultNode.name) {
+        if (visited.has(curr)) {
+          safeParent = defaultNode.name;
+          break;
+        }
+        visited.add(curr);
+        curr = rawParentMap.get(curr) || defaultNode.name;
+      }
+      parentMap.set(n.name, safeParent);
+    });
+
+    // Constrói childrenMap a partir do parentMap garantidamente acíclico
+    const childrenMap = new Map<string, string[]>();
+    nodes.forEach((n) => {
+      if (n.name === defaultNode.name) return;
+      const p = parentMap.get(n.name) || defaultNode.name;
+      const curList = childrenMap.get(p) || [];
+      curList.push(n.name);
+      childrenMap.set(p, curList);
+    });
+
+    // Cálculo iterativo de níveis de nós com memoização e proteção contra estouro de pilha
     const nodeLevelMap = new Map<string, number>();
     nodeLevelMap.set(defaultNode.name, 0);
 
     function getNodeLevel(name: string): number {
       if (nodeLevelMap.has(name)) return nodeLevelMap.get(name)!;
-      const n = nodes.find((x) => x.name === name);
-      if (!n || !n.parentBranch || n.parentBranch === defaultNode.name) {
-        nodeLevelMap.set(name, 1);
-        return 1;
+
+      const visited = new Set<string>([name]);
+      const path: string[] = [name];
+      let curr = parentMap.get(name);
+
+      while (curr && curr !== defaultNode.name && !nodeLevelMap.has(curr)) {
+        if (visited.has(curr)) {
+          curr = defaultNode.name;
+          break;
+        }
+        visited.add(curr);
+        path.push(curr);
+        curr = parentMap.get(curr);
       }
-      const lvl = 1 + getNodeLevel(n.parentBranch);
-      nodeLevelMap.set(name, lvl);
-      return lvl;
+
+      let baseLevel =
+        curr && nodeLevelMap.has(curr) ? nodeLevelMap.get(curr)! : 0;
+
+      for (let i = path.length - 1; i >= 0; i--) {
+        baseLevel += 1;
+        nodeLevelMap.set(path[i], baseLevel);
+      }
+
+      return nodeLevelMap.get(name) || 1;
     }
+    nodes.forEach((n) => getNodeLevel(n.name));
 
-    // Ordenação cronológica para crescimento de baixo para cima
-    const sortedOtherNodes = [...otherNodes].sort((a, b) => {
-      const timeA = a.baseDate
-        ? new Date(a.baseDate).getTime()
-        : a.lastCommit?.date
-          ? new Date(a.lastCommit.date).getTime()
-          : 0;
-      const timeB = b.baseDate
-        ? new Date(b.baseDate).getTime()
-        : b.lastCommit?.date
-          ? new Date(b.lastCommit.date).getTime()
-          : 0;
-      if (timeA && timeB && timeA !== timeB) return timeA - timeB;
-      return a.name.localeCompare(b.name);
-    });
+    // 2. Mapeamento dos Commits de Origem/Bifurcação e Cálculo da Altura Dinâmica de Níveis
+    function getForkCommitsForNode(node: VersionNode): BranchForkCommitItem[] {
+      const childrenNames = childrenMap.get(node.name) || [];
+      if (childrenNames.length === 0) return [];
 
-    const TRUNK_X = 0;
-    const directBranches = sortedOtherNodes.filter((b) => {
-      const parent = b.parentBranch;
-      return !parent || parent === defaultNode.name;
-    });
+      const childrenNodes = childrenNames
+        .map((cn) => nodes.find((n) => n.name === cn))
+        .filter((n): n is VersionNode => Boolean(n));
 
-    const validMainCommits = (mainCommits || []).slice(0, 30);
-    const totalSteps = Math.max(
-      directBranches.length + 1,
-      Math.ceil(validMainCommits.length * 0.75) + 1,
-      6,
-    );
-    const totalHeight = totalSteps * scaleProps.stepY + 160;
-    const trunkBaseY = totalHeight - 60; // Sul (raiz/base da árvore)
+      const candidateCommits: GitCommitInfo[] = [];
+      if (node.commits && node.commits.length > 0) {
+        candidateCommits.push(...node.commits);
+      } else if (node.lastCommit) {
+        candidateCommits.push(node.lastCommit);
+      }
 
-    // Posições dos commits da Principal com espaçamento mínimo garantido para evitar sobreposição de datas
-    const commitStep = Math.max(scaleProps.stepY * 0.72, 20);
-    const trunkCommits = validMainCommits.map((c, i) => {
-      const fromBaseIndex = validMainCommits.length - i;
-      return {
-        ...c,
-        y: trunkBaseY - fromBaseIndex * commitStep - 20,
-      };
-    });
+      if (candidateCommits.length === 0) {
+        candidateCommits.push({
+          hash: node.baseHash || node.name,
+          shortHash: (node.baseHash || node.name).slice(0, 7),
+          author: "Git",
+          date: node.baseDate || "",
+          message: `Origem de ${node.name}`,
+        });
+      }
 
-    // Mapa de posições salvas dos nós
-    const branchPosMap = new Map<
-      string,
-      { branchX: number; endY: number; labelTopY: number; side: -1 | 1 }
-    >();
-    branchPosMap.set(defaultNode.name, {
-      branchX: TRUNK_X,
-      endY: trunkBaseY,
-      labelTopY: trunkBaseY - scaleProps.labelHeight - 6,
-      side: 1,
-    });
+      // Mapeamento commit -> filhas que nasceram dele
+      const mapping = new Map<string, { commit: GitCommitInfo; children: string[] }>();
 
-    const branches: VerticalBranchLayoutItem[] = [];
-    let directBranchCount = 0;
+      childrenNodes.forEach((child, idx) => {
+        let matched: GitCommitInfo | undefined = undefined;
 
-    sortedOtherNodes.forEach((bNode) => {
-      const level = getNodeLevel(bNode.name);
-      const parentName = bNode.parentBranch;
-      const parentPos = parentName ? branchPosMap.get(parentName) : null;
-      const isSubBranch = Boolean(parentPos && parentName !== defaultNode.name);
-
-      let side: -1 | 1;
-      let branchX: number;
-      let startX: number;
-      let startY: number;
-      let branchLength = scaleProps.stepY * 0.85;
-
-      if (isSubBranch && parentPos) {
-        // Galho derivado de outro galho:
-        // Mantém o mesmo lado do pai (esquerda ou direita)
-        side = parentPos.side;
-        startX = parentPos.branchX;
-        startY = parentPos.endY; // Nasce diretamente da bolinha da versão pai
-
-        // Calcular a largura da etiqueta do pai para garantir que o nível filho sempre fique além dela
-        const parentLabelWidth = Math.max(
-          (parentName?.length || 10) * (scaleProps.fontSize * 0.58) + 12,
-          38,
-        );
-        const minLevelOffset = parentLabelWidth + scaleProps.nodeRadius * 2 + 18;
-
-        // Identifica irmãos (outros galhos derivados deste mesmo pai já posicionados)
-        const siblingBranches = branches.filter((br) => br.node.parentBranch === parentName);
-        const siblingIndex = siblingBranches.length;
-
-        // Afastamento horizontal: garante que fique além da etiqueta do pai + pequeno escalonamento por irmão
-        const horizontalOffset =
-          Math.max(minLevelOffset, scaleProps.levelWidth) + siblingIndex * 16;
-        branchX = parentPos.branchX + side * horizontalOffset;
-
-        // Escalonamento vertical por irmão para que múltiplos galhos do mesmo nó pai nunca se sobreponham
-        if (siblingIndex > 0) {
-          branchLength += siblingIndex * (scaleProps.stepY * 0.75 + 10);
-        }
-      } else {
-        // Galho direto do tronco Principal (Nível 1):
-        // 1. Tentar localizar o commit exato no tronco (pelo baseHash ou pelo commit de origem)
-        let baseCommit: (typeof trunkCommits)[0] | undefined;
-        if (bNode.baseHash) {
-          const bh = bNode.baseHash.toLowerCase();
-          baseCommit = trunkCommits.find((c) => {
+        // 1. Tenta por baseHash exato ou prefixo
+        if (child.baseHash) {
+          const bh = child.baseHash.toLowerCase();
+          matched = candidateCommits.find((c) => {
             const ch = c.hash.toLowerCase();
             const cs = (c.shortHash || "").toLowerCase();
-            return (
-              ch === bh ||
-              cs === bh ||
-              ch.startsWith(bh) ||
-              bh.startsWith(ch) ||
-              (cs && bh.startsWith(cs))
-            );
+            return ch === bh || cs === bh || ch.startsWith(bh) || bh.startsWith(ch);
           });
         }
 
-        // 2. Se for um rascunho sem commits próprios (ahead === 0) ou se ainda não achou, checar pelo último commit dele
-        if (
-          !baseCommit &&
-          (bNode.ahead === 0 || bNode.type === "draft") &&
-          bNode.lastCommit?.hash
-        ) {
-          const lh = bNode.lastCommit.hash.toLowerCase();
-          const ls = (bNode.lastCommit.shortHash || "").toLowerCase();
-          baseCommit = trunkCommits.find((c) => {
-            const ch = c.hash.toLowerCase();
-            const cs = (c.shortHash || "").toLowerCase();
-            return (
-              ch === lh ||
-              cs === lh ||
-              (ls && (ch === ls || cs === ls || ch.startsWith(ls))) ||
-              ch.startsWith(lh) ||
-              lh.startsWith(ch) ||
-              (cs && lh.startsWith(cs))
-            );
-          });
-        }
-
-        // 3. Se ainda não achou por hash mas temos baseDate, aproximar pelo commit mais próximo no tempo
-        if (!baseCommit && bNode.baseDate) {
-          const bTime = new Date(bNode.baseDate).getTime();
+        // 2. Tenta por baseDate aproximada
+        if (!matched && child.baseDate) {
+          const bTime = new Date(child.baseDate).getTime();
           if (!isNaN(bTime)) {
-            let closestCommit: (typeof trunkCommits)[0] | undefined;
             let minDiff = Infinity;
-            for (const c of trunkCommits) {
+            for (const c of candidateCommits) {
               if (c.date) {
                 const diff = Math.abs(new Date(c.date).getTime() - bTime);
                 if (diff < minDiff) {
                   minDiff = diff;
-                  closestCommit = c;
+                  matched = c;
                 }
               }
             }
-            if (closestCommit && minDiff < 180000) {
-              baseCommit = closestCommit;
-            }
           }
         }
 
-        // Se o commit de origem foi encontrado no tronco, o galho nasce exatamente nele!
-        if (baseCommit) {
-          startY = baseCommit.y;
-        } else {
-          // Fallback sequencial se o commit ancestral for mais antigo que os 30 commits exibidos
-          startY = trunkBaseY - (directBranchCount + 1) * scaleProps.stepY;
+        // 3. Fallback: se houver múltiplos commits e múltiplas filhas, distribui
+        if (!matched) {
+          const commitIdx = Math.min(idx, candidateCommits.length - 1);
+          matched = candidateCommits[commitIdx];
         }
 
-        // Alternância inteligente de lado (Direita / Esquerda) evitando colisão na mesma altura
-        const defaultSide: -1 | 1 = directBranchCount % 2 === 0 ? 1 : -1;
-        directBranchCount++;
+        const commitKey = matched.hash || matched.shortHash || `commit-${idx}`;
+        const existing = mapping.get(commitKey) || { commit: matched, children: [] };
+        existing.children.push(child.name);
+        mapping.set(commitKey, existing);
+      });
 
-        const isCollision = (s: -1 | 1, y: number, margin = 26) => {
-          return branches.some(
-            (prev) => prev.side === s && Math.abs(prev.startY - y) < margin,
-          );
-        };
+      const result: BranchForkCommitItem[] = [];
+      mapping.forEach((val) => {
+        result.push({
+          id: val.commit.hash || val.commit.shortHash,
+          commit: val.commit,
+          label: cleanCommitTitle(val.commit.message),
+          shortHash: val.commit.shortHash || (val.commit.hash ? val.commit.hash.slice(0, 7) : ""),
+          author: val.commit.author || "",
+          x: 0,
+          y: 0,
+          width: COMMIT_LABEL_WIDTH,
+          height: COMMIT_LABEL_HEIGHT,
+          exitX: 0,
+          exitY: 0,
+          childBranchNames: val.children,
+        });
+      });
 
-        if (isCollision(defaultSide, startY)) {
-          const otherSide: -1 | 1 = defaultSide === 1 ? -1 : 1;
-          side = !isCollision(otherSide, startY) ? otherSide : defaultSide;
-        } else {
-          side = defaultSide;
-        }
+      return result;
+    }
 
-        // Afastamento horizontal (lane) se houver múltiplos galhos na mesma altura e lado
-        const nearSameSideBranches = branches.filter(
-          (prev) => prev.side === side && Math.abs(prev.startY - startY) < 32,
-        );
-        const lane = 1 + nearSameSideBranches.length;
-        if (lane > 1) {
-          branchLength += (lane - 1) * (scaleProps.stepY * 0.65 + 6);
-        }
+    function getNodeSelfHeight(node: VersionNode): number {
+      const forkCount = getForkCommitsForNode(node).length;
+      if (forkCount === 0) {
+        return BASE_LEAF_HEIGHT;
+      }
+      return CARD_HEIGHT + 8 + forkCount * (COMMIT_LABEL_HEIGHT + COMMIT_LABEL_GAP) + 12;
+    }
 
-        branchX = TRUNK_X + side * lane * scaleProps.levelWidth;
-        startX = TRUNK_X;
+    const subtreeHeightMap = new Map<string, number>();
+
+    function computeSubtreeHeight(
+      name: string,
+      visited = new Set<string>(),
+    ): number {
+      if (subtreeHeightMap.has(name)) return subtreeHeightMap.get(name)!;
+      if (visited.has(name)) return BASE_LEAF_HEIGHT;
+      visited.add(name);
+
+      const node = nodes.find((n) => n.name === name);
+      const selfHeight = node ? getNodeSelfHeight(node) : BASE_LEAF_HEIGHT;
+
+      const children = childrenMap.get(name) || [];
+      if (children.length === 0) {
+        subtreeHeightMap.set(name, selfHeight);
+        return selfHeight;
       }
 
-      // Extensão vertical compacta subindo para o Norte (Sul -> Norte)
-      const endX = branchX;
-      const endY = startY - branchLength;
+      let sumChildren = 0;
+      for (const childName of children) {
+        if (!visited.has(childName)) {
+          sumChildren += computeSubtreeHeight(childName, visited);
+        }
+      }
 
-      // Ponto de retorno de merge ao tronco central mais acima (Norte)
-      let mergeY = endY - scaleProps.stepY * 0.55;
-      if (bNode.isMerged && bNode.mergedDate) {
-        const mTime = new Date(bNode.mergedDate).getTime();
-        if (!isNaN(mTime)) {
-          let closestMergeCommit: (typeof trunkCommits)[0] | undefined;
+      // Expande a altura dos outros níveis proporcionalmente para caberem com folga
+      const height = Math.max(selfHeight, sumChildren + 12);
+      subtreeHeightMap.set(name, height);
+      return height;
+    }
+    nodes.forEach((n) => computeSubtreeHeight(n.name));
+
+    // 3. Commits da linha Principal e Ancoragem das Branches de Nível 1
+    const TRUNK_X = 0;
+    const validMainCommits = (mainCommits || []).slice(0, 30);
+
+    // Mapeamento de commits de merge
+    const mergeCommitMap = new Map<string, string>(); // commitHash -> branchName
+    otherNodes.forEach((bNode) => {
+      if (bNode.isMerged) {
+        if (bNode.mergeCommitHash) {
+          mergeCommitMap.set(bNode.mergeCommitHash.toLowerCase(), bNode.name);
+        }
+      }
+    });
+
+    // Agrupar branches de Nível 1 pelo commit base de origem no tronco
+    const directBranches = otherNodes.filter((n) => getNodeLevel(n.name) === 1);
+    const commitDirectBranchesMap = new Map<string, VersionNode[]>();
+
+    directBranches.forEach((bNode) => {
+      let targetHash = "";
+      if (bNode.baseHash) {
+        const bh = bNode.baseHash.toLowerCase();
+        const found = validMainCommits.find((c) => {
+          const ch = c.hash.toLowerCase();
+          const cs = (c.shortHash || "").toLowerCase();
+          return (
+            ch === bh || cs === bh || ch.startsWith(bh) || bh.startsWith(ch)
+          );
+        });
+        if (found) targetHash = found.hash;
+      }
+      if (!targetHash && bNode.baseDate) {
+        const bTime = new Date(bNode.baseDate).getTime();
+        if (!isNaN(bTime)) {
           let minDiff = Infinity;
-          for (const c of trunkCommits) {
+          let closest = "";
+          for (const c of validMainCommits) {
             if (c.date) {
-              const diff = Math.abs(new Date(c.date).getTime() - mTime);
+              const diff = Math.abs(new Date(c.date).getTime() - bTime);
               if (diff < minDiff) {
                 minDiff = diff;
-                closestMergeCommit = c;
+                closest = c.hash;
               }
             }
           }
-          if (
-            closestMergeCommit &&
-            minDiff < 180000 &&
-            closestMergeCommit.y < endY
-          ) {
-            mergeY = closestMergeCommit.y;
-          }
+          if (closest && minDiff < 300000) targetHash = closest;
         }
       }
-
-      // Topo virtual da etiqueta (mantido para limites e cálculos de bounding box)
-      const labelTopY = endY - scaleProps.labelHeight;
-
-      // Cores semafóricas:
-      // Verde: Mergeada na Principal
-      // Laranja: Tem commits próprios e não está mergeada (ahead > 0 ou proposal)
-      // Roxo: Rascunho inicial sem commits ainda (ahead === 0)
-      let color = "#8b5cf6"; // roxo para rascunhos
-      if (bNode.isMerged) {
-        color = "#10b981"; // verde para mergeadas
-      } else if (bNode.ahead > 0 || bNode.type === "proposal") {
-        color = "#f59e0b"; // laranja para branches com commits pendentes
+      // Se não achou commit exato, ancora no commit mais antigo disponível
+      if (!targetHash && validMainCommits.length > 0) {
+        targetHash = validMainCommits[validMainCommits.length - 1].hash;
       }
-
-      branches.push({
-        node: bNode,
-        level,
-        side,
-        branchX,
-        startX,
-        startY,
-        endX,
-        endY,
-        labelTopY,
-        mergeY,
-        isMerged: Boolean(bNode.isMerged),
-        color,
-        mergedDate: bNode.mergedDate,
-      });
-
-      branchPosMap.set(bNode.name, { branchX, endY, labelTopY, side });
+      const list = commitDirectBranchesMap.get(targetHash) || [];
+      list.push(bNode);
+      commitDirectBranchesMap.set(targetHash, list);
     });
 
-    const minBranchY = branches.reduce(
-      (min, b) => Math.min(min, b.isMerged ? b.mergeY : b.labelTopY),
-      trunkBaseY - 100,
-    );
-    const minCommitY =
+    // 4. Atribuição de Lado Par / Ímpar para os grupos de Nível 1
+    const branchSideMap = new Map<string, -1 | 1>();
+    let anchorIndex = 0;
+
+    commitDirectBranchesMap.forEach((branchesGroup) => {
+      // Ímpar: -1 (Esquerda), Par: 1 (Direita)
+      const side: -1 | 1 = anchorIndex % 2 === 0 ? 1 : -1;
+      anchorIndex++;
+      branchesGroup.forEach((b) => {
+        branchSideMap.set(b.name, side);
+        function assignDescendantSide(parentName: string, s: -1 | 1) {
+          const ch = childrenMap.get(parentName) || [];
+          ch.forEach((cName) => {
+            branchSideMap.set(cName, s);
+            assignDescendantSide(cName, s);
+          });
+        }
+        assignDescendantSide(b.name, side);
+      });
+    });
+
+    // 5. Cálculo Dinâmico Compacto das Posições Verticais dos Commits no Tronco
+    // Evita espaço sobrando desnecessário entre commits
+    const commitHeights: number[] = [];
+    let prevBranchesHalfHeight = 0;
+
+    for (let i = validMainCommits.length - 1; i >= 0; i--) {
+      const c = validMainCommits[i];
+      const branchesAtCommit = commitDirectBranchesMap.get(c.hash) || [];
+      const leftBranches = branchesAtCommit.filter(
+        (b) => branchSideMap.get(b.name) === -1,
+      );
+      const rightBranches = branchesAtCommit.filter(
+        (b) => branchSideMap.get(b.name) === 1,
+      );
+
+      let hLeft = 0;
+      leftBranches.forEach((b) => (hLeft += computeSubtreeHeight(b.name)));
+      let hRight = 0;
+      rightBranches.forEach((b) => (hRight += computeSubtreeHeight(b.name)));
+
+      const curBranchesHeight = Math.max(hLeft, hRight);
+      const curHalf = curBranchesHeight / 2;
+
+      // Distância justa entre o commit anterior e este
+      const neededStep =
+        curBranchesHeight > 0 || prevBranchesHalfHeight > 0
+          ? Math.max(COMMIT_STEP_EMPTY, prevBranchesHalfHeight + curHalf + 10)
+          : COMMIT_STEP_EMPTY;
+
+      commitHeights.push(neededStep);
+      prevBranchesHalfHeight = curHalf;
+    }
+
+    const totalHeightSum = commitHeights.reduce((acc, h) => acc + h, 0);
+    const PADDING_TOP = 50;
+    const PADDING_BOTTOM = 50;
+    const trunkBaseY = totalHeightSum + PADDING_TOP;
+
+    let currentCommitY = trunkBaseY - 14;
+    const trunkCommits: TrunkCommitItem[] = [];
+
+    for (let i = validMainCommits.length - 1; i >= 0; i--) {
+      const c = validMainCommits[i];
+      const stepIndex = validMainCommits.length - 1 - i;
+      const step = commitHeights[stepIndex] || COMMIT_STEP_EMPTY;
+      currentCommitY -= step;
+
+      const isMerge =
+        mergeCommitMap.has(c.hash.toLowerCase()) ||
+        c.message.toLowerCase().startsWith("merge ");
+
+      trunkCommits.push({
+        ...c,
+        y: currentCommitY,
+        isMergeCommit: isMerge,
+        mergedBranchName: mergeCommitMap.get(c.hash.toLowerCase()),
+      });
+    }
+
+    const trunkTopY = Math.max(
       trunkCommits.length > 0
-        ? Math.min(...trunkCommits.map((c) => c.y))
-        : trunkBaseY - 100;
-    const trunkTopY = Math.max(Math.min(minBranchY, minCommitY) - 40, 40);
+        ? trunkCommits[trunkCommits.length - 1].y - 30
+        : 50,
+      35,
+    );
+
+    // 6. Colunas Horizontais por Nível
+    function getLevelColumnX(
+      level: number,
+      side: -1 | 1,
+    ): { cardX: number; entryX: number; exitX: number } {
+      if (side === 1) {
+        // Lado Direito: entra pela esquerda, sai pela direita
+        const entryX = TRUNK_X + BASE_OFFSET + (level - 1) * COL_STEP;
+        const cardX = entryX;
+        const exitX = cardX + CARD_WIDTH;
+        return { cardX, entryX, exitX };
+      } else {
+        // Lado Esquerdo: entra pela direita, sai pela esquerda
+        const entryX = TRUNK_X - BASE_OFFSET - (level - 1) * COL_STEP;
+        const cardX = entryX - CARD_WIDTH;
+        const exitX = cardX;
+        return { cardX, entryX, exitX };
+      }
+    }
+
+    // 7. Posicionamento Recursivo das Branches e Labels de Commit
+    const branches: SankeyBranchLayoutItem[] = [];
+
+    function layoutSubtree(
+      node: VersionNode,
+      level: number,
+      side: -1 | 1,
+      slotStartY: number,
+      slotHeight: number,
+      sourceX: number,
+      sourceY: number,
+      visited = new Set<string>(),
+    ) {
+      if (visited.has(node.name)) return;
+      visited.add(node.name);
+
+      const { cardX, entryX, exitX } = getLevelColumnX(level, side);
+
+      const forkLabels = getForkCommitsForNode(node);
+      const selfHeight = getNodeSelfHeight(node);
+
+      // Centraliza o bloco (card + labels de commit) verticalmente no slot reservado
+      const cardY = slotStartY + Math.max(0, (slotHeight - selfHeight) / 2);
+      const cardCenterY = cardY + CARD_HEIGHT / 2;
+
+      const path = getSankeyHorizontalPath(
+        sourceX,
+        sourceY,
+        entryX,
+        cardCenterY,
+      );
+
+      let color = "#3b82f6";
+      if (node.isMerged) {
+        color = "#10b981"; // Verde esmeralda para branches mergeadas
+      } else if (node.type === "proposal") {
+        color = "#8b5cf6"; // Roxo elegante para propostas
+      } else if (node.type === "draft") {
+        color = "#f59e0b"; // Âmbar para rascunhos
+      }
+
+      const commitCount = node.commits?.length || node.ahead || 0;
+
+      // Posiciona cada label de commit de onde nasceram novas branches
+      let curLabelY = cardY + CARD_HEIGHT + 8;
+      const labelW = COMMIT_LABEL_WIDTH;
+      const labelH = COMMIT_LABEL_HEIGHT;
+      const labelX = side === 1 ? cardX + 4 : cardX + CARD_WIDTH - labelW - 4;
+
+      forkLabels.forEach((fl) => {
+        fl.x = labelX;
+        fl.y = curLabelY;
+        fl.width = labelW;
+        fl.height = labelH;
+        fl.exitX = side === 1 ? labelX + labelW : labelX;
+        fl.exitY = curLabelY + labelH / 2;
+        curLabelY += labelH + COMMIT_LABEL_GAP;
+      });
+
+      branches.push({
+        node,
+        level,
+        side,
+        cardX,
+        cardY,
+        cardWidth: CARD_WIDTH,
+        cardHeight: CARD_HEIGHT,
+        entryX,
+        entryY: cardCenterY,
+        exitX,
+        exitY: cardCenterY,
+        sourceX,
+        sourceY,
+        path,
+        hasIntermediateCommitNode: forkLabels.length > 0,
+        forkCommitLabels: forkLabels,
+        color,
+        isMerged: Boolean(node.isMerged),
+        mergedDate: node.mergedDate,
+        mergeCommitHash: node.mergeCommitHash,
+        commitCount,
+      });
+
+      // Posiciona as filhas dentro do slot
+      const children = (childrenMap.get(node.name) || [])
+        .map((cName) => nodes.find((n) => n.name === cName)!)
+        .filter(Boolean);
+
+      if (children.length > 0) {
+        let totalChildrenHeight = 0;
+        children.forEach((child) => {
+          totalChildrenHeight += computeSubtreeHeight(child.name);
+        });
+
+        // Centraliza os slots das filhas em relação ao slot pai
+        let currentChildSlotY = slotStartY + Math.max(0, (slotHeight - totalChildrenHeight) / 2);
+
+        children.forEach((child) => {
+          if (!visited.has(child.name)) {
+            const childHeight = computeSubtreeHeight(child.name);
+
+            // Identifica o commit label exato de onde nasceu esta filha
+            const matchingLabel = forkLabels.find((lbl) =>
+              lbl.childBranchNames.includes(child.name),
+            );
+            const childSourceX = matchingLabel ? matchingLabel.exitX : exitX;
+            const childSourceY = matchingLabel ? matchingLabel.exitY : cardCenterY;
+
+            layoutSubtree(
+              child,
+              level + 1,
+              side,
+              currentChildSlotY,
+              childHeight,
+              childSourceX,
+              childSourceY,
+              visited,
+            );
+            currentChildSlotY += childHeight;
+          }
+        });
+      }
+    }
+
+    // Disparar layout a partir dos commits do tronco
+    trunkCommits.forEach((commit) => {
+      const branchesAtCommit = commitDirectBranchesMap.get(commit.hash) || [];
+      const leftBranches = branchesAtCommit.filter(
+        (b) => branchSideMap.get(b.name) === -1,
+      );
+      const rightBranches = branchesAtCommit.filter(
+        (b) => branchSideMap.get(b.name) === 1,
+      );
+
+      // Lado Esquerdo
+      if (leftBranches.length > 0) {
+        let totalLeftHeight = 0;
+        leftBranches.forEach(
+          (b) => (totalLeftHeight += computeSubtreeHeight(b.name)),
+        );
+        let startSlotY = commit.y - totalLeftHeight / 2;
+        leftBranches.forEach((b) => {
+          const bHeight = computeSubtreeHeight(b.name);
+          layoutSubtree(b, 1, -1, startSlotY, bHeight, TRUNK_X, commit.y);
+          startSlotY += bHeight;
+        });
+      }
+
+      // Lado Direito
+      if (rightBranches.length > 0) {
+        let totalRightHeight = 0;
+        rightBranches.forEach(
+          (b) => (totalRightHeight += computeSubtreeHeight(b.name)),
+        );
+        let startSlotY = commit.y - totalRightHeight / 2;
+        rightBranches.forEach((b) => {
+          const bHeight = computeSubtreeHeight(b.name);
+          layoutSubtree(b, 1, 1, startSlotY, bHeight, TRUNK_X, commit.y);
+          startSlotY += bHeight;
+        });
+      }
+    });
+
+    // 8. Ajuste Seguro do Topo e Cálculo da Altura Total
+    const allY: number[] = [
+      ...branches.map((b) => b.cardY),
+      ...trunkCommits.map((c) => c.y),
+    ];
+    branches.forEach((b) => {
+      if (b.forkCommitLabels) {
+        b.forkCommitLabels.forEach((fl) => allY.push(fl.y));
+      }
+    });
+
+    const minCalculatedY =
+      allY.length > 0 ? Math.min(...allY) : trunkBaseY - 100;
+    const SAFE_TOP = 40;
+
+    if (minCalculatedY < SAFE_TOP) {
+      const deltaY = SAFE_TOP - minCalculatedY;
+      trunkCommits.forEach((c) => (c.y += deltaY));
+      branches.forEach((b) => {
+        b.cardY += deltaY;
+        b.entryY += deltaY;
+        b.exitY += deltaY;
+        b.sourceY += deltaY;
+        if (b.forkCommitLabels) {
+          b.forkCommitLabels.forEach((fl) => {
+            fl.y += deltaY;
+            fl.exitY += deltaY;
+          });
+        }
+        b.path = getSankeyHorizontalPath(
+          b.sourceX,
+          b.sourceY,
+          b.entryX,
+          b.entryY,
+        );
+      });
+    }
+
+    // Calcula a altura total efetiva com base em todos os cards e labels de commit
+    let maxY = trunkBaseY;
+    branches.forEach((b) => {
+      let bBottom = b.cardY + b.cardHeight;
+      if (b.forkCommitLabels && b.forkCommitLabels.length > 0) {
+        const lastLbl = b.forkCommitLabels[b.forkCommitLabels.length - 1];
+        bBottom = Math.max(bBottom, lastLbl.y + lastLbl.height);
+      }
+      if (bBottom > maxY) maxY = bBottom;
+    });
+
+    const effectiveTotalHeight = maxY + PADDING_BOTTOM;
 
     return {
       trunkX: TRUNK_X,
       trunkBaseY,
       trunkTopY,
-      totalHeight,
+      totalHeight: effectiveTotalHeight,
       defaultNode,
       branches,
       trunkCommits,
     };
-  }, [nodes, mainCommits, scaleProps]);
+  }, [nodes, mainCommits]);
+
+  // Identifica a branch mergeada sob hover ou selecionada para acendimento sincronizado ("Apenas acende merge")
+  const activeMergedBranch = useMemo(() => {
+    const activeName = hoveredNodeName || selectedNodeName;
+    if (!activeName) return null;
+    const br = layout.branches.find((b) => b.node.name === activeName);
+    return br && br.isMerged ? br : null;
+  }, [hoveredNodeName, selectedNodeName, layout.branches]);
+
+  // Localiza com precisão cirúrgica o commit de merge único no tronco correspondente à branch
+  const mergeTrunkCommit = useMemo(() => {
+    if (!activeMergedBranch) return null;
+
+    const mHash = (activeMergedBranch.node.mergeCommitHash || "")
+      .trim()
+      .toLowerCase();
+    // 1. Prioridade absoluta: bater por hash exato ou prefixo curto (mínimo 6 chars)
+    if (mHash && mHash.length >= 6) {
+      const match = layout.trunkCommits.find((c) => {
+        const cHash = c.hash.toLowerCase();
+        return (
+          cHash === mHash || cHash.startsWith(mHash) || mHash.startsWith(cHash)
+        );
+      });
+      if (match) return match;
+    }
+
+    // 2. Se não achou por hash, verificar mensagem de merge citando a branch
+    const branchName = activeMergedBranch.node.name.toLowerCase();
+    const matchByMsg = layout.trunkCommits.find((c) => {
+      const msg = c.message.toLowerCase();
+      return (
+        msg.includes(`merge branch '${branchName}'`) ||
+        msg.includes(`merge branch "${branchName}"`) ||
+        msg.includes(`merge branch ${branchName}`) ||
+        (msg.includes("merge pull request") && msg.includes(branchName))
+      );
+    });
+    if (matchByMsg) return matchByMsg;
+
+    // 3. Fallback pontual: se houver data de merge, pega O MAIS PRÓXIMO em <= 60s
+    const mDate = activeMergedBranch.node.mergedDate;
+    if (mDate) {
+      const targetTime = new Date(mDate).getTime();
+      if (!isNaN(targetTime)) {
+        let closest: TrunkCommitItem | null = null;
+        let minDiff = Infinity;
+        for (const c of layout.trunkCommits) {
+          if (c.date) {
+            const t = new Date(c.date).getTime();
+            if (!isNaN(t)) {
+              const diff = Math.abs(t - targetTime);
+              if (diff < minDiff) {
+                minDiff = diff;
+                closest = c;
+              }
+            }
+          }
+        }
+        if (closest && minDiff <= 60000) {
+          return closest;
+        }
+      }
+    }
+
+    return null;
+  }, [activeMergedBranch, layout.trunkCommits]);
 
   return (
     <div
@@ -612,7 +862,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        background: "#f8fafc", // Fundo Light
+        background: "#f8fafc",
         userSelect: "none",
         cursor: isDragging ? "grabbing" : "grab",
       }}
@@ -621,7 +871,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
       onMouseUp={handleMouseUp}
       onWheel={handleWheel}
     >
-      {/* Barra Flutuante de Controles: Zoom com Lupas Destacadas, Navegação e Escala */}
+      {/* Barra Flutuante de Controles: Zoom e Navegação (sem seletor de escala) */}
       <div
         style={{
           position: "absolute",
@@ -633,7 +883,6 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
           zIndex: 10,
         }}
       >
-        {/* Controles de Zoom com Lupas de Alta Definição e Destaque */}
         <div
           style={{
             display: "flex",
@@ -649,7 +898,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
         >
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.min(z * 1.15, 2.5))}
+            onClick={() => setZoom((z) => Math.min(z * 1.15, 4.0))}
             title="Aumentar zoom (ou use Ctrl + Scroll)"
             style={{
               border: "none",
@@ -661,23 +910,31 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               justifyContent: "center",
               cursor: "pointer",
               borderRadius: "4px",
-              transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: "19px" }}>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "19px" }}
+            >
               zoom_in
             </span>
           </button>
 
-          <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", minWidth: "36px", textAlign: "center" }}>
+          <span
+            style={{
+              fontSize: "11px",
+              fontWeight: 700,
+              color: "#64748b",
+              minWidth: "36px",
+              textAlign: "center",
+            }}
+          >
             {Math.round(zoom * 100)}%
           </span>
 
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.max(z * 0.85, 0.35))}
+            onClick={() => setZoom((z) => Math.max(z * 0.85, 0.4))}
             title="Diminuir zoom (ou use Ctrl + Scroll)"
             style={{
               border: "none",
@@ -689,22 +946,29 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               justifyContent: "center",
               cursor: "pointer",
               borderRadius: "4px",
-              transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: "19px" }}>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "19px" }}
+            >
               zoom_out
             </span>
           </button>
 
-          <div style={{ width: "1px", height: "18px", background: "#e2e8f0", margin: "0 2px" }} />
+          <div
+            style={{
+              width: "1px",
+              height: "18px",
+              background: "#e2e8f0",
+              margin: "0 2px",
+            }}
+          />
 
           <button
             type="button"
             onClick={() => {
-              setPan((p) => ({ ...p, y: 140 - layout.trunkTopY * zoom }));
+              setPan((p) => ({ ...p, y: 100 - layout.trunkTopY * zoom }));
             }}
             title="Navegar para o Topo (Fim)"
             style={{
@@ -717,8 +981,6 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               fontWeight: 700,
               borderRadius: "4px",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(37, 99, 235, 0.08)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
             Topo ↑
           </button>
@@ -726,7 +988,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
           <button
             type="button"
             onClick={() => {
-              setPan((p) => ({ ...p, y: 460 - layout.trunkBaseY * zoom }));
+              setPan((p) => ({ ...p, y: 400 - layout.trunkBaseY * zoom }));
             }}
             title="Navegar para o Início (Base)"
             style={{
@@ -739,8 +1001,6 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               fontWeight: 600,
               borderRadius: "4px",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
             Início ↓
           </button>
@@ -748,10 +1008,10 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
           <button
             type="button"
             onClick={() => {
-              setZoom(1);
-              setPan({ x: 380, y: 80 });
+              setZoom(2);
+              setPan({ x: 420, y: 80 });
             }}
-            title="Centralizar Visualização"
+            title="Restaurar zoom padrão (2x) e centralizar"
             style={{
               border: "none",
               background: "transparent",
@@ -761,54 +1021,9 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               cursor: "pointer",
               borderRadius: "4px",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
             Reset
           </button>
-        </div>
-
-        {/* Seletor de Escala */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "2px",
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
-            borderRadius: "6px",
-            padding: "3px",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-            fontSize: "11px",
-          }}
-        >
-          <span style={{ padding: "0 4px", color: "#64748b", fontWeight: 600 }}>
-            Escala:
-          </span>
-          {(["compact", "normal", "wide"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setScaleMode(m)}
-              style={{
-                border: "none",
-                background: scaleMode === m ? "#2563eb" : "transparent",
-                color: scaleMode === m ? "#ffffff" : "#475569",
-                borderRadius: "4px",
-                padding: "2px 7px",
-                fontSize: "10px",
-                fontWeight: scaleMode === m ? 700 : 500,
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {m === "compact"
-                ? "Compacta"
-                : m === "normal"
-                  ? "Normal"
-                  : "Ampla"}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -818,7 +1033,6 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
         style={{ width: "100%", height: "100%", display: "block" }}
       >
         <defs>
-          {/* Grid pontilhado suave Light */}
           <pattern
             id="canvas-dots-light"
             x="0"
@@ -840,21 +1054,26 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
 
         {/* Camada Transformada por Pan e Zoom */}
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-          {/* TRONCO PRINCIPAL VERTICAL (CRESCENDO DE SUL PARA NORTE) */}
+          {/* TRONCO PRINCIPAL VERTICAL (AZUL CONTÍNUO) */}
           <line
             x1={layout.trunkX}
             y1={layout.trunkTopY}
             x2={layout.trunkX}
             y2={layout.trunkBaseY}
             stroke="#2563eb"
-            strokeWidth="3.5"
+            strokeWidth="3.2"
             strokeLinecap="round"
           />
 
-          {/* TODAS AS BOLINHAS DE COMMITS DA PRINCIPAL (CLICÁVEIS COM HIGHLIGHT) */}
+          {/* COMMITS DO TRONCO PRINCIPAL */}
           {layout.trunkCommits.map((c) => {
             const isHovered = hoveredCommitHash === c.hash;
             const isSelected = selectedCommitHash === c.hash;
+            // ACENDE EXCLUSIVAMENTE O COMMIT ALVO DO MERGE (corrige acender todos)
+            const isMergeTarget = Boolean(
+              mergeTrunkCommit && mergeTrunkCommit.hash === c.hash,
+            );
+
             const cleanMsg = cleanCommitTitle(c.message);
 
             return (
@@ -869,75 +1088,67 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                 onMouseLeave={() => setHoveredCommitHash(null)}
                 style={{ cursor: "pointer" }}
               >
-                {/* Hitbox ampla invisível para clique e hover confortáveis */}
-                <circle cx="0" cy="0" r="16" fill="transparent" />
+                {/* Hitbox ampla para clique fácil */}
+                <circle cx="0" cy="0" r="14" fill="transparent" />
 
-                {/* Data e horário do commit ao lado da bolinha */}
-                {c.date && (
-                  <text
-                    x="-9"
-                    y="3"
-                    textAnchor="end"
-                    fill="#94a3b8"
-                    fontSize={scaleProps.dateFontSize}
-                    fontWeight="500"
-                  >
-                    {formatMergeDate(c.date)}
-                  </text>
-                )}
-
-                {/* Highlight ao passar o mouse ou selecionar */}
-                {(isHovered || isSelected) && (
+                {/* Highlight ao passar mouse, selecionar ou ser o destino do merge */}
+                {(isHovered || isSelected || isMergeTarget) && (
                   <circle
                     cx="0"
                     cy="0"
-                    r={scaleProps.commitRadius + 5}
+                    r={COMMIT_RADIUS + 5.5}
                     fill="none"
-                    stroke="#2563eb"
-                    strokeWidth="2"
-                    opacity="0.6"
+                    stroke={isMergeTarget ? "#10b981" : "#2563eb"}
+                    strokeWidth={isMergeTarget ? "2.5" : "2"}
+                    opacity={isMergeTarget ? 0.95 : 0.65}
                   />
                 )}
 
-                {/* Bolinha do commit */}
+                {/* Bolinha do commit no tronco */}
                 <circle
                   cx="0"
                   cy="0"
                   r={
-                    isHovered || isSelected
-                      ? scaleProps.commitRadius + 2
-                      : scaleProps.commitRadius
+                    isHovered || isSelected || isMergeTarget
+                      ? COMMIT_RADIUS + 1.8
+                      : COMMIT_RADIUS
                   }
-                  fill={isHovered || isSelected ? "#3b82f6" : "#2563eb"}
+                  fill={
+                    isMergeTarget
+                      ? "#10b981"
+                      : isHovered || isSelected
+                        ? "#3b82f6"
+                        : "#2563eb"
+                  }
                   stroke="#ffffff"
-                  strokeWidth={isHovered || isSelected ? "2.2" : "1.2"}
-                  style={{ transition: "all 0.15s ease" }}
+                  strokeWidth="1.6"
                 />
 
-                {/* Tooltip sutil e flutuante no hover (sem hash, apenas título limpo) */}
+                {/* Tooltip flutuante no hover */}
                 {isHovered && (
                   <g
                     transform="translate(10, -10)"
-                    style={{ pointerEvents: "none" }}
+                    style={{ pointerEvents: "none", zIndex: 100 }}
                   >
                     <rect
                       x="0"
                       y="0"
-                      width={Math.min(cleanMsg.length * 5.8 + 16, 240)}
-                      height="16"
-                      rx="3"
+                      width={Math.min(cleanMsg.length * 6.2 + 16, 260)}
+                      height="20"
+                      rx="4"
                       fill="#1e293b"
-                      opacity="0.9"
+                      opacity="0.95"
                     />
                     <text
-                      x="6"
-                      y="11"
+                      x="8"
+                      y="13"
                       fill="#f8fafc"
-                      fontSize="8"
+                      fontSize="9"
                       fontWeight="500"
+                      fontFamily="system-ui, -apple-system, sans-serif"
                     >
-                      {cleanMsg.length > 34
-                        ? `${cleanMsg.slice(0, 34)}...`
+                      {cleanMsg.length > 38
+                        ? `${cleanMsg.slice(0, 38)}...`
                         : cleanMsg}
                     </text>
                   </g>
@@ -948,37 +1159,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
             );
           })}
 
-          {/* NÓ FIM (TOPO DA ÁRVORE NO NORTE) */}
-          <g transform={`translate(${layout.trunkX}, ${layout.trunkTopY})`}>
-            <circle
-              cx="0"
-              cy="0"
-              r={scaleProps.nodeRadius}
-              fill="#2563eb"
-              stroke="#ffffff"
-              strokeWidth="2"
-            />
-            <rect
-              x="-18"
-              y={-scaleProps.labelHeight - 6}
-              width="36"
-              height={scaleProps.labelHeight}
-              rx={scaleProps.labelHeight / 2}
-              fill="#1e293b"
-            />
-            <text
-              x="0"
-              y={-scaleProps.labelHeight - 6 + scaleProps.labelHeight * 0.7}
-              textAnchor="middle"
-              fill="#ffffff"
-              fontSize={scaleProps.fontSize - 0.5}
-              fontWeight="700"
-            >
-              Fim
-            </text>
-          </g>
-
-          {/* NÓ INÍCIO (RAIZ DA ÁRVORE NO SUL / BASE) */}
+          {/* NÓ INÍCIO (BASE NO SUL) */}
           {layout.defaultNode && (
             <g
               transform={`translate(${layout.trunkX}, ${layout.trunkBaseY})`}
@@ -988,118 +1169,206 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               onMouseLeave={() => setHoveredNodeName(null)}
               style={{ cursor: "pointer" }}
             >
-              {/* Hitbox ampla invisível */}
-              <circle cx="0" cy="0" r="22" fill="transparent" />
-
-              {layout.defaultNode.isCurrent && (
-                <circle
-                  cx="0"
-                  cy="0"
-                  r={scaleProps.nodeRadius + 6}
-                  fill="none"
-                  stroke="#2563eb"
-                  strokeWidth="2"
-                  opacity="0.6"
-                />
-              )}
+              <circle cx="0" cy="0" r="20" fill="transparent" />
               <circle
                 cx="0"
                 cy="0"
-                r={scaleProps.nodeRadius + 1}
+                r={NODE_RADIUS}
                 fill="#2563eb"
                 stroke="#ffffff"
-                strokeWidth="2.5"
+                strokeWidth="2.2"
               />
               <rect
-                x="-24"
+                x="-26"
                 y="8"
-                width="48"
-                height={scaleProps.labelHeight}
-                rx={scaleProps.labelHeight / 2}
+                width="52"
+                height="20"
+                rx="10"
                 fill="#2563eb"
+                style={{
+                  filter: "drop-shadow(0 1px 3px rgba(37,99,235,0.25))",
+                }}
               />
               <text
                 x="0"
-                y={8 + scaleProps.labelHeight * 0.7}
+                y="18"
                 textAnchor="middle"
+                dominantBaseline="central"
                 fill="#ffffff"
-                fontSize={scaleProps.fontSize}
+                fontSize="10"
                 fontWeight="700"
+                fontFamily="system-ui, -apple-system, sans-serif"
               >
                 Início
               </text>
-
-              {/* Rótulo 'Ativa' no Início quando for a versão corrente */}
-              {layout.defaultNode.isCurrent && (
-                <g
-                  transform={`translate(-19, ${8 + scaleProps.labelHeight + 4})`}
-                >
-                  <rect
-                    x="0"
-                    y="0"
-                    width="38"
-                    height={scaleProps.labelHeight - 2}
-                    rx={(scaleProps.labelHeight - 2) / 2}
-                    fill="#2563eb"
-                  />
-                  <text
-                    x="19"
-                    y={(scaleProps.labelHeight - 2) * 0.7}
-                    textAnchor="middle"
-                    fill="#ffffff"
-                    fontSize={scaleProps.fontSize - 1}
-                    fontWeight="700"
-                  >
-                    Ativa
-                  </text>
-                </g>
-              )}
             </g>
           )}
 
-          {/* GALHOS DERIVADOS - CRESCIMENTO SUL -> NORTE (BAIXO PARA CIMA) */}
+          {/* NÓ FIM (TOPO NO NORTE) */}
+          <g transform={`translate(${layout.trunkX}, ${layout.trunkTopY})`}>
+            <circle
+              cx="0"
+              cy="0"
+              r={NODE_RADIUS}
+              fill="#1e293b"
+              stroke="#ffffff"
+              strokeWidth="2"
+            />
+            <rect
+              x="-22"
+              y="-28"
+              width="44"
+              height="20"
+              rx="10"
+              fill="#1e293b"
+              style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.18))" }}
+            />
+            <text
+              x="0"
+              y="-18"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="#ffffff"
+              fontSize="10"
+              fontWeight="700"
+              fontFamily="system-ui, -apple-system, sans-serif"
+            >
+              Fim
+            </text>
+          </g>
+
+          {/* CONECTORES HORIZONTAIS SANKEY ENTRE NÍVEIS */}
+          {layout.branches.map((br) => {
+            const isSelected = selectedNodeName === br.node.name;
+            const isHovered = hoveredNodeName === br.node.name;
+
+            return (
+              <g key={`path-${br.node.name}`}>
+                {/* Linha Bézier fluida contínua e sólida */}
+                <path
+                  d={br.path}
+                  fill="none"
+                  stroke={br.color}
+                  strokeWidth={isSelected || isHovered ? "2.6" : "1.8"}
+                  opacity={isSelected || isHovered ? 1 : 0.85}
+                  style={{
+                    transition: "stroke-width 0.15s ease, opacity 0.15s ease",
+                  }}
+                />
+
+                {/* Ponto de derivação na origem (se vindo de outra branch e não de label de commit) */}
+                {br.sourceX !== layout.trunkX && (
+                  <circle
+                    cx={br.sourceX}
+                    cy={br.sourceY}
+                    r={COMMIT_RADIUS}
+                    fill={br.color}
+                    stroke="#ffffff"
+                    strokeWidth="1.2"
+                  />
+                )}
+              </g>
+            );
+          })}
+
+          {/* DESTAQUE INTERATIVO DE MERGE ("Apenas acende merge") */}
+          {activeMergedBranch && mergeTrunkCommit && (
+            <g style={{ pointerEvents: "none" }}>
+              {/* Feixe suave conectando a versão ao commit alvo de merge no tronco */}
+              <path
+                d={getSankeyHorizontalPath(
+                  activeMergedBranch.exitX,
+                  activeMergedBranch.entryY,
+                  layout.trunkX,
+                  mergeTrunkCommit.y,
+                )}
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="2.4"
+                opacity="0.95"
+              />
+
+              {/* Anel luminoso exclusivo no commit de merge */}
+              <g
+                transform={`translate(${layout.trunkX}, ${mergeTrunkCommit.y})`}
+              >
+                <circle
+                  cx="0"
+                  cy="0"
+                  r={COMMIT_RADIUS + 7}
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="2.5"
+                  opacity="0.95"
+                />
+                <circle cx="0" cy="0" r={COMMIT_RADIUS + 2} fill="#10b981" />
+
+                {/* Etiqueta elegante no ponto de merge */}
+                <g
+                  transform={`translate(${activeMergedBranch.side === 1 ? -10 : 10}, -10)`}
+                >
+                  <rect
+                    x={activeMergedBranch.side === 1 ? -130 : 0}
+                    y="0"
+                    width="130"
+                    height="20"
+                    rx="4"
+                    fill="#065f46"
+                    stroke="#10b981"
+                    strokeWidth="1"
+                    opacity="0.95"
+                  />
+                  <text
+                    x={activeMergedBranch.side === 1 ? -65 : 65}
+                    y="10"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill="#ecfdf5"
+                    fontSize="9"
+                    fontWeight="700"
+                    fontFamily="system-ui, -apple-system, sans-serif"
+                  >
+                    {`✓ Merge de ${activeMergedBranch.node.name.length > 13 ? `${activeMergedBranch.node.name.slice(0, 13)}...` : activeMergedBranch.node.name}`}
+                  </text>
+                </g>
+              </g>
+            </g>
+          )}
+
+          {/* CARDS / PÍLULAS HORIZONTAIS DE CADA VERSÃO (COM DESIGN APERFEIÇOADO) */}
           {layout.branches.map((br) => {
             const isSelected = selectedNodeName === br.node.name;
             const isHovered = hoveredNodeName === br.node.name;
             const isCurrent = br.node.isCurrent;
 
-            // Conector ortogonal vertical arredondado subindo de Sul para Norte
-            const branchPath = getVerticalMindMapPath(
-              br.startX,
-              br.startY,
-              br.endX,
-              br.endY,
-              6,
-            );
+            // Paleta de Cores do Card
+            let cardBg = "#ffffff";
+            let cardBorder = br.color;
+            let textColor = "#1e293b";
 
-            // Retorno ortogonal de Merge à linha central subindo para o Norte
-            const mergePath = br.isMerged
-              ? getVerticalMergePath(
-                  br.endX,
-                  br.endY,
-                  layout.trunkX,
-                  br.mergeY,
-                  6,
-                )
-              : "";
+            if (br.isMerged) {
+              cardBg = isSelected || isHovered ? "#dcfce7" : "#f0fdf4";
+              cardBorder = "#10b981";
+              textColor = "#065f46";
+            } else if (isSelected || isHovered) {
+              cardBg = "#ffffff";
+              cardBorder = br.color;
+            }
 
-            const labelWidth = Math.max(
-              br.node.name.length * (scaleProps.fontSize * 0.58) + 12,
-              38,
-            );
+            // Largura do badge de commits
+            const hasCommits = br.commitCount > 0;
+            const badgeW = br.commitCount >= 10 ? 25 : 20;
+            const badgeH = 18;
+            const badgeX = br.cardX + br.cardWidth - badgeW - 6;
+            const badgeY = br.cardY + (br.cardHeight - badgeH) / 2;
 
-            // Posicionamento LATERAL da etiqueta (lado externo da bolinha):
-            // br.side === 1: Galho à direita -> Etiqueta fica à direita da bolinha
-            // br.side === -1: Galho à esquerda -> Etiqueta fica à esquerda da bolinha
-            // Isso deixa o fluxo vertical para o Norte (sub-galhos e merges) 100% desimpedido sem sobreposição de linhas!
-            const labelX =
-              br.side === 1
-                ? br.endX + scaleProps.nodeRadius + 6
-                : br.endX - scaleProps.nodeRadius - 6 - labelWidth;
-            const labelY = br.endY - scaleProps.labelHeight / 2;
-
-            const badgeX = br.side === 1 ? labelX : labelX + labelWidth - 36;
-            const badgeY = labelY - scaleProps.labelHeight - 3;
+            // Espaço reservado para o texto da versão
+            const textStartX = isCurrent ? br.cardX + 22 : br.cardX + 12;
+            const maxChars = hasCommits ? 14 : 17;
+            const displayName =
+              br.node.name.length > maxChars
+                ? `${br.node.name.slice(0, maxChars - 1)}…`
+                : br.node.name;
 
             return (
               <g
@@ -1110,175 +1379,212 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                 onMouseLeave={() => setHoveredNodeName(null)}
                 style={{ cursor: "pointer" }}
               >
-                {/* Hitbox ampla invisível */}
-                <path
-                  d={branchPath}
-                  fill="none"
-                  stroke="transparent"
-                  strokeWidth="20"
-                />
+                {/* LABELS DE COMMITS DE BIFURCAÇÃO (Substitui a simples bolinha por labels com descrição completa) */}
+                {br.forkCommitLabels && br.forkCommitLabels.length > 0 && (
+                  <g>
+                    {/* Haste vertical guia com a cor da branch descendo do card até o último commit */}
+                    <line
+                      x1={br.side === 1 ? br.cardX + 16 : br.cardX + br.cardWidth - 16}
+                      y1={br.cardY + br.cardHeight}
+                      x2={br.side === 1 ? br.cardX + 16 : br.cardX + br.cardWidth - 16}
+                      y2={
+                        br.forkCommitLabels[br.forkCommitLabels.length - 1].y +
+                        br.forkCommitLabels[br.forkCommitLabels.length - 1].height / 2
+                      }
+                      stroke={br.color}
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      opacity="0.45"
+                    />
 
-                {/* Traço Visível do Galho */}
-                <path
-                  d={branchPath}
-                  fill="none"
-                  stroke={br.color}
-                  strokeWidth={isSelected || isHovered ? "3.5" : "1.8"}
-                  strokeDasharray={
-                    !br.isMerged &&
-                    br.node.type === "draft" &&
-                    br.node.ahead === 0
-                      ? "4 3"
-                      : undefined
-                  }
-                  opacity={isSelected || isHovered ? 1 : 0.85}
+                    {br.forkCommitLabels.map((lbl) => {
+                      const isSelectedCommit = selectedCommitHash === lbl.commit.hash;
+                      const isHoveredCommit = hoveredCommitHash === lbl.commit.hash;
+
+                      return (
+                        <g
+                          key={`fork-label-${lbl.id}-${lbl.y}`}
+                          transform={`translate(${lbl.x}, ${lbl.y})`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCommitHash(lbl.commit.hash);
+                            onSelectCommit?.(lbl.commit);
+                          }}
+                          onMouseEnter={() => setHoveredCommitHash(lbl.commit.hash)}
+                          onMouseLeave={() => setHoveredCommitHash(null)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {/* Card do Label de Commit */}
+                          <rect
+                            x="0"
+                            y="0"
+                            width={lbl.width}
+                            height={lbl.height}
+                            rx="5"
+                            fill={isSelectedCommit || isHoveredCommit ? "#ffffff" : "#f8fafc"}
+                            stroke={isSelectedCommit || isHoveredCommit ? br.color : "#cbd5e1"}
+                            strokeWidth={isSelectedCommit || isHoveredCommit ? "1.6" : "1"}
+                            style={{
+                              filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.05))",
+                              transition: "all 0.15s ease",
+                            }}
+                          />
+
+                          {/* Bolinha do commit integrada no label */}
+                          <circle
+                            cx="10"
+                            cy={lbl.height / 2}
+                            r="3.5"
+                            fill={br.color}
+                            stroke="#ffffff"
+                            strokeWidth="1"
+                          />
+
+                          {/* Hash curto com fonte monospace */}
+                          <text
+                            x="18"
+                            y={lbl.height / 2}
+                            dominantBaseline="central"
+                            fill="#64748b"
+                            fontSize="9"
+                            fontWeight="600"
+                            fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                          >
+                            {lbl.shortHash}
+                          </text>
+
+                          {/* Separador */}
+                          <text
+                            x="52"
+                            y={lbl.height / 2}
+                            dominantBaseline="central"
+                            fill="#cbd5e1"
+                            fontSize="9"
+                          >
+                            ·
+                          </text>
+
+                          {/* Descrição do Commit (clean title truncado) */}
+                          <text
+                            x="58"
+                            y={lbl.height / 2}
+                            dominantBaseline="central"
+                            fill="#1e293b"
+                            fontSize="9.5"
+                            fontWeight="500"
+                            fontFamily="system-ui, -apple-system, sans-serif"
+                          >
+                            {lbl.label.length > 13 ? `${lbl.label.slice(0, 13)}…` : lbl.label}
+                          </text>
+
+                          {/* Ponto indicador de saída do conector */}
+                          <circle
+                            cx={br.side === 1 ? lbl.width : 0}
+                            cy={lbl.height / 2}
+                            r="2.5"
+                            fill={br.color}
+                          />
+
+                          <title>{`${lbl.commit.message} (${lbl.author || "Git"} - ${lbl.shortHash})`}</title>
+                        </g>
+                      );
+                    })}
+                  </g>
+                )}
+
+                {/* Sombra / Highlight ao passar mouse ou selecionar */}
+                {(isSelected || isHovered) && (
+                  <rect
+                    x={br.cardX - 2.5}
+                    y={br.cardY - 2.5}
+                    width={br.cardWidth + 5}
+                    height={br.cardHeight + 5}
+                    rx={(br.cardHeight + 5) / 2}
+                    fill="none"
+                    stroke={cardBorder}
+                    strokeWidth="2.2"
+                    opacity="0.35"
+                  />
+                )}
+
+                {/* Pílula do Card */}
+                <rect
+                  x={br.cardX}
+                  y={br.cardY}
+                  width={br.cardWidth}
+                  height={br.cardHeight}
+                  rx={br.cardHeight / 2}
+                  fill={cardBg}
+                  stroke={cardBorder}
+                  strokeWidth={isSelected || isHovered ? "2" : "1.4"}
                   style={{
-                    transition: "stroke-width 0.15s ease, opacity 0.15s ease",
+                    filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.06))",
+                    transition: "all 0.15s ease",
                   }}
                 />
 
-                {/* Ponto de Bifurcação no Tronco Principal */}
-                {br.startX === layout.trunkX && (
-                  <circle
-                    cx={br.startX}
-                    cy={br.startY}
-                    r={scaleProps.nodeRadius - 2.8}
-                    fill={br.color}
-                    stroke="#ffffff"
-                    strokeWidth="1.2"
-                  />
-                )}
-
-                {/* Retorno do Merge com Quina Arredondada (se unida à Principal) */}
-                {br.isMerged && (
-                  <path
-                    d={mergePath}
-                    fill="none"
-                    stroke={br.color}
-                    strokeWidth={isSelected || isHovered ? "2.5" : "1.6"}
-                    opacity={isSelected || isHovered ? 1 : 0.75}
-                  />
-                )}
-
-                {/* Ponto de Merge final no Tronco Central */}
-                {br.isMerged && (
-                  <g>
+                {/* Indicador de Versão Ativa (Dot azul) */}
+                {isCurrent && (
+                  <g
+                    transform={`translate(${br.cardX + 12}, ${br.cardY + br.cardHeight / 2})`}
+                  >
+                    <circle cx="0" cy="0" r="3.5" fill="#2563eb" />
                     <circle
-                      cx={layout.trunkX}
-                      cy={br.mergeY}
-                      r={scaleProps.nodeRadius - 2.5}
-                      fill={br.color}
-                      stroke="#ffffff"
-                      strokeWidth="1.2"
+                      cx="0"
+                      cy="0"
+                      r="6.5"
+                      fill="none"
+                      stroke="#2563eb"
+                      strokeWidth="1.4"
+                      opacity="0.45"
                     />
-
-                    {/* Data e horário do merge: posicionado sempre à direita do tronco para nunca colidir com commits */}
-                    {br.mergedDate && (
-                      <g
-                        transform={`translate(${layout.trunkX + 8}, ${br.mergeY + 3})`}
-                      >
-                        <text
-                          x="0"
-                          y="0"
-                          textAnchor="start"
-                          fill="#94a3b8"
-                          fontSize={scaleProps.dateFontSize}
-                          fontWeight="500"
-                        >
-                          {formatMergeDate(br.mergedDate)}
-                        </text>
-                      </g>
-                    )}
                   </g>
                 )}
 
-                {/* NÓ DA VERSÃO (PONTO DO GALHO) */}
-                <circle cx={br.endX} cy={br.endY} r="18" fill="transparent" />
-
-                {isCurrent && (
-                  <circle
-                    cx={br.endX}
-                    cy={br.endY}
-                    r={scaleProps.nodeRadius + 5}
-                    fill="none"
-                    stroke={br.color}
-                    strokeWidth="1.8"
-                    opacity="0.65"
-                  />
-                )}
-
-                <circle
-                  cx={br.endX}
-                  cy={br.endY}
-                  r={
-                    isSelected || isHovered
-                      ? scaleProps.nodeRadius + 1
-                      : scaleProps.nodeRadius
-                  }
-                  fill={br.color}
-                  stroke="#ffffff"
-                  strokeWidth={isSelected || isHovered ? "2.2" : "1.8"}
-                  style={{ transition: "all 0.15s ease" }}
-                />
-
-                {/* ETIQUETA LATERAL COMPACTA DA VERSÃO (NUNCA CORTA LINHAS VERTICAIS) */}
-                <g
-                  transform={`translate(${labelX}, ${labelY})`}
+                {/* Nome da Versão - Centralizado verticalmente com tipografia aprimorada */}
+                <text
+                  x={textStartX}
+                  y={br.cardY + br.cardHeight / 2}
+                  dominantBaseline="central"
+                  fill={textColor}
+                  fontSize="11"
+                  fontWeight={isSelected || isHovered ? "700" : "600"}
+                  letterSpacing="-0.01em"
+                  fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
                 >
-                  <rect
-                    x="0"
-                    y="0"
-                    width={labelWidth}
-                    height={scaleProps.labelHeight}
-                    rx={scaleProps.labelHeight / 2}
-                    fill={isSelected || isHovered ? br.color : "#ffffff"}
-                    stroke={br.color}
-                    strokeWidth="1.1"
-                    style={{
-                      filter:
-                        isSelected || isHovered
-                          ? "drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
-                          : undefined,
-                      transition: "all 0.15s ease",
-                    }}
-                  />
-                  <text
-                    x={labelWidth / 2}
-                    y={scaleProps.labelHeight * 0.7}
-                    textAnchor="middle"
-                    fill={isSelected || isHovered ? "#ffffff" : "#1e293b"}
-                    fontSize={scaleProps.fontSize}
-                    fontWeight="600"
-                  >
-                    {br.node.name}
-                  </text>
-                </g>
+                  {displayName}
+                </text>
 
-                {/* Rótulo 'Ativa' acima da etiqueta quando for a versão corrente */}
-                {isCurrent && (
-                  <g
-                    transform={`translate(${badgeX}, ${badgeY})`}
-                  >
+                {/* Contador de Commits [N] perfeitamente centralizado e integrado */}
+                {hasCommits && (
+                  <g transform={`translate(${badgeX}, ${badgeY})`}>
                     <rect
                       x="0"
                       y="0"
-                      width="36"
-                      height={scaleProps.labelHeight - 2}
-                      rx={(scaleProps.labelHeight - 2) / 2}
-                      fill="#2563eb"
+                      width={badgeW}
+                      height={badgeH}
+                      rx={badgeH / 2}
+                      fill={br.isMerged ? "#dcfce7" : br.color}
+                      opacity={
+                        br.isMerged ? 1 : isSelected || isHovered ? 1 : 0.88
+                      }
                     />
                     <text
-                      x="18"
-                      y={(scaleProps.labelHeight - 2) * 0.72}
+                      x={badgeW / 2}
+                      y={badgeH / 2}
                       textAnchor="middle"
-                      fill="#ffffff"
-                      fontSize={scaleProps.fontSize - 0.8}
+                      dominantBaseline="central"
+                      fill={br.isMerged ? "#065f46" : "#ffffff"}
+                      fontSize="9.5"
                       fontWeight="700"
+                      fontFamily="system-ui, -apple-system, sans-serif"
                     >
-                      Ativa
+                      {br.commitCount}
                     </text>
                   </g>
                 )}
+
+                <title>{`${br.node.name} (${br.commitCount} commit(s))`}</title>
               </g>
             );
           })}
@@ -1287,4 +1593,3 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
     </div>
   );
 };
-export default VersionTreeCanvas;

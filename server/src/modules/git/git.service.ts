@@ -455,7 +455,7 @@ export class GitService {
       }
     } catch {}
 
-    const nodes = [];
+    const nodes: any[] = [];
 
     for (const rawName of branchNames) {
       let branch = rawName;
@@ -593,6 +593,14 @@ export class GitService {
 
           for (const other of branchNames) {
             if (other === branch || other === defaultBranch) continue;
+            // Se other já foi processado e tem esta branch como parent, não pode ser o pai (evita ciclo imediato A <-> B)
+            const alreadyProcessedNode = nodes.find((n) => n.name === other);
+            if (
+              alreadyProcessedNode &&
+              alreadyProcessedNode.parentBranch === branch
+            ) {
+              continue;
+            }
             try {
               const mbRes = await executeGit(
                 ["merge-base", other, branch],
@@ -624,6 +632,14 @@ export class GitService {
       // Calcular ahead/behind em relação à branch pai ou branch padrão
       let ahead = 0;
       let behind = 0;
+      let branchCommits: Array<{
+        hash: string;
+        shortHash: string;
+        author: string;
+        date: string;
+        message: string;
+      }> = [];
+
       if (!isDefault) {
         const compareBase =
           parentBranch && parentBranch !== defaultBranch
@@ -645,6 +661,42 @@ export class GitService {
             ahead = parseInt(aStr, 10) || 0;
           }
         } catch {}
+
+        // Commits exclusivos desta branch (para branches com commits pendentes)
+        if (ahead > 0) {
+          try {
+            const bCommitsRes = await executeGit(
+              [
+                "log",
+                `-${Math.min(ahead, 15)}`,
+                "--format=%H|%h|%an|%cI|%s",
+                `${compareBase}..${branch}`,
+              ],
+              repoDir,
+            );
+            if (bCommitsRes.success && bCommitsRes.stdout.trim()) {
+              branchCommits = bCommitsRes.stdout
+                .trim()
+                .split("\n")
+                .filter(Boolean)
+                .map((line) => {
+                  const parts = line.split("|");
+                  return {
+                    hash: parts[0],
+                    shortHash: parts[1],
+                    author: parts[2],
+                    date: parts[3],
+                    message: parts.slice(4).join("|") || "Commit",
+                  };
+                });
+            }
+          } catch {}
+        }
+
+        // Fallback: se não capturou commits exclusivos via ahead mas possui lastCommit, garante ao menos o último commit
+        if (branchCommits.length === 0 && lastCommit) {
+          branchCommits = [lastCommit];
+        }
       }
 
       // Identifica se foi unida/mergeada à Principal:
@@ -653,6 +705,7 @@ export class GitService {
         (p: any) => p.branch === branch && p.status === "MERGED",
       );
       let explicitMergeDate = "";
+      let mergeCommitHash = "";
       if (!isDefault && !hasMergedPR) {
         try {
           const mergeLog = await executeGit(
@@ -661,13 +714,15 @@ export class GitService {
               "-1",
               "--merges",
               `--grep=Merge.*${branch}`,
-              "--format=%cI",
+              "--format=%H|%cI",
               defaultBranch,
             ],
             repoDir,
           );
           if (mergeLog.success && mergeLog.stdout.trim()) {
-            explicitMergeDate = mergeLog.stdout.trim();
+            const [mHash, mDate] = mergeLog.stdout.trim().split("|");
+            mergeCommitHash = mHash || "";
+            explicitMergeDate = mDate || "";
           }
         } catch {}
       }
@@ -708,16 +763,35 @@ export class GitService {
             }
           : undefined,
         lastCommit,
+        commits: branchCommits,
         ahead,
         behind,
         isMerged,
         mergedDate,
+        mergeCommitHash,
         baseHash,
         baseDate,
         hasStash,
         stashes: branchStashes,
         uncommittedFiles: isCurrent ? currentStatusFiles : [],
       });
+    }
+
+    // Garantir que a árvore de parentBranch não contenha ciclos (DAG estrito convergindo para defaultBranch)
+    for (const node of nodes) {
+      if (node.isDefault) continue;
+      const chain = new Set<string>([node.name]);
+      let curr = node.parentBranch;
+      while (curr && curr !== defaultBranch) {
+        if (chain.has(curr)) {
+          // Ciclo detectado! Quebra a dependência circular apontando para defaultBranch
+          node.parentBranch = defaultBranch;
+          break;
+        }
+        chain.add(curr);
+        const parentNode = nodes.find((n) => n.name === curr);
+        curr = parentNode ? parentNode.parentBranch : defaultBranch;
+      }
     }
 
     // Ordenação amigável: Versão Principal no topo, seguida por propostas abertas, rascunhos e outras
