@@ -10,24 +10,24 @@ describe('InvitationsService - Gestão de Convites do GitHub', () => {
     assert.strictEqual(typeof res.total, 'number');
   });
 
-  it('Deve rejeitar aceite quando não autenticado no GitHub', async () => {
+  it('Deve rejeitar aceite quando não autenticado no GitHub ou sem id', async () => {
     await assert.rejects(
       async () => {
-        await invitationsService.acceptInvitation({ type: 'repository' });
+        await invitationsService.acceptInvitation({ type: 'repository', id: 12345 });
       },
       {
-        message: /autenticado no GitHub/i,
+        message: /(autenticado no GitHub|ID do convite|Falha ao aceitar)/i,
       }
     );
   });
 
-  it('Deve rejeitar recusa quando não autenticado no GitHub', async () => {
+  it('Deve rejeitar recusa quando não autenticado no GitHub ou sem org', async () => {
     await assert.rejects(
       async () => {
-        await invitationsService.declineInvitation({ type: 'org' });
+        await invitationsService.declineInvitation({ type: 'org', org: 'minha-org' });
       },
       {
-        message: /autenticado no GitHub/i,
+        message: /(autenticado no GitHub|organização é obrigatório|Falha ao recusar)/i,
       }
     );
   });

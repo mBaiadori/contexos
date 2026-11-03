@@ -41,16 +41,94 @@ export async function gitRoutes(app: FastifyInstance) {
     }
   });
 
+  // 3.1 Get Version Graph (Nodes, Proposals, Status)
+  app.get("/api/git/version-graph", async (req, reply) => {
+    try {
+      const { repo } = req.query as { repo?: string };
+      const data = await gitService.getVersionGraph(repo);
+      return data;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao carregar grafo de versões" });
+    }
+  });
+
+  // 3.2 Safe Switch (Check, Stash, Discard or Switch)
+  app.post("/api/git/safe-switch", async (req, reply) => {
+    try {
+      const body = req.body as {
+        branch: string;
+        repo?: string;
+        action?: "check" | "switch" | "stash" | "discard";
+      };
+      if (!body?.branch) {
+        return reply
+          .status(400)
+          .send({ error: "Nome da versão (branch) é obrigatório" });
+      }
+      const res = await gitService.safeSwitch(body);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao alternar de versão com segurança" });
+    }
+  });
+
+  // 3.3 Restore Stashed Drafts
+  app.post("/api/git/stash-pop", async (req, reply) => {
+    try {
+      const { repo, stashId } = (req.body as { repo?: string; stashId?: string }) || {};
+      const res = await gitService.popStash(repo, stashId);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao restaurar rascunhos" });
+    }
+  });
+
+  // 3.4 Drop Stashed Drafts
+  app.post("/api/git/stash-drop", async (req, reply) => {
+    try {
+      const { repo, stashId } = (req.body as { repo?: string; stashId?: string }) || {};
+      const res = await gitService.dropStash(repo, stashId);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao descartar rascunho" });
+    }
+  });
+
+  // 3.5 Clear All Stashes
+  app.post("/api/git/stash-clear", async (req, reply) => {
+    try {
+      const { repo } = (req.body as { repo?: string }) || {};
+      const res = await gitService.clearStashes(repo);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao limpar stashes" });
+    }
+  });
+
   // 4. Create or Switch Branch
   app.post("/api/git/branch", async (req, reply) => {
     try {
-      const { branch, repo } = req.body as { branch: string; repo?: string };
+      const { branch, repo, baseBranch } = req.body as {
+        branch: string;
+        repo?: string;
+        baseBranch?: string;
+      };
       if (!branch) {
         return reply
           .status(400)
           .send({ error: "Nome da branch é obrigatório" });
       }
-      const res = await gitService.switchOrCreateBranch(branch, repo);
+      const res = await gitService.switchOrCreateBranch(branch, repo, undefined, baseBranch);
       return res;
     } catch (err: any) {
       return reply

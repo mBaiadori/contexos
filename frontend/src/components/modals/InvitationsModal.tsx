@@ -52,8 +52,8 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
       } else {
         setFeedback({ type: "error", text: res.error || "Não foi possível aceitar o convite." });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", text: err.message || "Erro de conexão ao aceitar convite." });
+    } catch (err) {
+      setFeedback({ type: "error", text: (err as Error)?.message || "Erro de conexão ao aceitar convite." });
     } finally {
       setProcessingId(null);
     }
@@ -71,8 +71,8 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
       } else {
         setFeedback({ type: "error", text: res.error || "Não foi possível recusar o convite." });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", text: err.message || "Erro de conexão ao recusar convite." });
+    } catch (err) {
+      setFeedback({ type: "error", text: (err as Error)?.message || "Erro de conexão ao recusar convite." });
     } finally {
       setProcessingId(null);
     }

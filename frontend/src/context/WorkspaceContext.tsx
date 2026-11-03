@@ -13,6 +13,8 @@ import type {
   WhatsNewSummary,
   WorkspaceChange,
   PendingInvitationsResult,
+  VersionGraphData,
+  SafeSwitchResult,
 } from "../types";
 import { useAuth } from "./AuthContext";
 import { useEditorStore, type AutoSaveStatus } from "../stores/editorStore";
@@ -108,7 +110,14 @@ export interface WorkspaceContextType {
   syncGit: (branch?: string) => Promise<{ success: boolean; message: string }>;
   createOrSwitchBranch: (
     branch: string,
+    baseBranch?: string,
   ) => Promise<{ success: boolean; message: string }>;
+  versionGraph: VersionGraphData | null;
+  refreshVersionGraph: (targetRepoName?: string) => Promise<VersionGraphData | null>;
+  safeSwitch: (payload: { branch: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard' }) => Promise<SafeSwitchResult>;
+  popStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
+  dropStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
+  clearStash: () => Promise<{ success: boolean; message: string }>;
   moveFileOrFolder: (
     sourcePath: string,
     targetPath: string,

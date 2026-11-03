@@ -1,4 +1,4 @@
-import type { GitStatus, GitCommitInfo, WhatsNewSummary } from '../../types';
+import type { GitStatus, GitCommitInfo, WhatsNewSummary, VersionGraphData, SafeSwitchResult } from '../../types';
 import type { ApiResponse } from './client';
 
 export const gitApi = {
@@ -32,11 +32,56 @@ export const gitApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async createOrSwitchBranch(branch: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  async getVersionGraph(repo?: string): Promise<ApiResponse<VersionGraphData>> {
+    const res = await fetch(`/api/git/version-graph${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async safeSwitch(payload: {
+    branch: string;
+    repo?: string;
+    action?: 'check' | 'switch' | 'stash' | 'discard';
+  }): Promise<ApiResponse<SafeSwitchResult>> {
+    const res = await fetch('/api/git/safe-switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async popStash(payload?: { repo?: string; stashId?: string }): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch('/api/git/stash-pop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async dropStash(payload?: { repo?: string; stashId?: string }): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch('/api/git/stash-drop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async clearStash(payload?: { repo?: string }): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch('/api/git/stash-clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async createOrSwitchBranch(branch: string, repo?: string, baseBranch?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
     const res = await fetch('/api/git/branch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch, repo })
+      body: JSON.stringify({ branch, repo, baseBranch })
     });
     return { ok: res.ok, data: await res.json() };
   },

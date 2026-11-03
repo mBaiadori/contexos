@@ -183,8 +183,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         return { success: true, message: res.data.message };
       }
       return { success: false, error: res.data?.error || 'Falha ao aceitar convite' };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Erro ao aceitar convite' };
+    } catch (err) {
+      return { success: false, error: (err as Error)?.message || 'Erro ao aceitar convite' };
     }
   },
 
@@ -196,8 +196,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         return { success: true, message: res.data.message };
       }
       return { success: false, error: res.data?.error || 'Falha ao recusar convite' };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Erro ao recusar convite' };
+    } catch (err) {
+      return { success: false, error: (err as Error)?.message || 'Erro ao recusar convite' };
     }
   },
 

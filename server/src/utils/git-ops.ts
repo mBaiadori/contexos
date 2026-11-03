@@ -206,6 +206,7 @@ export async function commitChanges(
 export async function createAndCheckoutBranch(
   repoDir: string,
   branchName: string,
+  baseBranch?: string,
 ): Promise<{ success: boolean; message: string }> {
   const isRepo = await isGitRepo(repoDir);
   if (!isRepo)
@@ -219,11 +220,31 @@ export async function createAndCheckoutBranch(
     return { success: true, message: `Trocou para a branch '${safeName}'.` };
   }
 
-  const createRes = await executeGit(["checkout", "-b", safeName], repoDir);
+  // Identifica a branch de origem antes da criação
+  let currentBranchBefore = "";
+  try {
+    const curRes = await executeGit(["branch", "--show-current"], repoDir);
+    if (curRes.success) {
+      currentBranchBefore = curRes.stdout.trim();
+    }
+  } catch {}
+
+  const effectiveParent = baseBranch ? assertBranchName(baseBranch) : (currentBranchBefore || "main");
+
+  const args = baseBranch
+    ? ["checkout", "-b", safeName, assertBranchName(baseBranch)]
+    : ["checkout", "-b", safeName];
+
+  const createRes = await executeGit(args, repoDir);
   if (createRes.success) {
+    // Persiste no .git/config a origem de onde a branch foi bifurcada
+    try {
+      await executeGit(["config", `branch.${safeName}.parent`, effectiveParent], repoDir);
+    } catch {}
+
     return {
       success: true,
-      message: `Branch '${safeName}' criada com sucesso.`,
+      message: `Branch '${safeName}' criada com sucesso a partir de '${effectiveParent}'.`,
     };
   }
 

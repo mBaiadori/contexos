@@ -719,9 +719,9 @@ export const GitModal: React.FC<GitModalProps> = ({
               className="material-symbols-outlined"
               style={{ fontSize: "18px" }}
             >
-              layers
+              alt_route
             </span>
-            <span>Trilhas de Trabalho</span>
+            <span>Versões</span>
           </button>
         </div>
 

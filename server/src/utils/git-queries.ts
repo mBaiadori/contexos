@@ -164,7 +164,7 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
     tracking,
     ahead,
     behind,
-    isClean: visibleFiles.length === 0 && systemFiles.length === 0,
+    isClean: visibleFiles.length === 0,
     files: visibleFiles,
     systemFiles,
     remoteUrl,

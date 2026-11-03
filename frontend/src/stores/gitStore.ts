@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { API } from "../services/api";
 import { DraftStore } from "../services/draft-store";
 import { isPathHidden, isSystemPath } from "../utils/hidden-files";
-import type { GitCommitInfo, GitStatus, WhatsNewSummary, WorkspaceChange } from "../types";
+import type { GitCommitInfo, GitStatus, WhatsNewSummary, WorkspaceChange, VersionGraphData, SafeSwitchResult } from "../types";
 import { useRepoStore } from "./repoStore";
 import { useEditorStore } from "./editorStore";
 import { useGovernanceStore } from "./governanceStore";
@@ -16,6 +16,7 @@ interface GitState {
   hasUnreadWhatsNew: boolean;
   hasRemoteUpdates: boolean;
   remoteUpdateInfo: { localHash: string; remoteHash?: string; branch?: string } | null;
+  versionGraph: VersionGraphData | null;
 
   setGitStatus: (status: GitStatus | null) => void;
   setGitLog: (log: GitCommitInfo[]) => void;
@@ -35,7 +36,12 @@ interface GitState {
   markWhatsNewAsSeen: () => void;
   commitGit: (message: string, files?: string[]) => Promise<{ success: boolean; message: string; commitHash?: string }>;
   syncGit: (branch?: string) => Promise<{ success: boolean; message: string }>;
-  createOrSwitchBranch: (branch: string) => Promise<{ success: boolean; message: string }>;
+  createOrSwitchBranch: (branch: string, baseBranch?: string) => Promise<{ success: boolean; message: string }>;
+  refreshVersionGraph: (targetRepoName?: string) => Promise<VersionGraphData | null>;
+  safeSwitch: (payload: { branch: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard' }) => Promise<SafeSwitchResult>;
+  popStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
+  dropStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
+  clearStash: () => Promise<{ success: boolean; message: string }>;
 }
 
 const remoteUpdatesByRepo: Record<string, boolean> = {};
@@ -51,6 +57,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   hasUnreadWhatsNew: false,
   hasRemoteUpdates: false,
   remoteUpdateInfo: null,
+  versionGraph: null,
 
   setGitStatus: (gitStatus) => set({ gitStatus }),
   setGitLog: (gitLog) => set({ gitLog }),
@@ -263,15 +270,79 @@ export const useGitStore = create<GitState>((set, get) => ({
     return res.data;
   },
 
-  createOrSwitchBranch: async (branch: string) => {
+  createOrSwitchBranch: async (branch: string, baseBranch?: string) => {
     const repo = useRepoStore.getState().activeRepo;
-    const res = await API.createOrSwitchBranch(branch, repo?.name);
+    const res = await API.createOrSwitchBranch(branch, repo?.name, baseBranch);
     if (res.ok) {
       await get().refreshGitStatus();
       await get().refreshGitLog(15);
       await get().refreshWhatsNew();
+      await get().refreshVersionGraph();
       if (repo) await useRepoStore.getState().loadTree(repo.name);
     }
     return res.data;
+  },
+
+  refreshVersionGraph: async (targetRepoName?: string) => {
+    const repo = useRepoStore.getState().activeRepo;
+    const repoName = targetRepoName || repo?.name;
+    const res = await API.getVersionGraph(repoName);
+    if (res.ok && res.data) {
+      set({ versionGraph: res.data });
+      return res.data;
+    }
+    return null;
+  },
+
+  safeSwitch: async (payload: {
+    branch: string;
+    repo?: string;
+    action?: 'check' | 'switch' | 'stash' | 'discard';
+  }) => {
+    const repo = useRepoStore.getState().activeRepo;
+    const repoName = payload.repo || repo?.name;
+    const res = await API.safeSwitch({ ...payload, repo: repoName });
+    if (res.ok && res.data) {
+      if (payload.action && payload.action !== 'check' && res.data.success) {
+        await get().refreshGitStatus();
+        await get().refreshPendingChanges();
+        await get().refreshGitLog(15);
+        await get().refreshWhatsNew();
+        await get().refreshVersionGraph();
+        if (repo) await useRepoStore.getState().loadTree(repo.name);
+      }
+      return res.data;
+    }
+    return res.data || { success: false, error: 'Falha na comunicação com o servidor' };
+  },
+
+  popStash: async (stashId?: string) => {
+    const repo = useRepoStore.getState().activeRepo;
+    const res = await API.popStash({ repo: repo?.name, stashId });
+    if (res.ok && res.data?.success) {
+      await get().refreshGitStatus();
+      await get().refreshPendingChanges();
+      await get().refreshVersionGraph();
+      if (repo) await useRepoStore.getState().loadTree(repo.name);
+    }
+    return res.data || { success: false, message: 'Falha ao restaurar rascunhos' };
+  },
+
+  dropStash: async (stashId?: string) => {
+    const repo = useRepoStore.getState().activeRepo;
+    const res = await API.dropStash({ repo: repo?.name, stashId });
+    if (res.ok && res.data?.success) {
+      await get().refreshVersionGraph();
+    }
+    return res.data || { success: false, message: 'Falha ao descartar rascunho' };
+  },
+
+  clearStash: async () => {
+    const repo = useRepoStore.getState().activeRepo;
+    const res = await API.clearStash({ repo: repo?.name });
+    if (res.ok && res.data?.success) {
+      await get().refreshVersionGraph();
+    }
+    return res.data || { success: false, message: 'Falha ao limpar stashes' };
   },
 }));

@@ -233,6 +233,7 @@ export interface DepartmentConfig {
 
 export interface CollaboratorInfo {
   login: string;
+  name?: string;
   id: number;
   avatar_url: string;
   html_url: string;
@@ -270,6 +271,7 @@ export interface RepoTeamInfo {
   slug: string;
   name: string;
   description?: string;
+  members_count?: number;
   permission: 'pull' | 'triage' | 'push' | 'maintain' | 'admin' | string;
   permissions?: {
     pull?: boolean;
@@ -586,6 +588,65 @@ export interface GitCommitInfo {
   author: string;
   date: string;
   message: string;
+}
+
+export interface VersionProposalInfo {
+  id: number | string;
+  title: string;
+  description?: string;
+  status: 'OPEN' | 'MERGED' | 'CLOSED' | 'REJECTED';
+  author: string;
+  created_at: string;
+  approvals_count: number;
+}
+
+export interface VersionNode {
+  name: string;
+  isCurrent: boolean;
+  isDefault: boolean;
+  type: 'main' | 'proposal' | 'draft';
+  parentBranch?: string;
+  proposal?: VersionProposalInfo;
+  lastCommit?: {
+    hash: string;
+    shortHash: string;
+    author: string;
+    date: string;
+    message: string;
+  };
+  ahead: number;
+  behind: number;
+  isMerged?: boolean;
+  mergedDate?: string;
+  baseHash?: string;
+  baseDate?: string;
+  hasStash?: boolean;
+  stashes?: Array<{ id: string; message: string; date: string }>;
+  uncommittedFiles?: GitFileStatus[];
+}
+
+export interface VersionGraphData {
+  repo: string;
+  defaultBranch: string;
+  currentBranch: string;
+  stashes?: Array<{ id: string; message: string; date: string }>;
+  mainCommits?: GitCommitInfo[];
+  nodes: VersionNode[];
+}
+
+export interface SafeSwitchResult {
+  success?: boolean;
+  canSwitch?: boolean;
+  hasUncommitted?: boolean;
+  changedCount?: number;
+  files?: GitFileStatus[];
+  currentBranch?: string;
+  targetBranch?: string;
+  branch?: string;
+  message?: string;
+  error?: string;
+  stashed?: boolean;
+  discarded?: boolean;
 }
 
 export interface WhatsNewItem {

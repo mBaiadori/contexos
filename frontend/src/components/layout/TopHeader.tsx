@@ -15,11 +15,13 @@ import {
 } from "lucide-react";
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 import { InvitationsModal } from "../modals/InvitationsModal";
+import { HeaderVersionPill } from "./HeaderVersionPill";
 
 interface TopHeaderProps {
   onOpenDiffModal: () => void;
   onToggleCopilot: () => void;
   onOpenGitModal?: () => void;
+  onOpenVersionGraph?: () => void;
   onNavigateToEdits?: (tab?: "drafts" | "whats-new") => void;
   onOpenTour?: () => void;
 }
@@ -29,6 +31,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
     onOpenDiffModal,
     onToggleCopilot,
     onOpenGitModal = () => {},
+    onOpenVersionGraph = () => {},
     onNavigateToEdits,
     onOpenTour = () => {},
   }) => {
@@ -241,6 +244,8 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                 ? activeOrg.full_name || activeOrg.login
                 : "Visão Geral")}
           </h1>
+
+          <HeaderVersionPill onClick={onOpenVersionGraph} />
 
           {hasRemoteUpdates && (
             <button

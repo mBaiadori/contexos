@@ -12,8 +12,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const result = await authService.authenticateWithToken(body.token || '');
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(401).send({ error: err.message || 'Falha na autenticação' });
+    } catch (err) {
+      return reply.status(401).send({ error: (err as Error)?.message || 'Falha na autenticação' });
     }
   });
 
@@ -22,8 +22,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const result = await authService.requestDeviceCode(body.client_id);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Erro ao gerar código do dispositivo' });
+    } catch (err) {
+      return reply.status(400).send({ error: (err as Error)?.message || 'Erro ao gerar código do dispositivo' });
     }
   });
 
@@ -35,8 +35,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const result = await authService.pollDeviceToken(body.device_code, body.client_id);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Erro ao verificar autorização' });
+    } catch (err) {
+      return reply.status(400).send({ error: (err as Error)?.message || 'Erro ao verificar autorização' });
     }
   });
 
@@ -52,8 +52,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const res = await authService.switchAccount(body.account_id);
       return reply.send(res);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Erro ao alternar conta' });
+    } catch (err) {
+      return reply.status(400).send({ error: (err as Error)?.message || 'Erro ao alternar conta' });
     }
   });
 
@@ -65,8 +65,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const res = authService.removeAccount(decodeURIComponent(id));
       return reply.send(res);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Erro ao remover conta' });
+    } catch (err) {
+      return reply.status(400).send({ error: (err as Error)?.message || 'Erro ao remover conta' });
     }
   });
 
@@ -78,8 +78,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const result = await invitationsService.getPendingInvitations();
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message || 'Erro ao consultar convites' });
+    } catch (err) {
+      return reply.status(500).send({ error: (err as Error)?.message || 'Erro ao consultar convites' });
     }
   });
 
@@ -88,8 +88,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const result = await invitationsService.acceptInvitation(body);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Erro ao aceitar convite' });
+    } catch (err) {
+      return reply.status(400).send({ error: (err as Error)?.message || 'Erro ao aceitar convite' });
     }
   });
 
@@ -98,8 +98,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const result = await invitationsService.declineInvitation(body);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Erro ao recusar convite' });
+    } catch (err) {
+      return reply.status(400).send({ error: (err as Error)?.message || 'Erro ao recusar convite' });
     }
   });
 }

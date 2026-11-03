@@ -25,6 +25,7 @@ interface RepoGovernanceModalProps {
 interface OrgMemberInfo {
   id: number;
   login: string;
+  name?: string;
   avatar_url: string;
   html_url: string;
   role: string;
@@ -122,7 +123,7 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
       ]);
 
       if (collabRes.ok && collabRes.data?.collaborators) {
-        setCollaborators(collabRes.data.collaborators as any);
+        setCollaborators((collabRes.data.collaborators || []) as unknown as CollaboratorInfo[]);
       } else {
         setCollaborators([]);
       }
@@ -134,11 +135,11 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
       }
 
       if (membersRes.ok && membersRes.data?.members) {
-        setOrgMembers(membersRes.data.members as any);
+        setOrgMembers((membersRes.data.members || []) as unknown as OrgMemberInfo[]);
       } else {
         setOrgMembers([]);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.warn('[RepoGovernanceModal] Falha ao carregar acessos:', err);
       setErrorMsg('Não foi possível carregar a lista de acessos.');
     } finally {
@@ -176,10 +177,10 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
           text: res.data?.error || res.data?.message || `Não foi possível convidar @${username}.`,
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedbackMsg({
         type: 'error',
-        text: err.message || `Erro ao convidar @${username}.`,
+        text: (err as Error)?.message || `Erro ao convidar @${username}.`,
       });
     } finally {
       setInvitingLogin(null);
@@ -192,7 +193,7 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
     return collaborators.filter(
       (c) =>
         c.login?.toLowerCase().includes(q) ||
-        (c as any).name?.toLowerCase().includes(q) ||
+        c.name?.toLowerCase().includes(q) ||
         c.role_name?.toLowerCase().includes(q) ||
         c.permission?.toLowerCase().includes(q)
     );
@@ -204,7 +205,7 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
     return orgMembers.filter(
       (m) =>
         m.login?.toLowerCase().includes(q) ||
-        (m as any).name?.toLowerCase().includes(q) ||
+        m.name?.toLowerCase().includes(q) ||
         m.role?.toLowerCase().includes(q)
     );
   }, [orgMembers, searchQuery]);
@@ -442,7 +443,7 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
                       <div className="repo-gov-info">
                         <div className="repo-gov-name-row">
                           <span className="repo-gov-name">
-                            {(person as any).name || person.login}
+                            {person.name || person.login}
                           </span>
                           {person.is_owner && (
                             <span className="repo-gov-owner-badge">Proprietário</span>
@@ -530,7 +531,7 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
                       <div className="repo-gov-info">
                         <div className="repo-gov-name-row">
                           <span className="repo-gov-name">
-                            {(member as any).name || member.login}
+                            {member.name || member.login}
                           </span>
                           <span
                             className="repo-gov-owner-badge"
@@ -648,7 +649,7 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
                     <div className="repo-gov-info">
                       <div className="repo-gov-name-row">
                         <span className="repo-gov-name">{team.name}</span>
-                        {(team as any).members_count !== undefined && (
+                        {team.members_count !== undefined && (
                           <span
                             className="repo-gov-owner-badge"
                             style={{
@@ -657,8 +658,8 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
                               borderColor: 'var(--md-sys-color-outline-variant, #dadce0)',
                             }}
                           >
-                            {(team as any).members_count}{' '}
-                            {(team as any).members_count === 1 ? 'membro' : 'membros'}
+                            {team.members_count}{' '}
+                            {team.members_count === 1 ? 'membro' : 'membros'}
                           </span>
                         )}
                       </div>
