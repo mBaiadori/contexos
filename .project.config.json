@@ -1,0 +1,63 @@
+{
+  "governance_audit_logs": [
+    {
+      "id": "58a5a11a-9ed3-4df3-b5fa-09d99016c218",
+      "timestamp": "2026-10-22T21:21:21.342Z",
+      "action": "PR_EDITED",
+      "actor": "@mBaiadori",
+      "target": "PR #3 (gov/update-5501)",
+      "details": "Alterações em 'user.md' geraram o commit 2628630. Aprovações anteriores invalidadas para reavaliação."
+    }
+  ],
+  "categories": [
+    {
+      "name": "produtos",
+      "color": "#22c55e"
+    }
+  ],
+  "badges": [
+    {
+      "name": "ADR",
+      "color": "#3b82f6"
+    }
+  ],
+  "tags": [
+    {
+      "name": "developer",
+      "color": "#ef4444"
+    }
+  ],
+  "statuses": [
+    {
+      "name": "aprovado",
+      "color": "#22c55e"
+    },
+    {
+      "name": "revisao",
+      "color": "#fca5a5"
+    }
+  ],
+  "ai_template_prompt": "",
+  "governance_rules": {
+    "min_approvals_default": 1
+  },
+  "default_language": "pt-BR",
+  "supported_languages": [
+    {
+      "code": "pt-BR",
+      "label": "Português (Brasil)",
+      "flag": "🇧🇷"
+    },
+    {
+      "code": "en",
+      "label": "English",
+      "flag": "🇺🇸"
+    },
+    {
+      "code": "es",
+      "label": "Español",
+      "flag": "🇪🇸"
+    }
+  ],
+  "translation_engine": "lightweight-local"
+}
