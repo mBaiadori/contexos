@@ -93,6 +93,37 @@ export interface Repo {
   permissions?: RepoPermissions;
   has_access?: boolean;
   is_locked?: boolean;
+  is_pending_invitation?: boolean;
+  invitation_id?: number;
+  inviter?: string;
+}
+
+export interface RepoInvitation {
+  id: number;
+  type: 'repository';
+  repo_name: string;
+  full_name: string;
+  owner: string;
+  inviter: string;
+  permissions: string;
+  created_at: string;
+  html_url: string;
+}
+
+export interface OrgInvitation {
+  id: number;
+  type: 'org';
+  org_login: string;
+  org_name: string;
+  avatar_url?: string;
+  role: string;
+  state: string;
+}
+
+export interface PendingInvitationsResult {
+  repository_invitations: RepoInvitation[];
+  org_invitations: OrgInvitation[];
+  total: number;
 }
 
 export interface SavedAccount {

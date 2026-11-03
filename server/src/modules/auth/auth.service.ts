@@ -308,7 +308,7 @@ export class AuthService {
       customClientId ||
       process.env.GITHUB_CLIENT_ID ||
       (cfg as any).github_client_id ||
-      'Iv1.b507a08c87ecfe98'
+      '178c6fc778ccc68e1d6a'
     ).trim();
 
     if (!clientId) {
@@ -369,7 +369,7 @@ export class AuthService {
       customClientId ||
       process.env.GITHUB_CLIENT_ID ||
       (cfg as any).github_client_id ||
-      'Iv1.b507a08c87ecfe98'
+      '178c6fc778ccc68e1d6a'
     ).trim();
 
     try {

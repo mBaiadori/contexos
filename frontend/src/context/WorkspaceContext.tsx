@@ -12,6 +12,7 @@ import type {
   TreeNode,
   WhatsNewSummary,
   WorkspaceChange,
+  PendingInvitationsResult,
 } from "../types";
 import { useAuth } from "./AuthContext";
 import { useEditorStore, type AutoSaveStatus } from "../stores/editorStore";
@@ -128,6 +129,11 @@ export interface WorkspaceContextType {
   refreshEffectivePermission: (repo?: Repo) => Promise<void>;
   authError: string | null;
   setAuthError: (err: string | null) => void;
+  pendingInvitations: PendingInvitationsResult | null;
+  isLoadingInvitations: boolean;
+  refreshInvitations: () => Promise<void>;
+  acceptInvitation: (payload: { type: 'repository' | 'org'; id?: number | string; org?: string }) => Promise<{ success: boolean; message?: string; error?: string }>;
+  declineInvitation: (payload: { type: 'repository' | 'org'; id?: number | string; org?: string }) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);

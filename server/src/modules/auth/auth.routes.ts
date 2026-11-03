@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { authService } from './auth.service.js';
+import { invitationsService } from './invitations.service.js';
 
 export async function authRoutes(fastify: FastifyInstance) {
   fastify.get('/api/status', async (_request, reply) => {
@@ -71,5 +72,34 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   fastify.post('/api/auth/logout', async (_request, reply) => {
     return reply.send(authService.logout());
+  });
+
+  fastify.get('/api/auth/invitations', async (_request, reply) => {
+    try {
+      const result = await invitationsService.getPendingInvitations();
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || 'Erro ao consultar convites' });
+    }
+  });
+
+  fastify.post('/api/auth/invitations/accept', async (request, reply) => {
+    const body = (request.body as { type: 'repository' | 'org'; id?: number | string; org?: string }) || {};
+    try {
+      const result = await invitationsService.acceptInvitation(body);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message || 'Erro ao aceitar convite' });
+    }
+  });
+
+  fastify.post('/api/auth/invitations/decline', async (request, reply) => {
+    const body = (request.body as { type: 'repository' | 'org'; id?: number | string; org?: string }) || {};
+    try {
+      const result = await invitationsService.declineInvitation(body);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message || 'Erro ao recusar convite' });
+    }
   });
 }

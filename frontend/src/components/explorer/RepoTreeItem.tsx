@@ -11,6 +11,7 @@ import {
   FolderPlus,
   Trash2,
   Lock,
+  Mail,
 } from "lucide-react";
 import type { Repo, TreeNode } from "../../types";
 import { InlineCreateRow } from "./InlineCreateRow";
@@ -69,6 +70,46 @@ export const RepoTreeItem: React.FC<RepoTreeItemProps> = memo((props) => {
     onDropOnRepo,
     treeNodeProps,
   } = props;
+
+  if (r.is_pending_invitation) {
+    return (
+      <div
+        key={`org-repo-invitation-${r.name}`}
+        onClick={(e) => onSelectRepo(r, e)}
+        className="tree-repo-header"
+        style={{
+          backgroundColor: "rgba(245, 158, 11, 0.08)",
+          border: "1px dashed rgba(245, 158, 11, 0.35)",
+          cursor: "pointer",
+        }}
+        title={`Convite pendente de @${r.inviter || "Admin"} para ${r.name}. Clique para aceitar e sincronizar.`}
+      >
+        <div className="tree-repo-left">
+          <Mail size={13} color="#f59e0b" style={{ flexShrink: 0 }} />
+          <span
+            className="tree-repo-name"
+            style={{ color: "var(--text-heading)", fontWeight: 600 }}
+          >
+            {r.name}
+          </span>
+        </div>
+        <span
+          className="tree-repo-badge"
+          style={{
+            backgroundColor: "rgba(245, 158, 11, 0.15)",
+            color: "#d97706",
+            border: "1px solid rgba(245, 158, 11, 0.3)",
+            fontSize: "10px",
+            padding: "2px 7px",
+            borderRadius: "9999px",
+            fontWeight: 600,
+          }}
+        >
+          Aceitar Convite
+        </span>
+      </div>
+    );
+  }
 
   const isLocked =
     Boolean(r.is_locked) ||

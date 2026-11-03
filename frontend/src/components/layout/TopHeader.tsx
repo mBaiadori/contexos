@@ -11,8 +11,10 @@ import {
   Shield,
   CloudDownload,
   LogOut,
+  Mail,
 } from "lucide-react";
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
+import { InvitationsModal } from "../modals/InvitationsModal";
 
 interface TopHeaderProps {
   onOpenDiffModal: () => void;
@@ -38,9 +40,15 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
       isLoadingPermission,
       hasRemoteUpdates,
       syncGit,
+      pendingInvitations,
+      isLoadingInvitations,
+      acceptInvitation,
+      declineInvitation,
+      refreshInvitations,
     } = useWorkspace();
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const [isInvitationsOpen, setIsInvitationsOpen] = React.useState(false);
 
     const filteredPendingChanges = useMemo(() => {
       return (pendingChanges || []).filter(
@@ -359,6 +367,26 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
             </Badge>
           )}
 
+          {pendingInvitations && pendingInvitations.total > 0 && (
+            <Button
+              id="btn-top-invitations"
+              variant="subtle"
+              size="sm"
+              leftIcon={<Mail size={14} color="#d97706" />}
+              onClick={() => setIsInvitationsOpen(true)}
+              title={`${pendingInvitations.total} convite(s) pendente(s) no GitHub`}
+              style={{
+                backgroundColor: "rgba(245, 158, 11, 0.12)",
+                color: "#d97706",
+                borderColor: "rgba(245, 158, 11, 0.35)",
+                fontWeight: 600,
+                fontSize: "12px",
+              }}
+            >
+              Convites ({pendingInvitations.total})
+            </Button>
+          )}
+
           <Button
             id="btn-global-ai-copilot"
             variant="primary"
@@ -386,6 +414,16 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
             }}
           />
         </div>
+
+        <InvitationsModal
+          isOpen={isInvitationsOpen}
+          onClose={() => setIsInvitationsOpen(false)}
+          invitations={pendingInvitations}
+          isLoading={isLoadingInvitations}
+          onAccept={acceptInvitation}
+          onDecline={declineInvitation}
+          onRefresh={refreshInvitations}
+        />
       </header>
     );
   },

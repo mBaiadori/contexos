@@ -1,4 +1,4 @@
-import type { WorkspaceStatus, User, SavedAccount } from '../../types';
+import type { WorkspaceStatus, User, SavedAccount, PendingInvitationsResult } from '../../types';
 import { safeParseJson, type ApiResponse } from './client';
 
 export const authApi = {
@@ -75,5 +75,39 @@ export const authApi = {
   async logout(): Promise<{ success: boolean }> {
     const res = await fetch('/api/auth/logout', { method: 'POST' });
     return safeParseJson(res, { success: true });
+  },
+
+  async getPendingInvitations(): Promise<ApiResponse<PendingInvitationsResult>> {
+    const res = await fetch('/api/auth/invitations');
+    return {
+      ok: res.ok,
+      data: await safeParseJson(res, { repository_invitations: [], org_invitations: [], total: 0 }),
+    };
+  },
+
+  async acceptInvitation(payload: {
+    type: 'repository' | 'org';
+    id?: number | string;
+    org?: string;
+  }): Promise<ApiResponse<{ success?: boolean; message?: string; error?: string }>> {
+    const res = await fetch('/api/auth/invitations/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok, data: await safeParseJson(res) };
+  },
+
+  async declineInvitation(payload: {
+    type: 'repository' | 'org';
+    id?: number | string;
+    org?: string;
+  }): Promise<ApiResponse<{ success?: boolean; message?: string; error?: string }>> {
+    const res = await fetch('/api/auth/invitations/decline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok, data: await safeParseJson(res) };
   },
 };

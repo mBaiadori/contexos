@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Shield, Users, User, Search, X, RefreshCw, ExternalLink } from 'lucide-react';
-import { Modal, IconButton, Button, Spinner } from '../ui';
+import {
+  Shield,
+  Users,
+  User,
+  Search,
+  X,
+  RefreshCw,
+  ExternalLink,
+  Building2,
+  Check,
+  UserPlus,
+} from 'lucide-react';
+import { Modal, IconButton, Button, Spinner, AlertBanner } from '../ui';
 import { API } from '../../services/api';
 import type { CollaboratorInfo, RepoTeamInfo } from '../../types';
 
@@ -9,6 +20,14 @@ interface RepoGovernanceModalProps {
   onClose: () => void;
   orgLogin: string;
   repoName: string;
+}
+
+interface OrgMemberInfo {
+  id: number;
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  role: string;
 }
 
 const PERMISSION_BADGES: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -74,23 +93,32 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
   orgLogin,
   repoName,
 }) => {
-  const [activeTab, setActiveTab] = useState<'people' | 'teams'>('people');
+  const [activeTab, setActiveTab] = useState<'people' | 'org_members' | 'teams'>('people');
   const [searchQuery, setSearchQuery] = useState('');
   const [collaborators, setCollaborators] = useState<CollaboratorInfo[]>([]);
+  const [orgMembers, setOrgMembers] = useState<OrgMemberInfo[]>([]);
   const [teams, setTeams] = useState<RepoTeamInfo[]>([]);
+  const [memberPermissions, setMemberPermissions] = useState<Record<string, string>>({});
+  const [invitingLogin, setInvitingLogin] = useState<string | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const isOrg = Boolean(orgLogin && orgLogin !== 'local' && orgLogin !== 'all');
 
   const loadData = async () => {
     if (!repoName) return;
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [collabRes, teamsRes] = await Promise.all([
+      const [collabRes, teamsRes, membersRes] = await Promise.all([
         API.getGovernanceCollaborators(repoName),
-        orgLogin && orgLogin !== 'local' && orgLogin !== 'all'
+        isOrg
           ? API.getRepoTeams(orgLogin, repoName)
           : Promise.resolve({ ok: true, data: { teams: [] } }),
+        isOrg
+          ? API.getOrgMembers(orgLogin)
+          : Promise.resolve({ ok: true, data: { members: [] } }),
       ]);
 
       if (collabRes.ok && collabRes.data?.collaborators) {
@@ -104,6 +132,12 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
       } else {
         setTeams([]);
       }
+
+      if (membersRes.ok && membersRes.data?.members) {
+        setOrgMembers(membersRes.data.members as any);
+      } else {
+        setOrgMembers([]);
+      }
     } catch (err: any) {
       console.warn('[RepoGovernanceModal] Falha ao carregar acessos:', err);
       setErrorMsg('Não foi possível carregar a lista de acessos.');
@@ -115,9 +149,42 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
+      setFeedbackMsg(null);
       loadData();
     }
   }, [isOpen, repoName, orgLogin]);
+
+  const handleInviteMember = async (username: string) => {
+    const permission = memberPermissions[username] || 'push';
+    setInvitingLogin(username);
+    setFeedbackMsg(null);
+    try {
+      const res = await API.inviteCollaborator({
+        username,
+        permission,
+        repo: repoName,
+      });
+      if (res.ok && (res.data?.success || !res.data?.error)) {
+        setFeedbackMsg({
+          type: 'success',
+          text: `Convite enviado com sucesso para @${username} (Permissão: ${getPermissionBadge(permission).label})!`,
+        });
+        await loadData();
+      } else {
+        setFeedbackMsg({
+          type: 'error',
+          text: res.data?.error || res.data?.message || `Não foi possível convidar @${username}.`,
+        });
+      }
+    } catch (err: any) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err.message || `Erro ao convidar @${username}.`,
+      });
+    } finally {
+      setInvitingLogin(null);
+    }
+  };
 
   const filteredPeople = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -130,6 +197,17 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
         c.permission?.toLowerCase().includes(q)
     );
   }, [collaborators, searchQuery]);
+
+  const filteredOrgMembers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return orgMembers;
+    return orgMembers.filter(
+      (m) =>
+        m.login?.toLowerCase().includes(q) ||
+        (m as any).name?.toLowerCase().includes(q) ||
+        m.role?.toLowerCase().includes(q)
+    );
+  }, [orgMembers, searchQuery]);
 
   const filteredTeams = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -153,7 +231,7 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
       title="Governança & Acessos"
       subtitle={
         <>
-          Nível de permissão em{' '}
+          Permissões em{' '}
           <code
             style={{
               color: 'var(--md-sys-color-primary, #1a73e8)',
@@ -171,9 +249,17 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
           <span className="repo-gov-footer-total">
             Total:{' '}
             <strong>
-              {activeTab === 'people' ? filteredPeople.length : filteredTeams.length}
+              {activeTab === 'people'
+                ? filteredPeople.length
+                : activeTab === 'org_members'
+                  ? filteredOrgMembers.length
+                  : filteredTeams.length}
             </strong>{' '}
-            {activeTab === 'people' ? 'pessoa(s)' : 'time(s)'}
+            {activeTab === 'people'
+              ? 'pessoa(s)'
+              : activeTab === 'org_members'
+                ? 'membro(s) na organização'
+                : 'time(s)'}
           </span>
           <Button variant="primary" size="sm" onClick={onClose}>
             Fechar
@@ -182,6 +268,16 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
       }
     >
       <div className="repo-gov-container">
+        {feedbackMsg && (
+          <div style={{ marginBottom: '10px' }}>
+            <AlertBanner
+              variant={feedbackMsg.type}
+              title={feedbackMsg.text}
+              onClose={() => setFeedbackMsg(null)}
+            />
+          </div>
+        )}
+
         {/* Toolbar: Segmented Controls + Reload */}
         <div className="repo-gov-toolbar">
           <div className="repo-gov-segmented">
@@ -191,9 +287,23 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
               onClick={() => setActiveTab('people')}
             >
               <User size={14} />
-              <span>Pessoas</span>
+              <span>Acesso Atual</span>
               <span className="repo-gov-counter">{collaborators.length}</span>
             </button>
+
+            {isOrg && (
+              <button
+                type="button"
+                className={`repo-gov-seg-btn ${activeTab === 'org_members' ? 'active' : ''}`}
+                onClick={() => setActiveTab('org_members')}
+                title="Listar todos os membros da organização para convidar para este repositório"
+              >
+                <Building2 size={14} />
+                <span>Membros da Org</span>
+                <span className="repo-gov-counter">{orgMembers.length}</span>
+              </button>
+            )}
+
             <button
               type="button"
               className={`repo-gov-seg-btn ${activeTab === 'teams' ? 'active' : ''}`}
@@ -230,7 +340,9 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
             placeholder={
               activeTab === 'people'
                 ? 'Filtrar pessoas por nome ou @username...'
-                : 'Filtrar times por nome...'
+                : activeTab === 'org_members'
+                  ? 'Filtrar membros da organização por @username...'
+                  : 'Filtrar times por nome...'
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -281,7 +393,17 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
             filteredPeople.length === 0 ? (
               <div className="repo-gov-empty">
                 <User size={32} className="repo-gov-empty-icon" />
-                <p style={{ margin: 0 }}>Nenhuma pessoa encontrada.</p>
+                <p style={{ margin: 0 }}>Nenhuma pessoa encontrada com acesso individual.</p>
+                {isOrg && orgMembers.length > 0 && (
+                  <Button
+                    variant="subtle"
+                    size="xs"
+                    onClick={() => setActiveTab('org_members')}
+                    style={{ marginTop: '8px' }}
+                  >
+                    Ver Membros da Org ({orgMembers.length})
+                  </Button>
+                )}
                 {searchQuery && (
                   <Button
                     variant="ghost"
@@ -345,6 +467,147 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
                       {person.html_url && (
                         <a
                           href={person.html_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="repo-gov-external-link"
+                          title="Ver perfil no GitHub"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )
+          ) : activeTab === 'org_members' ? (
+            filteredOrgMembers.length === 0 ? (
+              <div className="repo-gov-empty">
+                <Building2 size={32} className="repo-gov-empty-icon" />
+                <p style={{ margin: 0 }}>Nenhum membro da organização encontrado.</p>
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setSearchQuery('')}
+                    style={{ marginTop: '4px' }}
+                  >
+                    Limpar busca
+                  </Button>
+                )}
+              </div>
+            ) : (
+              filteredOrgMembers.map((member) => {
+                const existingCollab = collaborators.find(
+                  (c) => c.login?.toLowerCase() === member.login?.toLowerCase()
+                );
+                const hasAccess = Boolean(existingCollab);
+                const badge = hasAccess ? getPermissionBadge(existingCollab?.permission) : null;
+                const selectedPerm = memberPermissions[member.login] || 'push';
+                const isInviting = invitingLogin === member.login;
+
+                return (
+                  <div key={`org-member-${member.login}`} className="repo-gov-card">
+                    <div className="repo-gov-card-left">
+                      {member.avatar_url ? (
+                        <img
+                          src={member.avatar_url}
+                          alt={member.login}
+                          className="repo-gov-avatar"
+                          style={{
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            flexShrink: 0,
+                          }}
+                        />
+                      ) : (
+                        <div className="repo-gov-avatar-fallback">
+                          {member.login?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="repo-gov-info">
+                        <div className="repo-gov-name-row">
+                          <span className="repo-gov-name">
+                            {(member as any).name || member.login}
+                          </span>
+                          <span
+                            className="repo-gov-owner-badge"
+                            style={{
+                              background: 'var(--md-sys-color-surface-container-high, #e8eaed)',
+                              color: 'var(--md-sys-color-on-surface-variant, #5f6368)',
+                              borderColor: 'var(--md-sys-color-outline-variant, #dadce0)',
+                            }}
+                          >
+                            {member.role === 'admin' ? 'Admin da Org' : 'Membro da Org'}
+                          </span>
+                        </div>
+                        <span className="repo-gov-sub">@{member.login}</span>
+                      </div>
+                    </div>
+
+                    <div className="repo-gov-card-right" style={{ gap: '8px' }}>
+                      {hasAccess ? (
+                        <span
+                          className="repo-gov-perm-badge"
+                          style={{
+                            backgroundColor: badge?.bg,
+                            color: badge?.color,
+                            border: `1px solid ${badge?.border}`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                          title={`Já possui acesso a este repositório como ${badge?.label}`}
+                        >
+                          <Check size={12} />
+                          {badge?.label}
+                        </span>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <select
+                            value={selectedPerm}
+                            onChange={(e) =>
+                              setMemberPermissions((prev) => ({
+                                ...prev,
+                                [member.login]: e.target.value,
+                              }))
+                            }
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              padding: '3px 6px',
+                              borderRadius: '6px',
+                              backgroundColor: 'var(--color-surface, #ffffff)',
+                              border: '1px solid var(--color-outline-variant, #e2e8f0)',
+                              color: 'var(--color-on-surface, #1e293b)',
+                              cursor: 'pointer',
+                              outline: 'none',
+                            }}
+                          >
+                            <option value="push">Escrita</option>
+                            <option value="pull">Leitura</option>
+                            <option value="admin">Admin</option>
+                          </select>
+
+                          <Button
+                            variant="primary"
+                            size="xs"
+                            onClick={() => handleInviteMember(member.login)}
+                            loading={isInviting}
+                            disabled={Boolean(invitingLogin && !isInviting)}
+                            style={{ fontSize: '11px', fontWeight: 600, padding: '3px 8px' }}
+                          >
+                            <UserPlus size={12} />
+                            <span>Convidar</span>
+                          </Button>
+                        </div>
+                      )}
+
+                      {member.html_url && (
+                        <a
+                          href={member.html_url}
                           target="_blank"
                           rel="noreferrer"
                           className="repo-gov-external-link"

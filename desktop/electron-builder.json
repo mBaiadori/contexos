@@ -60,7 +60,8 @@
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "include": "scripts/installer.nsh"
   },
   "linux": {
     "target": [

@@ -344,6 +344,62 @@ export class ReposService {
       }
     }
 
+    // Merge de convites pendentes de repositórios do usuário
+    if (cfg.authenticated && cfg.token && cfg.token !== "local_mode") {
+      try {
+        const { statusCode: invStatus, data: invData } = await callGitProviderAPI(
+          "/user/repository_invitations",
+          cfg.token,
+          "GET",
+          null,
+          { timeoutMs: 4000 }
+        );
+        if (invStatus === 200 && Array.isArray(invData)) {
+          for (const inv of invData) {
+            if (inv?.repository?.name) {
+              const invOwner = inv.repository.owner?.login || "";
+              const invFullName = inv.repository.full_name || `${invOwner}/${inv.repository.name}`;
+              const invKey = invFullName.toLowerCase();
+
+              const matchesScope = isPersonalScope
+                ? (invOwner.toLowerCase() === userLogin || !inv.repository.owner?.type || inv.repository.owner?.type === "User")
+                : (invOwner.toLowerCase() === normalizedTarget);
+
+              if (matchesScope && !remoteKeysMap.has(invKey)) {
+                const invRepo = {
+                  name: inv.repository.name,
+                  full_name: invFullName,
+                  description: inv.repository.description || "Convite de colaboração pendente",
+                  html_url: inv.repository.html_url,
+                  is_private: Boolean(inv.repository.private),
+                  default_branch: "main",
+                  is_local: false,
+                  is_cloned_locally: false,
+                  owner: invOwner,
+                  owner_type: inv.repository.owner?.type || (invOwner.toLowerCase() === userLogin ? "User" : "Organization"),
+                  is_owner: false,
+                  is_org: inv.repository.owner?.type === "Organization" || invOwner.toLowerCase() !== userLogin,
+                  is_fork: false,
+                  is_pending_invitation: true,
+                  invitation_id: inv.id,
+                  inviter: inv.inviter?.login || "Administrador",
+                  permissions: {
+                    admin: inv.permissions === "admin",
+                    push: inv.permissions === "admin" || inv.permissions === "write",
+                    pull: true,
+                  },
+                };
+                formattedRemote.push(invRepo);
+                remoteKeysMap.set(invKey, invRepo);
+              }
+            }
+          }
+        }
+      } catch (invErr) {
+        console.warn("[ReposService] Erro ao buscar convites pendentes para listagem:", invErr);
+      }
+    }
+
     // Ordenação fixa de A a Z
     formattedRemote.sort((a, b) =>
       a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
@@ -598,6 +654,19 @@ export class ReposService {
       Boolean(repo.permissions.pull || repo.permissions.admin || repo.is_owner);
 
     if (!isClonedLocally && hasPullPermission && !isLocal && (htmlUrl || fullName.includes("/") || cfg.token)) {
+      // Se o repositório possuir convite pendente, auto-aceita no GitHub antes de clonar
+      if (repo.is_pending_invitation && repo.invitation_id && cfg.token && cfg.token !== "local_mode") {
+        try {
+          await callGitProviderAPI(
+            `/user/repository_invitations/${encodeURIComponent(String(repo.invitation_id))}`,
+            cfg.token,
+            "PATCH"
+          );
+        } catch (autoAcceptErr) {
+          console.warn(`[selectRepo] Falha ao auto-aceitar convite para ${fullName}:`, autoAcceptErr);
+        }
+      }
+
       const cloneTargetUrl = htmlUrl || `https://github.com/${fullName}.git`;
       try {
         eventsService.broadcast("repo_progress", {

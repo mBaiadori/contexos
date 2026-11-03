@@ -6,6 +6,7 @@ import type {
   Repo,
   RepoDiagnosis,
   TreeNode,
+  PendingInvitationsResult,
 } from "../types";
 import { useGitStore } from "./gitStore";
 import { useEditorStore } from "./editorStore";
@@ -66,6 +67,8 @@ interface RepoState {
   effectivePermission: EffectiveUserPermission | null;
   isLoadingPermission: boolean;
   authError: string | null;
+  pendingInvitations: PendingInvitationsResult | null;
+  isLoadingInvitations: boolean;
 
   setActiveOrg: (org: Organization | null) => void;
   setOrgs: (orgs: Organization[]) => void;
@@ -77,6 +80,10 @@ interface RepoState {
   setRepoProgress: (progress: Record<string, { stage: string; percent: number; message?: string }>) => void;
   setEffectivePermission: (perm: EffectiveUserPermission | null) => void;
   setAuthError: (err: string | null) => void;
+
+  refreshInvitations: () => Promise<void>;
+  acceptInvitation: (payload: { type: 'repository' | 'org'; id?: number | string; org?: string }) => Promise<{ success: boolean; message?: string; error?: string }>;
+  declineInvitation: (payload: { type: 'repository' | 'org'; id?: number | string; org?: string }) => Promise<{ success: boolean; message?: string; error?: string }>;
 
   loadOrgs: () => Promise<void>;
   selectOrg: (orgLogin: string) => Promise<void>;
@@ -130,6 +137,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   effectivePermission: null,
   isLoadingPermission: false,
   authError: null,
+  pendingInvitations: null,
+  isLoadingInvitations: false,
 
   setActiveOrg: (activeOrg) => set({ activeOrg }),
   setOrgs: (orgs) => set({ orgs }),
@@ -150,7 +159,50 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   getRepoOwnerOrOrg: (targetRepo) =>
     resolveRepoOwnerOrOrg(targetRepo, get().activeRepo, get().activeOrg),
 
+  refreshInvitations: async () => {
+    set({ isLoadingInvitations: true });
+    try {
+      const res = await API.getPendingInvitations();
+      if (res.ok && res.data) {
+        set({ pendingInvitations: res.data });
+      }
+    } catch (err) {
+      console.warn("[repoStore] Erro ao carregar convites:", err);
+    } finally {
+      set({ isLoadingInvitations: false });
+    }
+  },
+
+  acceptInvitation: async (payload: { type: 'repository' | 'org'; id?: number | string; org?: string }) => {
+    try {
+      const res = await API.acceptInvitation(payload);
+      if (res.ok && res.data?.success) {
+        await get().refreshInvitations();
+        await get().loadOrgs();
+        await get().loadRepos();
+        return { success: true, message: res.data.message };
+      }
+      return { success: false, error: res.data?.error || 'Falha ao aceitar convite' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao aceitar convite' };
+    }
+  },
+
+  declineInvitation: async (payload: { type: 'repository' | 'org'; id?: number | string; org?: string }) => {
+    try {
+      const res = await API.declineInvitation(payload);
+      if (res.ok && res.data?.success) {
+        await get().refreshInvitations();
+        return { success: true, message: res.data.message };
+      }
+      return { success: false, error: res.data?.error || 'Falha ao recusar convite' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao recusar convite' };
+    }
+  },
+
   loadOrgs: async () => {
+    get().refreshInvitations().catch(() => {});
     try {
       const res = await API.getOrgs();
       if (res.ok && res.data?.orgs) {
