@@ -40,8 +40,8 @@ export const SafeSwitchModal: React.FC<SafeSwitchModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       size="md"
-      title="Alterações Pendentes no Disco"
-      subtitle={`Você tem alterações na versão "${currentBranch}". Como deseja prosseguir antes de mudar para "${targetBranch}"?`}
+      title="Alterações em Andamento"
+      subtitle={`Você possui edições na versão "${currentBranch}". Como deseja prosseguir antes de mudar para "${targetBranch}"?`}
       footer={
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", gap: "8px", flexWrap: "wrap" }}>
           <Button
@@ -59,9 +59,10 @@ export const SafeSwitchModal: React.FC<SafeSwitchModalProps> = ({
               size="sm"
               onClick={onConfirmDiscard}
               disabled={isProcessing}
+              title="Move as alterações para a Lixeira permanente. Nada é perdido definitivamente."
               style={{ color: "var(--color-error, #ef4444)", borderColor: "rgba(239, 68, 68, 0.4)" }}
             >
-              Descartar
+              Mover para Lixeira
             </Button>
 
             <Button
@@ -69,8 +70,10 @@ export const SafeSwitchModal: React.FC<SafeSwitchModalProps> = ({
               size="sm"
               onClick={onConfirmStash}
               disabled={isProcessing}
+              title="Guarda suas alterações para navegação. Uma pílula interativa surgirá no cabeçalho permitindo restaurá-las a qualquer momento."
+              style={{ color: "#d97706", borderColor: "rgba(245, 158, 11, 0.4)" }}
             >
-              Guardar rascunhos (Stash)
+              Guardar para navegação
             </Button>
 
             {onConfirmCommit && (
@@ -89,7 +92,7 @@ export const SafeSwitchModal: React.FC<SafeSwitchModalProps> = ({
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         <p style={{ margin: 0, fontSize: "12px", color: "var(--text-secondary)" }}>
-          Para que nenhuma alteração seja perdida, você pode <strong>salvar um marco permanente (commit)</strong> nesta versão atual ou <strong>guardar em rascunhos temporários</strong>. O histórico de edições continuará visível e intacto.
+          Para que nenhuma alteração seja perdida, você pode <strong>guardar suas alterações para navegação</strong> (elas ficarão disponíveis no topo com acesso rápido), <strong>salvar um marco permanente</strong> nesta versão ou <strong>mover para a Lixeira</strong> (preservando o histórico para recuperação futura).
         </p>
 
         {onConfirmCommit && (

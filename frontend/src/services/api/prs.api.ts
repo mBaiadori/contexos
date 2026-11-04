@@ -30,6 +30,18 @@ export const prsApi = {
     return res.json();
   },
 
+  async checkConflicts(
+    files?: string[],
+    repo?: string
+  ): Promise<ApiResponse<{ hasConflicts: boolean; conflicts: Array<{ id: number | string; title: string; branch: string; author?: string; matchingFiles: string[] }> }>> {
+    const res = await fetch('/api/prs/check-conflicts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files, repo }),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async createPR(payload: { title: string; content?: string; path?: string; repo?: string }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/create', {
       method: 'POST',

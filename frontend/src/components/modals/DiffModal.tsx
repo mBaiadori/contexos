@@ -3,6 +3,7 @@ import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAI } from "../../context/AIContext";
 import { API } from "../../services/api";
 import { VisualMarkdownDiff } from "../editor/VisualMarkdownDiff";
+import type { ConflictingProposal } from "../../types";
 import {
   Modal,
   Button,
@@ -47,6 +48,8 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   );
   const [prTitle, setPrTitle] = useState("");
   const [prDesc, setPrDesc] = useState("");
+  const [conflicts, setConflicts] = useState<ConflictingProposal[]>([]);
+  const [targetProposalId, setTargetProposalId] = useState<number | string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>(
@@ -60,8 +63,26 @@ export const DiffModal: React.FC<DiffModalProps> = ({
         `Proposta de Evolução Documental (${pendingChanges.length} arquivos)`,
       );
       setPrDesc("");
+      setTargetProposalId(null);
+
+      // Checar se há propostas abertas conflitantes
+      if (pendingChanges.length > 0) {
+        API.checkConflicts(pendingChanges.map((c) => c.path), activeRepo?.name)
+          .then((res) => {
+            if (res.ok && res.data?.hasConflicts && res.data.conflicts.length > 0) {
+              setConflicts(res.data.conflicts);
+              // Pré-selecionar anexar por conveniência recomendada
+              setTargetProposalId(res.data.conflicts[0].id);
+            } else {
+              setConflicts([]);
+            }
+          })
+          .catch((err) => {
+            console.warn("[DiffModal] Erro ao verificar propostas concorrentes:", err);
+          });
+      }
     }
-  }, [isOpen, pendingChanges.length]);
+  }, [isOpen, pendingChanges.length, activeRepo?.name]);
 
   if (!isOpen) return null;
 
@@ -100,6 +121,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       const res = await API.createUnifiedPR({
         title: prTitle,
         description: prDesc,
+        targetProposalId: targetProposalId || undefined,
         repo: activeRepo?.name,
       });
       if (res.ok) {
@@ -424,6 +446,104 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
         {/* Metadados da Proposta */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Banner de Proposta Concorrente */}
+          {conflicts.length > 0 && (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: "8px",
+                backgroundColor: "rgba(245, 158, 11, 0.08)",
+                border: "1px solid rgba(245, 158, 11, 0.3)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#d97706",
+                }}
+              >
+                <span>⚠️ Proposta em Aberto Detectada</span>
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "12px",
+                  color: "var(--text-secondary)",
+                  lineHeight: 1.4,
+                }}
+              >
+                Você já possui a{" "}
+                <strong>
+                  Proposta #{conflicts[0].id} ("{conflicts[0].title}")
+                </strong>{" "}
+                aberta alterando arquivos coincidentes. Como deseja organizar estas novas edições?
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "16px",
+                  marginTop: "4px",
+                  fontSize: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="proposal_dest"
+                    checked={targetProposalId === conflicts[0].id}
+                    onChange={() => setTargetProposalId(conflicts[0].id)}
+                  />
+                  <span
+                    style={{
+                      fontWeight:
+                        targetProposalId === conflicts[0].id ? 600 : 400,
+                    }}
+                  >
+                    Anexar à Proposta #{conflicts[0].id} existente (Recomendado)
+                  </span>
+                </label>
+
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="proposal_dest"
+                    checked={targetProposalId === null}
+                    onChange={() => setTargetProposalId(null)}
+                  />
+                  <span
+                    style={{
+                      fontWeight: targetProposalId === null ? 600 : 400,
+                    }}
+                  >
+                    Criar nova Proposta separada
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
+
           <FormField
             label="Título da Proposta de Evolução:"
             required
@@ -488,6 +608,33 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               onChange={(e) => setPrTitle(e.target.value)}
               placeholder="Descreva o objetivo desta proposta..."
             />
+            <div
+              style={{
+                fontSize: "11px",
+                color: "var(--text-secondary)",
+                marginTop: "4px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <span style={{ opacity: 0.8 }}>Linha técnica (branch):</span>
+              <code
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  backgroundColor: "var(--bg-surface, rgba(0,0,0,0.05))",
+                  color: "#7c3aed",
+                  fontWeight: 500,
+                }}
+              >
+                {targetProposalId
+                  ? `Anexa à linha da Proposta #${targetProposalId}`
+                  : prTitle.trim()
+                    ? `prop-<ID>-${prTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "atualizacao"}`
+                    : "prop-<ID>-<titulo>"}
+              </code>
+            </div>
           </FormField>
 
           <FormField label="Descrição & Justificativa:">

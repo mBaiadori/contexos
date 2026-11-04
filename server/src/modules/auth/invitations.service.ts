@@ -126,10 +126,7 @@ export class InvitationsService {
       if (statusCode === 204 || statusCode === 200) {
         return { success: true, message: 'Convite para o repositório aceito com sucesso!' };
       }
-      return {
-        success: false,
-        error: data?.message || `Falha ao aceitar convite (HTTP ${statusCode}).`,
-      };
+      throw new Error(`Falha ao aceitar convite: ${data?.message || `HTTP ${statusCode}`}`);
     }
 
     if (payload.type === 'org') {

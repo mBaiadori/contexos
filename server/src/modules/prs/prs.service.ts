@@ -1441,6 +1441,68 @@ DIRETRIZES OBRIGATÓRIAS:
     };
   }
 
+  async checkConflictingProposals(
+    repoNameParam?: string,
+    filesToCheck?: string[],
+  ) {
+    const cfg = loadConfig();
+    const repoName = repoNameParam || cfg.active_repo?.name || "local";
+    const repoDir = this.getRepoDir(repoName);
+    const prs = this.loadRepoPRs(repoName);
+    const openPRs = prs.filter((p: any) => p.status === "OPEN" || !p.status);
+
+    if (openPRs.length === 0) {
+      return { hasConflicts: false, conflicts: [] };
+    }
+
+    let targetFiles = filesToCheck || [];
+    if (targetFiles.length === 0) {
+      const gitStatus = await getGitStatus(repoDir);
+      targetFiles = (gitStatus.files || []).map((f) => f.path);
+    }
+
+    const conflicts: Array<{
+      id: number | string;
+      title: string;
+      branch: string;
+      author?: string;
+      matchingFiles: string[];
+    }> = [];
+
+    for (const pr of openPRs) {
+      let prFiles: string[] = [];
+      try {
+        const diffRes = await executeGit(
+          [
+            "diff",
+            "--name-only",
+            `${pr.base_sha || "main"}...${pr.head_sha || pr.branch}`,
+          ],
+          repoDir,
+        );
+        if (diffRes.success && diffRes.stdout) {
+          prFiles = diffRes.stdout.trim().split("\n").filter(Boolean);
+        }
+      } catch {}
+
+      const matching = targetFiles.filter((tf) => prFiles.includes(tf));
+      if (matching.length > 0) {
+        conflicts.push({
+          id: pr.id,
+          title: pr.title,
+          branch: pr.branch,
+          author: pr.author?.login || pr.author?.name || "Autor",
+          matchingFiles: matching,
+        });
+      }
+    }
+
+    return {
+      hasConflicts: conflicts.length > 0,
+      conflicts,
+    };
+  }
+
   async createPR(payload: {
     title: string;
     description: string;
@@ -1449,6 +1511,7 @@ DIRETRIZES OBRIGATÓRIAS:
     layer?: string;
     domain?: string;
     repo?: string;
+    targetProposalId?: number | string;
   }) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
@@ -1534,10 +1597,81 @@ DIRETRIZES OBRIGATÓRIAS:
       : "";
 
     const repoPRs = this.loadRepoPRs(repoName);
-    const newId = repoPRs.length + 1;
-    const branchName =
-      payload.branch || `gov/update-${Date.now().toString().slice(-4)}`;
     const now = new Date().toISOString();
+
+    // Se o usuário optar por anexar à proposta aberta existente
+    if (payload.targetProposalId) {
+      const existingPR = repoPRs.find(
+        (p: any) => String(p.id) === String(payload.targetProposalId),
+      );
+      if (!existingPR) {
+        throw new Error(
+          `Proposta #${payload.targetProposalId} não foi encontrada.`,
+        );
+      }
+      if (existingPR.status === "MERGED" || existingPR.status === "CLOSED") {
+        throw new Error(
+          `A Proposta #${payload.targetProposalId} já está finalizada ou encerrada.`,
+        );
+      }
+
+      const activeToken = getActiveBearerToken(cfg.token);
+      await healRepositoryState(repoDir, { token: activeToken });
+      await createAndCheckoutBranch(repoDir, existingPR.branch);
+
+      const commitMsg =
+        payload.title || `Atualizações na Proposta #${existingPR.id}`;
+      await commitChanges(repoDir, commitMsg, allChangedPaths);
+
+      const headHashRes = await executeGit(["rev-parse", "HEAD"], repoDir);
+      const headSha = headHashRes.success
+        ? (headHashRes.stdout || "").trim()
+        : "";
+
+      if (
+        cfg.authenticated &&
+        activeToken &&
+        activeRepo?.full_name &&
+        !activeRepo?.is_local
+      ) {
+        try {
+          await executeGit(
+            ["push", "origin", assertBranchName(existingPR.branch)],
+            repoDir,
+          );
+        } catch (pushErr: any) {
+          console.warn(
+            "[PRsService] Falha ao sincronizar branch da proposta remota:",
+            pushErr,
+          );
+        }
+      }
+
+      existingPR.updated_at = now;
+      existingPR.head_sha = headSha;
+      this.saveRepoPRs(repoName, repoPRs);
+      workspaceService.invalidateTreeCache(repoName);
+      try {
+        clearWorkspaceChanges(repoName);
+      } catch {}
+
+      return {
+        ...existingPR,
+        message: `Alterações anexadas com sucesso à Proposta #${existingPR.id}!`,
+      };
+    }
+
+    const newId = repoPRs.length + 1;
+    const cleanSlug = (payload.title || "atualizacao")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 35) || "atualizacao";
+
+    const branchName =
+      payload.branch || `prop-${newId}-${cleanSlug}`;
 
     // 1. Create and checkout new Git branch
     let headSha = "";

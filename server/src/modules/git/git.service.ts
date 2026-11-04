@@ -1,6 +1,8 @@
+import fs from "fs";
+import path from "path";
 import { resolveRepoDir } from "../../config/constants.js";
 import { clearWorkspaceChanges, loadConfig } from "../../config/storage.js";
-import { assertBranchName } from "../../utils/git-validate.js";
+import { assertBranchName, assertCommitish } from "../../utils/git-validate.js";
 import {
   checkRemoteGitUpdates,
   cloneGitRepo,
@@ -25,6 +27,7 @@ import { recordAuditEvent } from "../audit/audit-chain.service.js";
 import { eventsService } from "../events/events.service.js";
 import { prsService } from "../prs/prs.service.js";
 import { workspaceService } from "../workspace/workspace.service.js";
+import { draftsTrashService } from "./drafts-trash.service.js";
 
 export class GitService {
   private getRepoDir(repoName?: string, ownerParam?: string): string {
@@ -455,327 +458,383 @@ export class GitService {
       }
     } catch {}
 
-    const nodes: any[] = [];
-
-    for (const rawName of branchNames) {
-      let branch = rawName;
-      try {
-        branch = assertBranchName(rawName);
-      } catch {
-        continue;
-      }
-
-      const isCurrent = branch === currentBranch;
-      const isDefault = branch === defaultBranch;
-
-      let baseHash = "";
-      let baseDate = "";
-      if (!isDefault) {
-        try {
-          const baseRes = await executeGit(
-            ["merge-base", defaultBranch, branch],
-            repoDir,
-          );
-          if (baseRes.success) {
-            baseHash = baseRes.stdout.trim();
-            if (baseHash) {
-              const bdRes = await executeGit(
-                ["log", "-1", "--format=%cI", baseHash],
-                repoDir,
-              );
-              if (bdRes.success) {
-                baseDate = bdRes.stdout.trim();
-              }
-            }
-          }
-        } catch {}
-      }
-
-      // Stashes vinculados a esta versão
-      const branchStashes = stashes.filter(
-        (s) =>
-          s.message.includes(`(${branch} ->`) ||
-          s.message.includes(`On ${branch}:`) ||
-          (isCurrent && s.id === "stash@{0}"),
+    // 1. Otimização em Massa: Últimos commits de todas as branches em 1 único comando
+    const branchLastCommits = new Map<
+      string,
+      { hash: string; shortHash: string; author: string; date: string; message: string }
+    >();
+    try {
+      const refRes = await executeGit(
+        [
+          "for-each-ref",
+          "--format=%(refname:short)|%(objectname)|%(authordate:iso-strict)|%(authorname)|%(contents:subject)",
+          "refs/heads/",
+        ],
+        repoDir,
       );
-      const hasStash = branchStashes.length > 0;
-
-      // Obter último commit
-      let lastCommit:
-        | {
-            hash: string;
-            shortHash: string;
-            author: string;
-            date: string;
-            message: string;
-          }
-        | undefined = undefined;
-
-      try {
-        const logRes = await executeGit(
-          ["log", "-1", "--format=%H|%h|%an|%cI|%s", branch],
-          repoDir,
-        );
-        if (logRes.success && logRes.stdout.trim()) {
-          const parts = logRes.stdout.trim().split("|");
-          if (parts.length >= 4) {
-            lastCommit = {
-              hash: parts[0],
-              shortHash: parts[1],
-              author: parts[2],
-              date: parts[3],
-              message: parts.slice(4).join("|") || "Sem mensagem",
-            };
-          }
-        }
-      } catch {}
-
-      // Localizar proposta associada
-      const pr = repoPRs.find(
-        (p: any) => p.branch === branch && p.status !== "DELETED",
-      );
-
-      let type: "main" | "proposal" | "draft" = "draft";
-      if (isDefault) {
-        type = "main";
-      } else if (pr) {
-        type = "proposal";
+      if (refRes.success && refRes.stdout.trim()) {
+        refRes.stdout
+          .trim()
+          .split("\n")
+          .forEach((line) => {
+            const parts = line.split("|");
+            if (parts.length >= 4) {
+              const [ref, hash, date, author, ...msgParts] = parts;
+              branchLastCommits.set(ref, {
+                hash,
+                shortHash: hash.slice(0, 7),
+                author: author || "Git",
+                date: date || "",
+                message: msgParts.join("|") || "Sem mensagem",
+              });
+            }
+          });
       }
+    } catch {}
 
-      // Descobrir a versão pai (parentBranch) antes do cálculo de ahead/behind
-      let parentBranch: string | undefined = undefined;
-      if (!isDefault) {
-        // 1. Prioridade: verificar se há no git config
-        try {
-          const cfgParentRes = await executeGit(
-            ["config", `branch.${branch}.parent`],
-            repoDir,
-          );
-          if (cfgParentRes.success && cfgParentRes.stdout.trim()) {
-            const rawParent = cfgParentRes.stdout.trim();
-            if (branchNames.includes(rawParent)) {
-              parentBranch = rawParent;
-            } else if (/^[0-9a-f]{7,40}$/i.test(rawParent)) {
-              // Se foi bifurcada de um commit hash do tronco, o pai é o defaultBranch
-              parentBranch = defaultBranch;
-            } else {
-              parentBranch = rawParent;
+    // 2. Otimização em Massa: Todas as configs branch.<name>.parent em 1 único comando
+    const branchConfigParents = new Map<string, string>();
+    try {
+      const cfgRes = await executeGit(
+        ["config", "--get-regexp", "^branch\\..*\\.parent$"],
+        repoDir,
+      );
+      if (cfgRes.success && cfgRes.stdout.trim()) {
+        cfgRes.stdout
+          .trim()
+          .split("\n")
+          .forEach((line) => {
+            const match = line.match(/^branch\.(.+)\.parent\s+(.+)$/);
+            if (match) {
+              branchConfigParents.set(match[1].trim(), match[2].trim());
             }
-          }
-        } catch {}
+          });
+      }
+    } catch {}
 
-        // 2. Se não achou no config, verificar proposta (PR) associada
-        if (!parentBranch && pr?.target_branch) {
-          parentBranch = pr.target_branch;
-        }
-
-        // 3. Se ainda não achou, checar se o nome sugere herança direta (ex: gov/update-3317-derivada de gov/update-3317)
-        // Prioriza o prefixo mais longo para pegar o pai imediato em cadeias profundas
-        if (!parentBranch) {
-          const candidates = branchNames
-            .filter(
-              (other) =>
-                other !== branch &&
-                other !== defaultBranch &&
-                (branch.startsWith(`${other}-`) ||
-                  branch.startsWith(`${other}/`)),
-            )
-            .sort((a, b) => b.length - a.length);
-          if (candidates.length > 0) {
-            parentBranch = candidates[0];
-          }
-        }
-
-        // 4. Se ainda não achou, checar se divergiu de outra branch existente via merge-base
-        if (!parentBranch) {
-          let bestCandidate: string | null = null;
-          let bestTimestamp = 0;
-
-          for (const other of branchNames) {
-            if (other === branch || other === defaultBranch) continue;
-            // Se other já foi processado e tem esta branch como parent, não pode ser o pai (evita ciclo imediato A <-> B)
-            const alreadyProcessedNode = nodes.find((n) => n.name === other);
-            if (
-              alreadyProcessedNode &&
-              alreadyProcessedNode.parentBranch === branch
-            ) {
-              continue;
-            }
-            try {
-              const mbRes = await executeGit(
-                ["merge-base", other, branch],
-                repoDir,
-              );
-              if (mbRes.success && mbRes.stdout.trim()) {
-                const mbHash = mbRes.stdout.trim();
-                if (mbHash && mbHash !== baseHash) {
-                  const timeRes = await executeGit(
-                    ["log", "-1", "--format=%ct", mbHash],
-                    repoDir,
-                  );
-                  if (timeRes.success) {
-                    const ts = parseInt(timeRes.stdout.trim(), 10) || 0;
-                    if (ts > bestTimestamp) {
-                      bestTimestamp = ts;
-                      bestCandidate = other;
-                    }
+    // 3. Otimização em Massa: Commits de merge no tronco em 1 único comando
+    const mergeCommitsByBranch = new Map<
+      string,
+      { hash: string; date: string; message: string }
+    >();
+    try {
+      const mergesRes = await executeGit(
+        ["log", "--merges", "-100", "--format=%H|%cI|%s", defaultBranch],
+        repoDir,
+      );
+      if (mergesRes.success && mergesRes.stdout.trim()) {
+        mergesRes.stdout
+          .trim()
+          .split("\n")
+          .forEach((line) => {
+            const parts = line.split("|");
+            if (parts.length >= 3) {
+              const [mHash, mDate, ...msgParts] = parts;
+              const msg = msgParts.join("|") || "";
+              branchNames.forEach((bName) => {
+                if (bName !== defaultBranch && !mergeCommitsByBranch.has(bName)) {
+                  if (
+                    msg.includes(`'${bName}'`) ||
+                    msg.includes(`"${bName}"`) ||
+                    msg.includes(` ${bName} `) ||
+                    msg.endsWith(` ${bName}`)
+                  ) {
+                    mergeCommitsByBranch.set(bName, { hash: mHash, date: mDate, message: msg });
                   }
                 }
-              }
-            } catch {}
-          }
-
-          parentBranch = bestCandidate || defaultBranch;
-        }
+              });
+            }
+          });
       }
+    } catch {}
 
-      // Calcular ahead/behind em relação à branch pai ou branch padrão
-      let ahead = 0;
-      let behind = 0;
-      let branchCommits: Array<{
-        hash: string;
-        shortHash: string;
-        author: string;
-        date: string;
-        message: string;
-      }> = [];
+    // Cache em memória para merge-base simétricos e datas de commits
+    const mergeBaseCache = new Map<string, string>();
+    const getMergeBase = async (a: string, b: string): Promise<string> => {
+      const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+      if (mergeBaseCache.has(key)) return mergeBaseCache.get(key)!;
+      try {
+        const res = await executeGit(["merge-base", a, b], repoDir);
+        const hash = res.success ? res.stdout.trim() : "";
+        mergeBaseCache.set(key, hash);
+        return hash;
+      } catch {
+        mergeBaseCache.set(key, "");
+        return "";
+      }
+    };
 
-      if (!isDefault) {
-        const compareBase =
-          parentBranch && parentBranch !== defaultBranch
-            ? parentBranch
-            : defaultBranch;
+    const commitDateCache = new Map<string, string>();
+    mainCommits.forEach((mc) => {
+      if (mc.hash && mc.date) commitDateCache.set(mc.hash, mc.date);
+    });
+
+    const getCommitDate = async (hash: string): Promise<string> => {
+      if (!hash) return "";
+      if (commitDateCache.has(hash)) return commitDateCache.get(hash)!;
+      try {
+        const bdRes = await executeGit(["log", "-1", "--format=%cI", hash], repoDir);
+        const d = bdRes.success ? bdRes.stdout.trim() : "";
+        commitDateCache.set(hash, d);
+        return d;
+      } catch {
+        return "";
+      }
+    };
+
+    // 4. Processamento Concorrente com Promise.all (elimina o gargalo sequencial)
+    const rawNodes = await Promise.all(
+      branchNames.map(async (rawName) => {
+        let branch = rawName;
         try {
-          const countRes = await executeGit(
-            [
-              "rev-list",
-              "--left-right",
-              "--count",
-              `${compareBase}...${branch}`,
-            ],
-            repoDir,
-          );
-          if (countRes.success && countRes.stdout.trim()) {
-            const [bStr, aStr] = countRes.stdout.trim().split(/\s+/);
-            behind = parseInt(bStr, 10) || 0;
-            ahead = parseInt(aStr, 10) || 0;
-          }
-        } catch {}
+          branch = assertBranchName(rawName);
+        } catch {
+          return null;
+        }
 
-        // Commits exclusivos desta branch (para branches com commits pendentes)
-        if (ahead > 0) {
+        const isCurrent = branch === currentBranch;
+        const isDefault = branch === defaultBranch;
+
+        let baseHash = "";
+        let baseDate = "";
+        if (!isDefault) {
+          baseHash = await getMergeBase(defaultBranch, branch);
+          if (baseHash) {
+            baseDate = await getCommitDate(baseHash);
+          }
+        }
+
+        // Stashes vinculados a esta versão
+        const branchStashes = stashes.filter(
+          (s) =>
+            s.message.includes(`(${branch} ->`) ||
+            s.message.includes(`On ${branch}:`) ||
+            (isCurrent && s.id === "stash@{0}"),
+        );
+        const hasStash = branchStashes.length > 0;
+
+        // Obter último commit (do cache de for-each-ref ou fallback para log -1)
+        let lastCommit = branchLastCommits.get(branch);
+        if (!lastCommit) {
           try {
-            const bCommitsRes = await executeGit(
-              [
-                "log",
-                `-${Math.min(ahead, 15)}`,
-                "--format=%H|%h|%an|%cI|%s",
-                `${compareBase}..${branch}`,
-              ],
+            const logRes = await executeGit(
+              ["log", "-1", "--format=%H|%h|%an|%cI|%s", branch],
               repoDir,
             );
-            if (bCommitsRes.success && bCommitsRes.stdout.trim()) {
-              branchCommits = bCommitsRes.stdout
-                .trim()
-                .split("\n")
-                .filter(Boolean)
-                .map((line) => {
-                  const parts = line.split("|");
-                  return {
-                    hash: parts[0],
-                    shortHash: parts[1],
-                    author: parts[2],
-                    date: parts[3],
-                    message: parts.slice(4).join("|") || "Commit",
-                  };
-                });
+            if (logRes.success && logRes.stdout.trim()) {
+              const parts = logRes.stdout.trim().split("|");
+              if (parts.length >= 4) {
+                lastCommit = {
+                  hash: parts[0],
+                  shortHash: parts[1],
+                  author: parts[2],
+                  date: parts[3],
+                  message: parts.slice(4).join("|") || "Sem mensagem",
+                };
+              }
             }
           } catch {}
         }
 
-        // Fallback: se não capturou commits exclusivos via ahead mas possui lastCommit, garante ao menos o último commit
-        if (branchCommits.length === 0 && lastCommit) {
-          branchCommits = [lastCommit];
+        // Localizar proposta associada
+        const pr = repoPRs.find(
+          (p: any) => p.branch === branch && p.status !== "DELETED",
+        );
+
+        let type: "main" | "proposal" | "draft" = "draft";
+        if (isDefault) {
+          type = "main";
+        } else if (pr) {
+          type = "proposal";
         }
-      }
 
-      // Identifica se foi unida/mergeada à Principal:
-      // Apenas se tiver PR com status MERGED ou commit de merge explícito no tronco citando a branch
-      const hasMergedPR = repoPRs.some(
-        (p: any) => p.branch === branch && p.status === "MERGED",
-      );
-      let explicitMergeDate = "";
-      let mergeCommitHash = "";
-      if (!isDefault && !hasMergedPR) {
-        try {
-          const mergeLog = await executeGit(
-            [
-              "log",
-              "-1",
-              "--merges",
-              `--grep=Merge.*${branch}`,
-              "--format=%H|%cI",
-              defaultBranch,
-            ],
-            repoDir,
-          );
-          if (mergeLog.success && mergeLog.stdout.trim()) {
-            const [mHash, mDate] = mergeLog.stdout.trim().split("|");
-            mergeCommitHash = mHash || "";
-            explicitMergeDate = mDate || "";
-          }
-        } catch {}
-      }
-
-      const isMerged =
-        !isDefault && (hasMergedPR || Boolean(explicitMergeDate));
-
-      let mergedDate = "";
-      if (isMerged) {
-        if (hasMergedPR) {
-          const mergedPR = repoPRs.find(
-            (p: any) => p.branch === branch && p.status === "MERGED",
-          );
-          mergedDate = mergedPR?.merged_at || mergedPR?.updated_at || "";
-        }
-        if (!mergedDate && explicitMergeDate) {
-          mergedDate = explicitMergeDate;
-        }
-      }
-
-      nodes.push({
-        name: branch,
-        isCurrent,
-        isDefault,
-        type,
-        parentBranch,
-        proposal: pr
-          ? {
-              id: pr.id,
-              title: pr.title,
-              description: pr.description || "",
-              status: pr.status,
-              author: pr.author,
-              created_at: pr.created_at,
-              approvals_count: Array.isArray(pr.approvals)
-                ? pr.approvals.length
-                : 0,
+        // Descobrir a versão pai (parentBranch) de forma rápida e segura
+        let parentBranch: string | undefined = undefined;
+        if (!isDefault) {
+          // 1. Config de branch
+          const cfgParent = branchConfigParents.get(branch);
+          if (cfgParent) {
+            if (branchNames.includes(cfgParent)) {
+              parentBranch = cfgParent;
+            } else if (/^[0-9a-f]{7,40}$/i.test(cfgParent)) {
+              parentBranch = defaultBranch;
+            } else {
+              parentBranch = cfgParent;
             }
-          : undefined,
-        lastCommit,
-        commits: branchCommits,
-        ahead,
-        behind,
-        isMerged,
-        mergedDate,
-        mergeCommitHash,
-        baseHash,
-        baseDate,
-        hasStash,
-        stashes: branchStashes,
-        uncommittedFiles: isCurrent ? currentStatusFiles : [],
-      });
-    }
+          }
+
+          // 2. Proposta (PR)
+          if (!parentBranch && pr?.target_branch) {
+            parentBranch = pr.target_branch;
+          }
+
+          // 3. Correspondência de prefixo de nome
+          if (!parentBranch) {
+            const candidates = branchNames
+              .filter(
+                (other) =>
+                  other !== branch &&
+                  other !== defaultBranch &&
+                  (branch.startsWith(`${other}-`) ||
+                    branch.startsWith(`${other}/`)),
+              )
+              .sort((a, b) => b.length - a.length);
+            if (candidates.length > 0) {
+              parentBranch = candidates[0];
+            }
+          }
+
+          // 4. Se ainda não achou, checar se divergiu de outra branch existente via merge-base (amostra dos mais relevantes)
+          if (!parentBranch) {
+            let bestCandidate: string | null = null;
+            let bestTimestamp = 0;
+
+            const candidateSample = branchNames
+              .filter((other) => other !== branch && other !== defaultBranch)
+              .slice(0, 5);
+
+            for (const other of candidateSample) {
+              const mbHash = await getMergeBase(other, branch);
+              if (mbHash && mbHash !== baseHash) {
+                const dStr = await getCommitDate(mbHash);
+                const ts = dStr ? new Date(dStr).getTime() : 0;
+                if (ts > bestTimestamp) {
+                  bestTimestamp = ts;
+                  bestCandidate = other;
+                }
+              }
+            }
+
+            parentBranch = bestCandidate || defaultBranch;
+          }
+        }
+
+        // Calcular ahead/behind
+        let ahead = 0;
+        let behind = 0;
+        let branchCommits: Array<{
+          hash: string;
+          shortHash: string;
+          author: string;
+          date: string;
+          message: string;
+        }> = [];
+
+        if (!isDefault) {
+          const compareBase =
+            parentBranch && parentBranch !== defaultBranch
+              ? parentBranch
+              : defaultBranch;
+          try {
+            const countRes = await executeGit(
+              [
+                "rev-list",
+                "--left-right",
+                "--count",
+                `${compareBase}...${branch}`,
+              ],
+              repoDir,
+            );
+            if (countRes.success && countRes.stdout.trim()) {
+              const [bStr, aStr] = countRes.stdout.trim().split(/\s+/);
+              behind = parseInt(bStr, 10) || 0;
+              ahead = parseInt(aStr, 10) || 0;
+            }
+          } catch {}
+
+          if (ahead > 0) {
+            try {
+              const bCommitsRes = await executeGit(
+                [
+                  "log",
+                  `-${Math.min(ahead, 15)}`,
+                  "--format=%H|%h|%an|%cI|%s",
+                  `${compareBase}..${branch}`,
+                ],
+                repoDir,
+              );
+              if (bCommitsRes.success && bCommitsRes.stdout.trim()) {
+                branchCommits = bCommitsRes.stdout
+                  .trim()
+                  .split("\n")
+                  .filter(Boolean)
+                  .map((line) => {
+                    const parts = line.split("|");
+                    return {
+                      hash: parts[0],
+                      shortHash: parts[1],
+                      author: parts[2],
+                      date: parts[3],
+                      message: parts.slice(4).join("|") || "Commit",
+                    };
+                  });
+              }
+            } catch {}
+          }
+
+          if (branchCommits.length === 0 && lastCommit) {
+            branchCommits = [lastCommit];
+          }
+        }
+
+        // Identifica se foi unida/mergeada
+        const hasMergedPR = repoPRs.some(
+          (p: any) => p.branch === branch && p.status === "MERGED",
+        );
+        const mergeInfo = mergeCommitsByBranch.get(branch);
+        const isMerged = !isDefault && (hasMergedPR || Boolean(mergeInfo));
+        let mergedDate = "";
+        let mergeCommitHash = "";
+
+        if (isMerged) {
+          if (hasMergedPR) {
+            const mergedPR = repoPRs.find(
+              (p: any) => p.branch === branch && p.status === "MERGED",
+            );
+            mergedDate = mergedPR?.merged_at || mergedPR?.updated_at || "";
+          }
+          if (!mergedDate && mergeInfo) {
+            mergedDate = mergeInfo.date;
+            mergeCommitHash = mergeInfo.hash;
+          }
+        }
+
+        return {
+          name: branch,
+          isCurrent,
+          isDefault,
+          type,
+          parentBranch,
+          proposal: pr
+            ? {
+                id: pr.id,
+                title: pr.title,
+                description: pr.description || "",
+                status: pr.status,
+                author: pr.author,
+                created_at: pr.created_at,
+                approvals_count: Array.isArray(pr.approvals)
+                  ? pr.approvals.length
+                  : 0,
+              }
+            : undefined,
+          lastCommit,
+          commits: branchCommits,
+          ahead,
+          behind,
+          isMerged,
+          mergedDate,
+          mergeCommitHash,
+          baseHash,
+          baseDate,
+          hasStash,
+          stashes: branchStashes,
+          uncommittedFiles: isCurrent ? currentStatusFiles : [],
+        };
+      }),
+    );
+
+    const nodes: any[] = rawNodes.filter(Boolean);
 
     // Garantir que a árvore de parentBranch não contenha ciclos (DAG estrito convergindo para defaultBranch)
     for (const node of nodes) {
@@ -814,7 +873,8 @@ export class GitService {
   }
 
   async safeSwitch(payload: {
-    branch: string;
+    branch?: string;
+    commitHash?: string;
     repo?: string;
     action?: "check" | "switch" | "stash" | "discard";
     owner?: string;
@@ -826,11 +886,31 @@ export class GitService {
       throw new Error(`Repositório ${repoName} não está clonado localmente.`);
     }
 
-    const targetBranch = assertBranchName(payload.branch);
+    const rawTarget = payload.commitHash || payload.branch;
+    if (!rawTarget) {
+      throw new Error("Nome da versão (branch) ou hash do commit é obrigatório.");
+    }
+
+    const isCommit = Boolean(payload.commitHash || /^[0-9a-f]{7,40}$/i.test(rawTarget));
+    const targetRef = isCommit
+      ? assertCommitish(rawTarget, "Commit")
+      : assertBranchName(rawTarget, "Branch");
+
     const status = await getGitStatus(repoDir);
     const userFiles = status.files || [];
     const isClean = userFiles.length === 0;
     const action = payload.action || "check";
+
+    const switchTarget = async () => {
+      if (isCommit) {
+        const coRes = await executeGit(["checkout", targetRef], repoDir);
+        if (!coRes.success) {
+          throw new Error(coRes.stderr || `Falha ao alternar para o marco ${targetRef}.`);
+        }
+      } else {
+        await createAndCheckoutBranch(repoDir, targetRef);
+      }
+    };
 
     if (action === "check") {
       return {
@@ -839,39 +919,81 @@ export class GitService {
         changedCount: userFiles.length,
         files: userFiles,
         currentBranch: status.branch || "main",
-        targetBranch,
+        targetBranch: isCommit ? undefined : targetRef,
+        targetCommit: isCommit ? targetRef : undefined,
       };
     }
 
     if (action === "stash") {
       if (!isClean) {
         const fromBranch = status.branch || "desconhecida";
-        const stashMsg = `Auto-stash Context OS (${fromBranch} -> ${targetBranch})`;
+        const stashMsg = `Auto-stash Context OS (${fromBranch} -> ${targetRef})`;
         await executeGit(["stash", "push", "-u", "-m", stashMsg], repoDir);
       }
-      await createAndCheckoutBranch(repoDir, targetBranch);
+      await switchTarget();
       workspaceService.invalidateTreeCache(repoName);
       return {
         success: true,
-        message: `Alternado para a versão ${targetBranch}. Rascunhos guardados com segurança.`,
+        message: isCommit
+          ? `Alternado para o marco ${targetRef.slice(0, 7)}. Rascunhos guardados com segurança.`
+          : `Alternado para a versão ${targetRef}. Rascunhos guardados com segurança.`,
         stashed: !isClean,
-        branch: targetBranch,
+        branch: isCommit ? undefined : targetRef,
+        commitHash: isCommit ? targetRef : undefined,
       };
     }
 
     if (action === "discard") {
+      // Salvar na lixeira permanente antes de descartar
+      try {
+        const diffRes = await executeGit(["diff", "HEAD"], repoDir);
+        let patch = diffRes.stdout || "";
+        for (const uf of userFiles.filter(
+          (f) => f.status === "A" || f.status === "U" || f.status === "??",
+        )) {
+          const filePath = path.join(repoDir, uf.path);
+          if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath, "utf-8");
+            patch +=
+              `\n--- /dev/null\n+++ b/${uf.path}\n@@ -0,0 +1,${content.split("\n").length} @@\n` +
+              content
+                .split("\n")
+                .map((l) => `+${l}`)
+                .join("\n");
+          }
+        }
+        if (patch.trim()) {
+          await draftsTrashService.moveToTrash(
+            {
+              fromBranch: status.branch || "Principal",
+              source: "safe_switch",
+              message: `Alterações descartadas ao alternar para ${targetRef}`,
+              files: userFiles.map((f) => ({ path: f.path, status: f.status })),
+              patch,
+            },
+            repoName,
+            payload.owner,
+          );
+        }
+      } catch (err) {
+        console.warn("[GitService] Falha ao arquivar rascunho descartado na lixeira:", err);
+      }
+
       await executeGit(["reset", "--hard", "HEAD"], repoDir);
       await executeGit(["clean", "-fd"], repoDir);
       try {
         clearWorkspaceChanges(repoName);
       } catch {}
-      await createAndCheckoutBranch(repoDir, targetBranch);
+      await switchTarget();
       workspaceService.invalidateTreeCache(repoName);
       return {
         success: true,
-        message: `Alterações descartadas e alternado para a versão ${targetBranch}.`,
+        message: isCommit
+          ? `Alterações movidas para a lixeira e alternado para o marco ${targetRef.slice(0, 7)}.`
+          : `Alterações movidas para a lixeira e alternado para a versão ${targetRef}.`,
         discarded: true,
-        branch: targetBranch,
+        branch: isCommit ? undefined : targetRef,
+        commitHash: isCommit ? targetRef : undefined,
       };
     }
 
@@ -886,12 +1008,15 @@ export class GitService {
       };
     }
 
-    await createAndCheckoutBranch(repoDir, targetBranch);
+    await switchTarget();
     workspaceService.invalidateTreeCache(repoName);
     return {
       success: true,
-      message: `Alternado para a versão ${targetBranch}.`,
-      branch: targetBranch,
+      message: isCommit
+        ? `Alternado para o marco ${targetRef.slice(0, 7)}.`
+        : `Alternado para a versão ${targetRef}.`,
+      branch: isCommit ? undefined : targetRef,
+      commitHash: isCommit ? targetRef : undefined,
     };
   }
 
@@ -921,6 +1046,82 @@ export class GitService {
     };
   }
 
+  async getStashDetails(
+    repoNameParam?: string,
+    stashId = "stash@{0}",
+    ownerParam?: string,
+  ) {
+    const cfg = loadConfig();
+    const repoName = repoNameParam || cfg.active_repo?.name || "local";
+    const repoDir = this.getRepoDir(repoName, ownerParam);
+    if (!(await isGitRepo(repoDir))) {
+      throw new Error(`Repositório ${repoName} não está clonado localmente.`);
+    }
+
+    const listRes = await executeGit(
+      ["stash", "list", "--format=%gd|%s|%cI"],
+      repoDir,
+    );
+    let message = "";
+    let date = "";
+    let fromBranch = "Principal";
+    let targetBranch = "";
+
+    if (listRes.success && listRes.stdout) {
+      const line =
+        listRes.stdout
+          .split("\n")
+          .find((l) => l.startsWith(stashId)) ||
+        listRes.stdout.split("\n")[0];
+      if (line) {
+        const [, msg, dt] = line.split("|");
+        message = msg || "";
+        date = dt || "";
+
+        const match = message.match(/\((.+?) -> (.+?)\)/);
+        if (match) {
+          fromBranch = match[1];
+          targetBranch = match[2];
+        } else {
+          const match2 = message.match(/On (.+?):/);
+          if (match2) fromBranch = match2[1];
+        }
+      }
+    }
+
+    // Obter numstat
+    const numstatRes = await executeGit(
+      ["stash", "show", "--numstat", stashId],
+      repoDir,
+    );
+    const files: Array<{ path: string; additions: number; deletions: number }> =
+      [];
+    if (numstatRes.success && numstatRes.stdout) {
+      numstatRes.stdout
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .forEach((l) => {
+          const [add, del, filePath] = l.split("\t");
+          files.push({
+            additions: parseInt(add, 10) || 0,
+            deletions: parseInt(del, 10) || 0,
+            path: filePath || l,
+          });
+        });
+    }
+
+    return {
+      id: stashId,
+      message,
+      date,
+      fromBranch,
+      targetBranch,
+      fileCount: files.length,
+      files,
+    };
+  }
+
   async dropStash(
     repoNameParam?: string,
     stashId?: string,
@@ -933,6 +1134,57 @@ export class GitService {
       throw new Error(`Repositório ${repoName} não está clonado localmente.`);
     }
 
+    // Arquivar na lixeira antes de descartar
+    try {
+      const targetStash = stashId || "stash@{0}";
+      const patchRes = await executeGit(["stash", "show", "-p", targetStash], repoDir);
+      const patch = patchRes.success ? patchRes.stdout || "" : "";
+
+      const numstatRes = await executeGit(["stash", "show", "--numstat", targetStash], repoDir);
+      const files: Array<{ path: string; additions?: number; deletions?: number }> = [];
+      if (numstatRes.success && numstatRes.stdout) {
+        numstatRes.stdout.trim().split("\n").filter(Boolean).forEach((l) => {
+          const [add, del, p] = l.split("\t");
+          files.push({
+            additions: parseInt(add, 10) || 0,
+            deletions: parseInt(del, 10) || 0,
+            path: p || l,
+          });
+        });
+      }
+
+      let fromBranch = "Principal";
+      const listRes = await executeGit(["stash", "list", "--format=%gd|%s|%cI"], repoDir);
+      if (listRes.success && listRes.stdout) {
+        const line = listRes.stdout.split("\n").find((l) => l.startsWith(targetStash)) || listRes.stdout.split("\n")[0];
+        if (line) {
+          const [, msg] = line.split("|");
+          const m1 = msg?.match(/\((.+?) ->/);
+          if (m1 && m1[1]) fromBranch = m1[1];
+          else {
+            const m2 = msg?.match(/On (.+?):/);
+            if (m2 && m2[1]) fromBranch = m2[1];
+          }
+        }
+      }
+
+      if (patch.trim()) {
+        await draftsTrashService.moveToTrash(
+          {
+            fromBranch,
+            source: "stash",
+            message: `Rascunho guardado (${targetStash}) descartado`,
+            files,
+            patch,
+          },
+          repoName,
+          ownerParam,
+        );
+      }
+    } catch (err) {
+      console.warn("[GitService] Falha ao mover stash descartado para lixeira:", err);
+    }
+
     const args = ["stash", "drop"];
     if (stashId) {
       args.push(stashId);
@@ -942,7 +1194,7 @@ export class GitService {
     return {
       success: res.success,
       message: res.success
-        ? "Rascunho descartado com sucesso."
+        ? "Rascunho movido para a lixeira com sucesso."
         : res.stderr || "Erro ao descartar rascunho.",
     };
   }

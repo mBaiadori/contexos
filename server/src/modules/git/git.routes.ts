@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { gitService } from "./git.service.js";
+import { draftsTrashService } from "./drafts-trash.service.js";
 
 export async function gitRoutes(app: FastifyInstance) {
   // 1. Get current Git Status
@@ -58,14 +59,15 @@ export async function gitRoutes(app: FastifyInstance) {
   app.post("/api/git/safe-switch", async (req, reply) => {
     try {
       const body = req.body as {
-        branch: string;
+        branch?: string;
+        commitHash?: string;
         repo?: string;
         action?: "check" | "switch" | "stash" | "discard";
       };
-      if (!body?.branch) {
+      if (!body?.branch && !body?.commitHash) {
         return reply
           .status(400)
-          .send({ error: "Nome da versão (branch) é obrigatório" });
+          .send({ error: "Nome da versão (branch) ou hash do commit é obrigatório" });
       }
       const res = await gitService.safeSwitch(body);
       return res;
@@ -112,6 +114,79 @@ export async function gitRoutes(app: FastifyInstance) {
       return reply
         .status(500)
         .send({ error: err.message || "Erro ao limpar stashes" });
+    }
+  });
+
+  // 3.6 Get Stash Details
+  app.get("/api/git/stash-details", async (req, reply) => {
+    try {
+      const { repo, stashId, owner } = req.query as {
+        repo?: string;
+        stashId?: string;
+        owner?: string;
+      };
+      const details = await gitService.getStashDetails(repo, stashId, owner);
+      return details;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao obter detalhes do rascunho guardado" });
+    }
+  });
+
+  // 3.7 List Drafts Trash
+  app.get("/api/git/trash", async (req, reply) => {
+    try {
+      const { repo, owner } = req.query as { repo?: string; owner?: string };
+      const items = await draftsTrashService.listTrash(repo, owner);
+      return { trash: items };
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao listar lixeira de rascunhos" });
+    }
+  });
+
+  // 3.8 Restore Draft From Trash
+  app.post("/api/git/trash/restore", async (req, reply) => {
+    try {
+      const { id, repo, owner } = req.body as { id: string; repo?: string; owner?: string };
+      if (!id) {
+        return reply.status(400).send({ error: "ID do rascunho é obrigatório para restauração." });
+      }
+      const res = await draftsTrashService.restoreTrash(id, repo, owner);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao restaurar rascunho da lixeira" });
+    }
+  });
+
+  // 3.9 Delete Single Trash Item
+  app.delete("/api/git/trash/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string };
+      const { repo, owner } = req.query as { repo?: string; owner?: string };
+      const res = await draftsTrashService.deleteTrashItem(id, repo, owner);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao excluir rascunho da lixeira" });
+    }
+  });
+
+  // 3.10 Empty Drafts Trash
+  app.delete("/api/git/trash", async (req, reply) => {
+    try {
+      const { repo, owner } = req.query as { repo?: string; owner?: string };
+      const res = await draftsTrashService.clearTrash(repo, owner);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao esvaziar lixeira" });
     }
   });
 

@@ -644,11 +644,52 @@ export interface SafeSwitchResult {
   files?: GitFileStatus[];
   currentBranch?: string;
   targetBranch?: string;
+  targetCommit?: string;
   branch?: string;
+  commitHash?: string;
   message?: string;
   error?: string;
   stashed?: boolean;
   discarded?: boolean;
+}
+
+export interface StashDetails {
+  id: string;
+  message: string;
+  date: string;
+  fromBranch: string;
+  targetBranch?: string;
+  fileCount: number;
+  files: Array<{
+    path: string;
+    additions: number;
+    deletions: number;
+  }>;
+}
+
+export interface DiscardedDraftItem {
+  id: string;
+  discardedAt: string;
+  fromBranch: string;
+  source: "stash" | "workspace" | "safe_switch";
+  message?: string;
+  fileCount: number;
+  files: Array<{
+    path: string;
+    additions?: number;
+    deletions?: number;
+    status?: string;
+  }>;
+  patch?: string;
+  summary?: string;
+}
+
+export interface ConflictingProposal {
+  id: number | string;
+  title: string;
+  branch: string;
+  author?: string;
+  matchingFiles: string[];
 }
 
 export interface WhatsNewItem {

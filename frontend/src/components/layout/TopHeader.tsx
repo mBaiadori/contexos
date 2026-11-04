@@ -16,6 +16,7 @@ import {
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 import { InvitationsModal } from "../modals/InvitationsModal";
 import { HeaderVersionPill } from "./HeaderVersionPill";
+import { SavedChangesPill } from "./SavedChangesPill";
 
 interface TopHeaderProps {
   onOpenDiffModal: () => void;
@@ -246,6 +247,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
           </h1>
 
           <HeaderVersionPill onClick={onOpenVersionGraph} />
+          <SavedChangesPill />
 
           {hasRemoteUpdates && (
             <button

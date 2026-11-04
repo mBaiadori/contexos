@@ -1,4 +1,4 @@
-import type { GitStatus, GitCommitInfo, WhatsNewSummary, VersionGraphData, SafeSwitchResult } from '../../types';
+import type { GitStatus, GitCommitInfo, WhatsNewSummary, VersionGraphData, SafeSwitchResult, StashDetails, DiscardedDraftItem } from '../../types';
 import type { ApiResponse } from './client';
 
 export const gitApi = {
@@ -38,7 +38,8 @@ export const gitApi = {
   },
 
   async safeSwitch(payload: {
-    branch: string;
+    branch?: string;
+    commitHash?: string;
     repo?: string;
     action?: 'check' | 'switch' | 'stash' | 'discard';
   }): Promise<ApiResponse<SafeSwitchResult>> {
@@ -143,6 +144,52 @@ export const gitApi = {
     if (lastSeenHash) query.set('lastSeenHash', lastSeenHash);
     if (repo) query.set('repo', repo);
     const res = await fetch(`/api/git/whats-new-diff?${query.toString()}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getStashDetails(stashId?: string, repo?: string): Promise<ApiResponse<StashDetails>> {
+    const params = new URLSearchParams();
+    if (stashId) params.set('stashId', stashId);
+    if (repo) params.set('repo', repo);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/git/stash-details${qs}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getTrash(repo?: string): Promise<ApiResponse<{ trash: DiscardedDraftItem[] }>> {
+    const params = new URLSearchParams();
+    if (repo) params.set('repo', repo);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/git/trash${qs}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async restoreTrash(id: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string; appliedFiles?: string[] }>> {
+    const res = await fetch('/api/git/trash/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, repo }),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async deleteTrashItem(id: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const params = new URLSearchParams();
+    if (repo) params.set('repo', repo);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/git/trash/${encodeURIComponent(id)}${qs}`, {
+      method: 'DELETE',
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async clearTrash(repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const params = new URLSearchParams();
+    if (repo) params.set('repo', repo);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/git/trash${qs}`, {
+      method: 'DELETE',
+    });
     return { ok: res.ok, data: await res.json() };
   },
 };

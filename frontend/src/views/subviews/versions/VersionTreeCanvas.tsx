@@ -1,4 +1,10 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useMemo,
+  useEffect,
+  useCallback,
+} from "react";
 import type { VersionNode, GitCommitInfo } from "../../../types";
 
 export interface VersionTreeCanvasProps {
@@ -8,6 +14,8 @@ export interface VersionTreeCanvasProps {
   onSelectNode: (node: VersionNode) => void;
   onSwitchNode?: (node: VersionNode) => void;
   onSelectCommit?: (commit: GitCommitInfo) => void;
+  onSwitchCommit?: (commit: GitCommitInfo) => void;
+  isLoading?: boolean;
 }
 
 export interface BranchForkCommitItem {
@@ -113,9 +121,11 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
   onSelectNode,
   onSwitchNode,
   onSelectCommit,
+  onSwitchCommit,
+  isLoading = false,
 }) => {
-  // Zoom inicial dobrado conforme solicitação do usuário (2x)
-  const [zoom, setZoom] = useState(2);
+  // Zoom e pan do canvas
+  const [zoom, setZoom] = useState(1.15);
   const [pan, setPan] = useState({ x: 420, y: 80 });
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredNodeName, setHoveredNodeName] = useState<string | null>(null);
@@ -126,7 +136,9 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
     null,
   );
 
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hasInitialCenteredRef = useRef(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (
@@ -150,23 +162,39 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
     setIsDragging(false);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    if (e.ctrlKey || e.metaKey) {
-      const factor = e.deltaY < 0 ? 1.05 : 0.95;
-      setZoom((prev) => Math.min(Math.max(prev * factor, 0.4), 4.0));
-    } else if (e.shiftKey) {
-      setPan((prev) => ({
-        ...prev,
-        x: prev.x - e.deltaY,
-      }));
-    } else {
-      setPan((prev) => ({
-        ...prev,
-        y: prev.y - e.deltaY,
-      }));
-    }
-  };
+  // Listener nativo com { passive: false } para permitir preventDefault() e impedir zoom no navegador
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // Impede o zoom do navegador (Cmd/Ctrl + Scroll) e o scroll padrão da página
+      e.preventDefault();
+
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom no canvas (scroll up/pinch out = zoom in, scroll down/pinch in = zoom out)
+        const factor = e.deltaY < 0 ? 1.06 : 0.94;
+        setZoom((prev) => Math.min(Math.max(prev * factor, 0.4), 4.0));
+      } else if (e.shiftKey) {
+        // Scroll horizontal
+        setPan((prev) => ({
+          ...prev,
+          x: prev.x - (e.deltaY || e.deltaX),
+        }));
+      } else {
+        // Pan livre (suporta tanto trackpad com deltaX/deltaY quanto mouse wheel)
+        setPan((prev) => ({
+          x: prev.x - e.deltaX,
+          y: prev.y - e.deltaY,
+        }));
+      }
+    };
+
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", onWheel);
+    };
+  }, []);
 
   // Layout Estruturado em Colunas de Nível com Altura Dinâmica de Sub-árvore
   const layout = useMemo(() => {
@@ -293,7 +321,10 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
       }
 
       // Mapeamento commit -> filhas que nasceram dele
-      const mapping = new Map<string, { commit: GitCommitInfo; children: string[] }>();
+      const mapping = new Map<
+        string,
+        { commit: GitCommitInfo; children: string[] }
+      >();
 
       childrenNodes.forEach((child, idx) => {
         let matched: GitCommitInfo | undefined = undefined;
@@ -304,7 +335,9 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
           matched = candidateCommits.find((c) => {
             const ch = c.hash.toLowerCase();
             const cs = (c.shortHash || "").toLowerCase();
-            return ch === bh || cs === bh || ch.startsWith(bh) || bh.startsWith(ch);
+            return (
+              ch === bh || cs === bh || ch.startsWith(bh) || bh.startsWith(ch)
+            );
           });
         }
 
@@ -332,7 +365,10 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
         }
 
         const commitKey = matched.hash || matched.shortHash || `commit-${idx}`;
-        const existing = mapping.get(commitKey) || { commit: matched, children: [] };
+        const existing = mapping.get(commitKey) || {
+          commit: matched,
+          children: [],
+        };
         existing.children.push(child.name);
         mapping.set(commitKey, existing);
       });
@@ -343,7 +379,9 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
           id: val.commit.hash || val.commit.shortHash,
           commit: val.commit,
           label: cleanCommitTitle(val.commit.message),
-          shortHash: val.commit.shortHash || (val.commit.hash ? val.commit.hash.slice(0, 7) : ""),
+          shortHash:
+            val.commit.shortHash ||
+            (val.commit.hash ? val.commit.hash.slice(0, 7) : ""),
           author: val.commit.author || "",
           x: 0,
           y: 0,
@@ -363,7 +401,12 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
       if (forkCount === 0) {
         return BASE_LEAF_HEIGHT;
       }
-      return CARD_HEIGHT + 8 + forkCount * (COMMIT_LABEL_HEIGHT + COMMIT_LABEL_GAP) + 12;
+      return (
+        CARD_HEIGHT +
+        8 +
+        forkCount * (COMMIT_LABEL_HEIGHT + COMMIT_LABEL_GAP) +
+        12
+      );
     }
 
     const subtreeHeightMap = new Map<string, number>();
@@ -536,12 +579,8 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
       });
     }
 
-    const trunkTopY = Math.max(
-      trunkCommits.length > 0
-        ? trunkCommits[trunkCommits.length - 1].y - 30
-        : 50,
-      35,
-    );
+    // Espaçamento amplo e confortável entre o último commit e o nó Fim
+    const TRUNK_END_GAP = 75;
 
     // 6. Colunas Horizontais por Nível
     function getLevelColumnX(
@@ -658,7 +697,8 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
         });
 
         // Centraliza os slots das filhas em relação ao slot pai
-        let currentChildSlotY = slotStartY + Math.max(0, (slotHeight - totalChildrenHeight) / 2);
+        let currentChildSlotY =
+          slotStartY + Math.max(0, (slotHeight - totalChildrenHeight) / 2);
 
         children.forEach((child) => {
           if (!visited.has(child.name)) {
@@ -669,7 +709,9 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               lbl.childBranchNames.includes(child.name),
             );
             const childSourceX = matchingLabel ? matchingLabel.exitX : exitX;
-            const childSourceY = matchingLabel ? matchingLabel.exitY : cardCenterY;
+            const childSourceY = matchingLabel
+              ? matchingLabel.exitY
+              : cardCenterY;
 
             layoutSubtree(
               child,
@@ -776,17 +818,75 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
     });
 
     const effectiveTotalHeight = maxY + PADDING_BOTTOM;
+    const effectiveTrunkTopY = Math.max(
+      trunkCommits.length > 0
+        ? trunkCommits[trunkCommits.length - 1].y - TRUNK_END_GAP
+        : 50,
+      45,
+    );
 
     return {
       trunkX: TRUNK_X,
       trunkBaseY,
-      trunkTopY,
+      trunkTopY: effectiveTrunkTopY,
       totalHeight: effectiveTotalHeight,
       defaultNode,
       branches,
       trunkCommits,
     };
   }, [nodes, mainCommits]);
+
+  // Centralização e Zoom Automático no Nó / Commit "Ativo"
+  const centerOnActive = useCallback(() => {
+    if (!layout || nodes.length === 0) return;
+    const container = containerRef.current;
+    const containerW = container?.clientWidth || 900;
+    const containerH = container?.clientHeight || 600;
+
+    let targetX = layout.trunkX;
+    let targetY = layout.trunkTopY;
+
+    const defaultNode = layout.defaultNode;
+    const isDefaultCurrent = defaultNode?.isCurrent;
+
+    if (isDefaultCurrent && layout.trunkCommits.length > 0) {
+      // Se estiver na branch principal (default), focar no último commit do tronco como ATIVO
+      const lastCommit = layout.trunkCommits[layout.trunkCommits.length - 1];
+      targetX = layout.trunkX;
+      targetY = lastCommit.y;
+    } else {
+      // Se estiver em outra branch, focar no card da branch ativa
+      const activeBranch = layout.branches.find((b) => b.node.isCurrent);
+      if (activeBranch) {
+        targetX = activeBranch.cardX + activeBranch.cardWidth / 2;
+        targetY = activeBranch.cardY + activeBranch.cardHeight / 2;
+      } else if (layout.trunkCommits.length > 0) {
+        targetX = layout.trunkX;
+        targetY = layout.trunkCommits[layout.trunkCommits.length - 1].y;
+      }
+    }
+
+    const targetZoom = 1.2;
+    setZoom(targetZoom);
+    setPan({
+      x: containerW / 2 - targetX * targetZoom,
+      y: containerH / 2 - targetY * targetZoom,
+    });
+  }, [layout, nodes]);
+
+  useEffect(() => {
+    if (
+      !hasInitialCenteredRef.current &&
+      nodes.length > 0 &&
+      (layout.trunkCommits.length > 0 || layout.branches.length > 0)
+    ) {
+      hasInitialCenteredRef.current = true;
+      const timer = setTimeout(() => {
+        centerOnActive();
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [layout, nodes, centerOnActive]);
 
   // Identifica a branch mergeada sob hover ou selecionada para acendimento sincronizado ("Apenas acende merge")
   const activeMergedBranch = useMemo(() => {
@@ -857,6 +957,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
 
   return (
     <div
+      ref={containerRef}
       style={{
         position: "relative",
         width: "100%",
@@ -869,8 +970,170 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onWheel={handleWheel}
     >
+      {/* LOADING INICIAL COMPLETO (enquanto o grafo inicial é gerado) */}
+      {isLoading && (!nodes || nodes.length === 0) && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#f8fafc",
+            zIndex: 40,
+            gap: "18px",
+          }}
+        >
+          {/* Animação Circular Material 3 */}
+          <div
+            style={{
+              position: "relative",
+              width: "56px",
+              height: "56px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <svg width="56" height="56" viewBox="0 0 56 56">
+              <circle
+                cx="28"
+                cy="28"
+                r="23"
+                fill="none"
+                stroke="#e2e8f0"
+                strokeWidth="4"
+              />
+              <circle
+                cx="28"
+                cy="28"
+                r="23"
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth="4"
+                strokeDasharray="90 145"
+                strokeLinecap="round"
+              >
+                <animateTransform
+                  attributeName="transform"
+                  type="rotate"
+                  from="0 28 28"
+                  to="360 28 28"
+                  dur="1s"
+                  repeatCount="indefinite"
+                />
+              </circle>
+            </svg>
+            <span
+              className="material-symbols-outlined"
+              style={{
+                position: "absolute",
+                fontSize: "24px",
+                color: "#2563eb",
+              }}
+            >
+              account_tree
+            </span>
+          </div>
+
+          <div
+            style={{
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
+            <span
+              style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b" }}
+            >
+              Mapeando Grafo de Versões...
+            </span>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "#64748b",
+                maxWidth: "340px",
+                lineHeight: "1.4",
+              }}
+            >
+              Calculando ramificações, bifurcações e histórico do repositório
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER FLUTUANTE DE ATUALIZAÇÃO (quando o grafo já está renderizado) */}
+      {isLoading && nodes && nodes.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: "16px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "8px 18px",
+            borderRadius: "9999px",
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(8px)",
+            border: "1px solid #cbd5e1",
+            boxShadow: "0 6px 20px rgba(0, 0, 0, 0.08)",
+            zIndex: 35,
+            pointerEvents: "none",
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24">
+            <circle
+              cx="12"
+              cy="12"
+              r="9"
+              fill="none"
+              stroke="#e2e8f0"
+              strokeWidth="3"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="9"
+              fill="none"
+              stroke="#2563eb"
+              strokeWidth="3"
+              strokeDasharray="26 50"
+              strokeLinecap="round"
+            >
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                from="0 12 12"
+                to="360 12 12"
+                dur="0.8s"
+                repeatCount="indefinite"
+              />
+            </circle>
+          </svg>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                color: "#1e293b",
+                lineHeight: 1.2,
+              }}
+            >
+              Atualizando grafo...
+            </span>
+            <span
+              style={{ fontSize: "10px", color: "#64748b", lineHeight: 1.2 }}
+            >
+              Mapeando alterações recentes
+            </span>
+          </div>
+        </div>
+      )}
       {/* Barra Flutuante de Controles: Zoom e Navegação (sem seletor de escala) */}
       <div
         style={{
@@ -1007,11 +1270,38 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              setZoom(2);
-              setPan({ x: 420, y: 80 });
+            onClick={centerOnActive}
+            title="Focar e centralizar no nó ou commit ativo"
+            style={{
+              border: "none",
+              background: "rgba(37, 99, 235, 0.12)",
+              color: "#2563eb",
+              padding: "3px 8px",
+              fontSize: "11px",
+              cursor: "pointer",
+              fontWeight: 700,
+              borderRadius: "4px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
             }}
-            title="Restaurar zoom padrão (2x) e centralizar"
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "16px" }}
+            >
+              my_location
+            </span>
+            Ativo
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setZoom(1.15);
+              centerOnActive();
+            }}
+            title="Restaurar zoom e centralizar no ativo"
             style={{
               border: "none",
               background: "transparent",
@@ -1025,6 +1315,37 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
             Reset
           </button>
         </div>
+
+        {layout.defaultNode && !layout.defaultNode.isCurrent && (
+          <button
+            type="button"
+            onClick={() => onSwitchNode?.(layout.defaultNode!)}
+            title={`Alternar de volta para a Linha Principal (${layout.defaultNode.name})`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              background: "#2563eb",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "8px",
+              padding: "5px 12px",
+              fontSize: "11px",
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(37,99,235,0.3)",
+              transition: "transform 0.1s ease",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "15px" }}
+            >
+              arrow_back
+            </span>
+            Voltar para {layout.defaultNode.name}
+          </button>
+        )}
       </div>
 
       <svg
@@ -1066,12 +1387,16 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
           />
 
           {/* COMMITS DO TRONCO PRINCIPAL */}
-          {layout.trunkCommits.map((c) => {
+          {layout.trunkCommits.map((c, idx) => {
             const isHovered = hoveredCommitHash === c.hash;
             const isSelected = selectedCommitHash === c.hash;
             // ACENDE EXCLUSIVAMENTE O COMMIT ALVO DO MERGE (corrige acender todos)
             const isMergeTarget = Boolean(
               mergeTrunkCommit && mergeTrunkCommit.hash === c.hash,
+            );
+            const isLatestTrunkCommit = idx === layout.trunkCommits.length - 1;
+            const isCommitActive = Boolean(
+              layout.defaultNode?.isCurrent && isLatestTrunkCommit,
             );
 
             const cleanMsg = cleanCommitTitle(c.message);
@@ -1084,44 +1409,105 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                   setSelectedCommitHash(c.hash);
                   onSelectCommit?.(c);
                 }}
+                onDoubleClick={() => onSwitchCommit?.(c)}
                 onMouseEnter={() => setHoveredCommitHash(c.hash)}
                 onMouseLeave={() => setHoveredCommitHash(null)}
                 style={{ cursor: "pointer" }}
               >
                 {/* Hitbox ampla para clique fácil */}
-                <circle cx="0" cy="0" r="14" fill="transparent" />
+                <circle cx="0" cy="0" r="16" fill="transparent" />
+
+                {/* Pulso e destaque especial se for o commit ATIVO */}
+                {isCommitActive && (
+                  <g style={{ pointerEvents: "none" }}>
+                    <circle
+                      cx="0"
+                      cy="0"
+                      r={COMMIT_RADIUS + 7}
+                      fill="none"
+                      stroke="#2563eb"
+                      strokeWidth="2.5"
+                      opacity="0.85"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${COMMIT_RADIUS + 5};${COMMIT_RADIUS + 13};${COMMIT_RADIUS + 5}`}
+                        dur="2.2s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.9;0.15;0.9"
+                        dur="2.2s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+
+                    {/* Badge destacada ATIVO (HEAD) */}
+                    <g transform="translate(14, -11)">
+                      <rect
+                        x="0"
+                        y="0"
+                        width="96"
+                        height="22"
+                        rx="11"
+                        fill="#2563eb"
+                        style={{
+                          filter: "drop-shadow(0 2px 6px rgba(37,99,235,0.45))",
+                        }}
+                      />
+                      <circle cx="11" cy="11" r="3.5" fill="#ffffff" />
+                      <text
+                        x="22"
+                        y="11.5"
+                        dominantBaseline="central"
+                        fill="#ffffff"
+                        fontSize="10"
+                        fontWeight="700"
+                        fontFamily="system-ui, -apple-system, sans-serif"
+                      >
+                        Ativo
+                      </text>
+                    </g>
+                  </g>
+                )}
 
                 {/* Highlight ao passar mouse, selecionar ou ser o destino do merge */}
-                {(isHovered || isSelected || isMergeTarget) && (
-                  <circle
-                    cx="0"
-                    cy="0"
-                    r={COMMIT_RADIUS + 5.5}
-                    fill="none"
-                    stroke={isMergeTarget ? "#10b981" : "#2563eb"}
-                    strokeWidth={isMergeTarget ? "2.5" : "2"}
-                    opacity={isMergeTarget ? 0.95 : 0.65}
-                  />
-                )}
+                {(isHovered || isSelected || isMergeTarget) &&
+                  !isCommitActive && (
+                    <circle
+                      cx="0"
+                      cy="0"
+                      r={COMMIT_RADIUS + 5.5}
+                      fill="none"
+                      stroke={isMergeTarget ? "#10b981" : "#2563eb"}
+                      strokeWidth={isMergeTarget ? "2.5" : "2"}
+                      opacity={isMergeTarget ? 0.95 : 0.65}
+                    />
+                  )}
 
                 {/* Bolinha do commit no tronco */}
                 <circle
                   cx="0"
                   cy="0"
                   r={
-                    isHovered || isSelected || isMergeTarget
-                      ? COMMIT_RADIUS + 1.8
-                      : COMMIT_RADIUS
+                    isCommitActive
+                      ? COMMIT_RADIUS + 2.5
+                      : isHovered || isSelected || isMergeTarget
+                        ? COMMIT_RADIUS + 1.8
+                        : COMMIT_RADIUS
                   }
                   fill={
-                    isMergeTarget
-                      ? "#10b981"
-                      : isHovered || isSelected
-                        ? "#3b82f6"
-                        : "#2563eb"
+                    isCommitActive
+                      ? "#2563eb"
+                      : isMergeTarget
+                        ? "#10b981"
+                        : isHovered || isSelected
+                          ? "#3b82f6"
+                          : "#2563eb"
                   }
                   stroke="#ffffff"
-                  strokeWidth="1.6"
+                  strokeWidth={isCommitActive ? "2" : "1.6"}
                 />
 
                 {/* Tooltip flutuante no hover */}
@@ -1204,37 +1590,41 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
             </g>
           )}
 
-          {/* NÓ FIM (TOPO NO NORTE) */}
+          {/* NÓ FIM (TOPO NO NORTE) - COM ESPAÇAMENTO ADEQUADO E SEM SOBREPOSIÇÃO */}
           <g transform={`translate(${layout.trunkX}, ${layout.trunkTopY})`}>
+            {/* Ponto terminal do topo */}
             <circle
               cx="0"
               cy="0"
-              r={NODE_RADIUS}
+              r="4.5"
               fill="#1e293b"
               stroke="#ffffff"
-              strokeWidth="2"
+              strokeWidth="1.5"
             />
-            <rect
-              x="-22"
-              y="-28"
-              width="44"
-              height="20"
-              rx="10"
-              fill="#1e293b"
-              style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.18))" }}
-            />
-            <text
-              x="0"
-              y="-18"
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#ffffff"
-              fontSize="10"
-              fontWeight="700"
-              fontFamily="system-ui, -apple-system, sans-serif"
-            >
-              Fim
-            </text>
+            {/* Badge 'Fim' posicionado com folga limpa acima do ponto terminal */}
+            <g transform="translate(0, -22)">
+              <rect
+                x="-24"
+                y="-10"
+                width="48"
+                height="20"
+                rx="10"
+                fill="#1e293b"
+                style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.22))" }}
+              />
+              <text
+                x="0"
+                y="0"
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="#ffffff"
+                fontSize="10"
+                fontWeight="700"
+                fontFamily="system-ui, -apple-system, sans-serif"
+              >
+                Fim
+              </text>
+            </g>
           </g>
 
           {/* CONECTORES HORIZONTAIS SANKEY ENTRE NÍVEIS */}
@@ -1255,18 +1645,6 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                     transition: "stroke-width 0.15s ease, opacity 0.15s ease",
                   }}
                 />
-
-                {/* Ponto de derivação na origem (se vindo de outra branch e não de label de commit) */}
-                {br.sourceX !== layout.trunkX && (
-                  <circle
-                    cx={br.sourceX}
-                    cy={br.sourceY}
-                    r={COMMIT_RADIUS}
-                    fill={br.color}
-                    stroke="#ffffff"
-                    strokeWidth="1.2"
-                  />
-                )}
               </g>
             );
           })}
@@ -1384,12 +1762,22 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                   <g>
                     {/* Haste vertical guia com a cor da branch descendo do card até o último commit */}
                     <line
-                      x1={br.side === 1 ? br.cardX + 16 : br.cardX + br.cardWidth - 16}
+                      x1={
+                        br.side === 1
+                          ? br.cardX + 16
+                          : br.cardX + br.cardWidth - 16
+                      }
                       y1={br.cardY + br.cardHeight}
-                      x2={br.side === 1 ? br.cardX + 16 : br.cardX + br.cardWidth - 16}
+                      x2={
+                        br.side === 1
+                          ? br.cardX + 16
+                          : br.cardX + br.cardWidth - 16
+                      }
                       y2={
                         br.forkCommitLabels[br.forkCommitLabels.length - 1].y +
-                        br.forkCommitLabels[br.forkCommitLabels.length - 1].height / 2
+                        br.forkCommitLabels[br.forkCommitLabels.length - 1]
+                          .height /
+                          2
                       }
                       stroke={br.color}
                       strokeWidth="1.6"
@@ -1398,8 +1786,10 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                     />
 
                     {br.forkCommitLabels.map((lbl) => {
-                      const isSelectedCommit = selectedCommitHash === lbl.commit.hash;
-                      const isHoveredCommit = hoveredCommitHash === lbl.commit.hash;
+                      const isSelectedCommit =
+                        selectedCommitHash === lbl.commit.hash;
+                      const isHoveredCommit =
+                        hoveredCommitHash === lbl.commit.hash;
 
                       return (
                         <g
@@ -1410,7 +1800,13 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                             setSelectedCommitHash(lbl.commit.hash);
                             onSelectCommit?.(lbl.commit);
                           }}
-                          onMouseEnter={() => setHoveredCommitHash(lbl.commit.hash)}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            onSwitchCommit?.(lbl.commit);
+                          }}
+                          onMouseEnter={() =>
+                            setHoveredCommitHash(lbl.commit.hash)
+                          }
                           onMouseLeave={() => setHoveredCommitHash(null)}
                           style={{ cursor: "pointer" }}
                         >
@@ -1421,52 +1817,28 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                             width={lbl.width}
                             height={lbl.height}
                             rx="5"
-                            fill={isSelectedCommit || isHoveredCommit ? "#ffffff" : "#f8fafc"}
-                            stroke={isSelectedCommit || isHoveredCommit ? br.color : "#cbd5e1"}
-                            strokeWidth={isSelectedCommit || isHoveredCommit ? "1.6" : "1"}
+                            fill={
+                              isSelectedCommit || isHoveredCommit
+                                ? "#ffffff"
+                                : "#f8fafc"
+                            }
+                            stroke={
+                              isSelectedCommit || isHoveredCommit
+                                ? br.color
+                                : "#cbd5e1"
+                            }
+                            strokeWidth={
+                              isSelectedCommit || isHoveredCommit ? "1.6" : "1"
+                            }
                             style={{
                               filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.05))",
                               transition: "all 0.15s ease",
                             }}
                           />
 
-                          {/* Bolinha do commit integrada no label */}
-                          <circle
-                            cx="10"
-                            cy={lbl.height / 2}
-                            r="3.5"
-                            fill={br.color}
-                            stroke="#ffffff"
-                            strokeWidth="1"
-                          />
-
-                          {/* Hash curto com fonte monospace */}
+                          {/* Nome / Descrição do Commit na Branch (sem bolinhas, apenas o nome limpo) */}
                           <text
-                            x="18"
-                            y={lbl.height / 2}
-                            dominantBaseline="central"
-                            fill="#64748b"
-                            fontSize="9"
-                            fontWeight="600"
-                            fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                          >
-                            {lbl.shortHash}
-                          </text>
-
-                          {/* Separador */}
-                          <text
-                            x="52"
-                            y={lbl.height / 2}
-                            dominantBaseline="central"
-                            fill="#cbd5e1"
-                            fontSize="9"
-                          >
-                            ·
-                          </text>
-
-                          {/* Descrição do Commit (clean title truncado) */}
-                          <text
-                            x="58"
+                            x="10"
                             y={lbl.height / 2}
                             dominantBaseline="central"
                             fill="#1e293b"
@@ -1474,16 +1846,11 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                             fontWeight="500"
                             fontFamily="system-ui, -apple-system, sans-serif"
                           >
-                            {lbl.label.length > 13 ? `${lbl.label.slice(0, 13)}…` : lbl.label}
+                            {(() => {
+                              const title = lbl.label || lbl.commit.message || lbl.shortHash;
+                              return title.length > 21 ? `${title.slice(0, 21)}…` : title;
+                            })()}
                           </text>
-
-                          {/* Ponto indicador de saída do conector */}
-                          <circle
-                            cx={br.side === 1 ? lbl.width : 0}
-                            cy={lbl.height / 2}
-                            r="2.5"
-                            fill={br.color}
-                          />
 
                           <title>{`${lbl.commit.message} (${lbl.author || "Git"} - ${lbl.shortHash})`}</title>
                         </g>
@@ -1492,8 +1859,37 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                   </g>
                 )}
 
+                {/* Pulso e destaque da versão ATIVA */}
+                {isCurrent && (
+                  <rect
+                    x={br.cardX - 4}
+                    y={br.cardY - 4}
+                    width={br.cardWidth + 8}
+                    height={br.cardHeight + 8}
+                    rx={(br.cardHeight + 8) / 2}
+                    fill="none"
+                    stroke="#2563eb"
+                    strokeWidth="2.5"
+                    opacity="0.8"
+                    style={{ pointerEvents: "none" }}
+                  >
+                    <animate
+                      attributeName="stroke-width"
+                      values="2;4.5;2"
+                      dur="2s"
+                      repeatCount="indefinite"
+                    />
+                    <animate
+                      attributeName="opacity"
+                      values="0.85;0.25;0.85"
+                      dur="2s"
+                      repeatCount="indefinite"
+                    />
+                  </rect>
+                )}
+
                 {/* Sombra / Highlight ao passar mouse ou selecionar */}
-                {(isSelected || isHovered) && (
+                {(isSelected || isHovered) && !isCurrent && (
                   <rect
                     x={br.cardX - 2.5}
                     y={br.cardY - 2.5}
@@ -1515,28 +1911,39 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                   height={br.cardHeight}
                   rx={br.cardHeight / 2}
                   fill={cardBg}
-                  stroke={cardBorder}
-                  strokeWidth={isSelected || isHovered ? "2" : "1.4"}
+                  stroke={isCurrent ? "#2563eb" : cardBorder}
+                  strokeWidth={
+                    isCurrent ? "2.2" : isSelected || isHovered ? "2" : "1.4"
+                  }
                   style={{
-                    filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.06))",
+                    filter: isCurrent
+                      ? "drop-shadow(0 2px 8px rgba(37,99,235,0.35))"
+                      : "drop-shadow(0 1px 3px rgba(0,0,0,0.06))",
                     transition: "all 0.15s ease",
                   }}
                 />
 
-                {/* Indicador de Versão Ativa (Dot azul) */}
+                {/* Indicador de Versão Ativa (Dot pulsante) */}
                 {isCurrent && (
                   <g
                     transform={`translate(${br.cardX + 12}, ${br.cardY + br.cardHeight / 2})`}
                   >
-                    <circle cx="0" cy="0" r="3.5" fill="#2563eb" />
+                    <circle cx="0" cy="0" r="3.5" fill="#2563eb">
+                      <animate
+                        attributeName="r"
+                        values="3;4.2;3"
+                        dur="1.8s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
                     <circle
                       cx="0"
                       cy="0"
-                      r="6.5"
+                      r="7"
                       fill="none"
                       stroke="#2563eb"
-                      strokeWidth="1.4"
-                      opacity="0.45"
+                      strokeWidth="1.5"
+                      opacity="0.5"
                     />
                   </g>
                 )}

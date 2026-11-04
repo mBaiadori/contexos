@@ -113,8 +113,9 @@ export interface WorkspaceContextType {
     baseBranch?: string,
   ) => Promise<{ success: boolean; message: string }>;
   versionGraph: VersionGraphData | null;
+  isVersionGraphLoading: boolean;
   refreshVersionGraph: (targetRepoName?: string) => Promise<VersionGraphData | null>;
-  safeSwitch: (payload: { branch: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard' }) => Promise<SafeSwitchResult>;
+  safeSwitch: (payload: { branch?: string; commitHash?: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard' }) => Promise<SafeSwitchResult>;
   popStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   dropStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   clearStash: () => Promise<{ success: boolean; message: string }>;

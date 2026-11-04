@@ -35,7 +35,13 @@ export const workspaceApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async createUnifiedPR(payload: { title: string; description: string; repo?: string }): Promise<ApiResponse<any>> {
+  async createUnifiedPR(payload: {
+    title: string;
+    description: string;
+    branch?: string;
+    targetProposalId?: number | string;
+    repo?: string;
+  }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/workspace/create-pr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

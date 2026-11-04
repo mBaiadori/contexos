@@ -218,6 +218,19 @@ export async function prsRoutes(fastify: FastifyInstance) {
     return reply.send(await prsService.generatePRSummary(body?.repo));
   });
 
+  fastify.post("/api/prs/check-conflicts", async (request, reply) => {
+    try {
+      const body = (request.body as { repo?: string; files?: string[] }) || {};
+      const result = await prsService.checkConflictingProposals(
+        body.repo,
+        body.files,
+      );
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || "Erro ao verificar propostas concorrentes" });
+    }
+  });
+
   fastify.post("/api/workspace/create-pr", async (request, reply) => {
     try {
       const result = await prsService.createPR(request.body as any);

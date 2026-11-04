@@ -17,6 +17,7 @@ interface GitState {
   hasRemoteUpdates: boolean;
   remoteUpdateInfo: { localHash: string; remoteHash?: string; branch?: string } | null;
   versionGraph: VersionGraphData | null;
+  isVersionGraphLoading: boolean;
 
   setGitStatus: (status: GitStatus | null) => void;
   setGitLog: (log: GitCommitInfo[]) => void;
@@ -38,7 +39,7 @@ interface GitState {
   syncGit: (branch?: string) => Promise<{ success: boolean; message: string }>;
   createOrSwitchBranch: (branch: string, baseBranch?: string) => Promise<{ success: boolean; message: string }>;
   refreshVersionGraph: (targetRepoName?: string) => Promise<VersionGraphData | null>;
-  safeSwitch: (payload: { branch: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard' }) => Promise<SafeSwitchResult>;
+  safeSwitch: (payload: { branch?: string; commitHash?: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard' }) => Promise<SafeSwitchResult>;
   popStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   dropStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   clearStash: () => Promise<{ success: boolean; message: string }>;
@@ -58,6 +59,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   hasRemoteUpdates: false,
   remoteUpdateInfo: null,
   versionGraph: null,
+  isVersionGraphLoading: false,
 
   setGitStatus: (gitStatus) => set({ gitStatus }),
   setGitLog: (gitLog) => set({ gitLog }),
@@ -284,18 +286,24 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   refreshVersionGraph: async (targetRepoName?: string) => {
-    const repo = useRepoStore.getState().activeRepo;
-    const repoName = targetRepoName || repo?.name;
-    const res = await API.getVersionGraph(repoName);
-    if (res.ok && res.data) {
-      set({ versionGraph: res.data });
-      return res.data;
+    set({ isVersionGraphLoading: true });
+    try {
+      const repo = useRepoStore.getState().activeRepo;
+      const repoName = targetRepoName || repo?.name;
+      const res = await API.getVersionGraph(repoName);
+      if (res.ok && res.data) {
+        set({ versionGraph: res.data });
+        return res.data;
+      }
+      return null;
+    } finally {
+      set({ isVersionGraphLoading: false });
     }
-    return null;
   },
 
   safeSwitch: async (payload: {
-    branch: string;
+    branch?: string;
+    commitHash?: string;
     repo?: string;
     action?: 'check' | 'switch' | 'stash' | 'discard';
   }) => {
