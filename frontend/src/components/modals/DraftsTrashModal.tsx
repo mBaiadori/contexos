@@ -40,7 +40,7 @@ export const DraftsTrashModal: React.FC<DraftsTrashModalProps> = ({
           setSelectedItem(res.data.trash[0]);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("[DraftsTrashModal] Erro ao carregar lixeira:", err);
     } finally {
       setIsLoading(false);
@@ -72,8 +72,8 @@ export const DraftsTrashModal: React.FC<DraftsTrashModalProps> = ({
           message: res.data?.message || "Erro ao restaurar rascunho da lixeira.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message || "Falha na comunicação com o servidor." });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message || "Falha na comunicação com o servidor." });
     } finally {
       setIsProcessing(false);
     }
@@ -87,8 +87,8 @@ export const DraftsTrashModal: React.FC<DraftsTrashModalProps> = ({
       await API.deleteTrashItem(id, activeRepo?.name);
       if (selectedItem?.id === id) setSelectedItem(null);
       await loadTrash();
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsProcessing(false);
     }
@@ -101,8 +101,8 @@ export const DraftsTrashModal: React.FC<DraftsTrashModalProps> = ({
       await API.clearTrash(activeRepo?.name);
       setSelectedItem(null);
       await loadTrash();
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsProcessing(false);
     }

@@ -120,10 +120,10 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
           message: popRes.message || "Erro ao restaurar alterações guardadas.",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
         type: "error",
-        message: err.message || "Falha ao restaurar rascunho.",
+        message: (err as Error).message || "Falha ao restaurar rascunho.",
       });
     } finally {
       setIsProcessing(false);
@@ -152,10 +152,10 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
           message: popRes.message || "Erro ao aplicar na versão atual (possível conflito de edição).",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
         type: "error",
-        message: err.message || "Falha ao aplicar alterações.",
+        message: (err as Error).message || "Falha ao aplicar alterações.",
       });
     } finally {
       setIsProcessing(false);
@@ -191,10 +191,10 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
           message: res.message || "Erro ao mover para a Lixeira.",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
         type: "error",
-        message: err.message || "Falha ao mover para a Lixeira.",
+        message: (err as Error).message || "Falha ao mover para a Lixeira.",
       });
     } finally {
       setIsProcessing(false);

@@ -137,10 +137,10 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
           message: res?.message || "Falha ao salvar marco.",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
         type: "error",
-        message: err.message || "Erro inesperado.",
+        message: (err as Error).message || "Erro inesperado.",
       });
     } finally {
       setIsCommitting(false);
@@ -193,10 +193,10 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
           message: switchRes.error || "Erro ao alternar de versão.",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
         type: "error",
-        message: err.message || "Erro ao alternar de versão.",
+        message: (err as Error).message || "Erro ao alternar de versão.",
       });
     } finally {
       setIsSwitching(false);
@@ -248,10 +248,10 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
           message: switchRes.error || "Erro ao alternar para o marco.",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
         type: "error",
-        message: err.message || "Erro ao alternar para o marco.",
+        message: (err as Error).message || "Erro ao alternar para o marco.",
       });
     } finally {
       setIsSwitching(false);
@@ -301,10 +301,10 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
           message: switchRes.error || "Falha ao alternar.",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
         type: "error",
-        message: err.message || "Erro inesperado.",
+        message: (err as Error).message || "Erro inesperado.",
       });
     } finally {
       setIsSwitching(false);
@@ -344,8 +344,8 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
           message: res.error || "Falha ao guardar rascunhos.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }
@@ -384,8 +384,8 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
           message: res.error || "Falha ao descartar alterações.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }
@@ -418,8 +418,8 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
           message: res.message || "Erro ao criar nova versão.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }
@@ -452,8 +452,8 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
             res.message || "Erro ao criar nova versão a partir do marco.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }

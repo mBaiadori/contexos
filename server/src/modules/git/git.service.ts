@@ -16,6 +16,7 @@ import {
   getGitDiff,
   getGitLog,
   getGitStatus,
+  GitFileStatus,
   getWhatsNewFileDiff,
   getWhatsNewSummary,
   isGitRepo,
@@ -28,6 +29,21 @@ import { eventsService } from "../events/events.service.js";
 import { prsService } from "../prs/prs.service.js";
 import { workspaceService } from "../workspace/workspace.service.js";
 import { draftsTrashService } from "./drafts-trash.service.js";
+
+interface RepoPRItem {
+  id?: string | number;
+  title?: string;
+  description?: string;
+  branch?: string;
+  target_branch?: string;
+  status?: string;
+  merged_at?: string;
+  updated_at?: string;
+  author?: unknown;
+  created_at?: string;
+  approvals?: unknown[];
+  [key: string]: unknown;
+}
 
 export class GitService {
   private getRepoDir(repoName?: string, ownerParam?: string): string {
@@ -382,7 +398,7 @@ export class GitService {
     const currentBranch = branchesData.current || defaultBranch;
     const branchNames = branchesData.branches || [currentBranch];
 
-    let currentStatusFiles: any[] = [];
+    let currentStatusFiles: GitFileStatus[] = [];
     try {
       const st = await getGitStatus(repoDir);
       currentStatusFiles = st.files || [];
@@ -406,7 +422,7 @@ export class GitService {
       }
     } catch {}
 
-    let repoPRs: any[] = [];
+    let repoPRs: RepoPRItem[] = [];
     try {
       repoPRs = prsService.loadRepoPRs(repoName) || [];
     } catch {}
@@ -638,7 +654,7 @@ export class GitService {
 
         // Localizar proposta associada
         const pr = repoPRs.find(
-          (p: any) => p.branch === branch && p.status !== "DELETED",
+          (p: RepoPRItem) => p.branch === branch && p.status !== "DELETED",
         );
 
         let type: "main" | "proposal" | "draft" = "draft";
@@ -779,7 +795,7 @@ export class GitService {
 
         // Identifica se foi unida/mergeada
         const hasMergedPR = repoPRs.some(
-          (p: any) => p.branch === branch && p.status === "MERGED",
+          (p: RepoPRItem) => p.branch === branch && p.status === "MERGED",
         );
         const mergeInfo = mergeCommitsByBranch.get(branch);
         const isMerged = !isDefault && (hasMergedPR || Boolean(mergeInfo));
@@ -789,7 +805,7 @@ export class GitService {
         if (isMerged) {
           if (hasMergedPR) {
             const mergedPR = repoPRs.find(
-              (p: any) => p.branch === branch && p.status === "MERGED",
+              (p: RepoPRItem) => p.branch === branch && p.status === "MERGED",
             );
             mergedDate = mergedPR?.merged_at || mergedPR?.updated_at || "";
           }
@@ -834,7 +850,7 @@ export class GitService {
       }),
     );
 
-    const nodes: any[] = rawNodes.filter(Boolean);
+    const nodes = rawNodes.filter((n): n is NonNullable<typeof n> => Boolean(n));
 
     // Garantir que a árvore de parentBranch não contenha ciclos (DAG estrito convergindo para defaultBranch)
     for (const node of nodes) {

@@ -69,8 +69,8 @@ export const GitBranchesTab: React.FC<GitBranchesTabProps> = ({
           message: switchRes.error || "Erro ao alternar de versão.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message || "Erro ao alternar de versão." });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message || "Erro ao alternar de versão." });
     } finally {
       setIsSwitching(false);
     }
@@ -94,8 +94,8 @@ export const GitBranchesTab: React.FC<GitBranchesTabProps> = ({
       } else {
         setFeedback({ type: "error", message: res.error || "Falha ao guardar rascunhos." });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }
@@ -119,8 +119,8 @@ export const GitBranchesTab: React.FC<GitBranchesTabProps> = ({
       } else {
         setFeedback({ type: "error", message: res.error || "Falha ao descartar alterações." });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }

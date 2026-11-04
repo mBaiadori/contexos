@@ -71,10 +71,10 @@ export async function gitRoutes(app: FastifyInstance) {
       }
       const res = await gitService.safeSwitch(body);
       return res;
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao alternar de versão com segurança" });
+        .send({ error: (err as Error).message || "Erro ao alternar de versão com segurança" });
     }
   });
 
@@ -84,10 +84,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo, stashId } = (req.body as { repo?: string; stashId?: string }) || {};
       const res = await gitService.popStash(repo, stashId);
       return res;
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao restaurar rascunhos" });
+        .send({ error: (err as Error).message || "Erro ao restaurar rascunhos" });
     }
   });
 
@@ -97,10 +97,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo, stashId } = (req.body as { repo?: string; stashId?: string }) || {};
       const res = await gitService.dropStash(repo, stashId);
       return res;
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao descartar rascunho" });
+        .send({ error: (err as Error).message || "Erro ao descartar rascunho" });
     }
   });
 
@@ -110,10 +110,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo } = (req.body as { repo?: string }) || {};
       const res = await gitService.clearStashes(repo);
       return res;
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao limpar stashes" });
+        .send({ error: (err as Error).message || "Erro ao limpar stashes" });
     }
   });
 
@@ -127,10 +127,10 @@ export async function gitRoutes(app: FastifyInstance) {
       };
       const details = await gitService.getStashDetails(repo, stashId, owner);
       return details;
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao obter detalhes do rascunho guardado" });
+        .send({ error: (err as Error).message || "Erro ao obter detalhes do rascunho guardado" });
     }
   });
 
@@ -140,10 +140,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo, owner } = req.query as { repo?: string; owner?: string };
       const items = await draftsTrashService.listTrash(repo, owner);
       return { trash: items };
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao listar lixeira de rascunhos" });
+        .send({ error: (err as Error).message || "Erro ao listar lixeira de rascunhos" });
     }
   });
 
@@ -156,10 +156,10 @@ export async function gitRoutes(app: FastifyInstance) {
       }
       const res = await draftsTrashService.restoreTrash(id, repo, owner);
       return res;
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao restaurar rascunho da lixeira" });
+        .send({ error: (err as Error).message || "Erro ao restaurar rascunho da lixeira" });
     }
   });
 
@@ -170,10 +170,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo, owner } = req.query as { repo?: string; owner?: string };
       const res = await draftsTrashService.deleteTrashItem(id, repo, owner);
       return res;
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao excluir rascunho da lixeira" });
+        .send({ error: (err as Error).message || "Erro ao excluir rascunho da lixeira" });
     }
   });
 
@@ -183,10 +183,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo, owner } = req.query as { repo?: string; owner?: string };
       const res = await draftsTrashService.clearTrash(repo, owner);
       return res;
-    } catch (err: any) {
+    } catch (err) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao esvaziar lixeira" });
+        .send({ error: (err as Error).message || "Erro ao esvaziar lixeira" });
     }
   });
 

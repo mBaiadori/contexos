@@ -105,10 +105,10 @@ export const VersionGraphModal: React.FC<VersionGraphModalProps> = ({
           message: switchRes.error || "Erro ao alternar de versão.",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
         type: "error",
-        message: err.message || "Erro inesperado ao alternar de versão.",
+        message: (err as Error).message || "Erro inesperado ao alternar de versão.",
       });
     } finally {
       setIsSwitching(false);
@@ -137,8 +137,8 @@ export const VersionGraphModal: React.FC<VersionGraphModalProps> = ({
           message: res.error || "Falha ao guardar rascunhos e alternar.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }
@@ -166,8 +166,8 @@ export const VersionGraphModal: React.FC<VersionGraphModalProps> = ({
           message: res.error || "Falha ao descartar e alternar.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }
@@ -197,8 +197,8 @@ export const VersionGraphModal: React.FC<VersionGraphModalProps> = ({
           message: res.message || "Erro ao criar nova versão.",
         });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message });
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
     } finally {
       setIsSwitching(false);
     }

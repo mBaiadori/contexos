@@ -1449,7 +1449,7 @@ DIRETRIZES OBRIGATÓRIAS:
     const repoName = repoNameParam || cfg.active_repo?.name || "local";
     const repoDir = this.getRepoDir(repoName);
     const prs = this.loadRepoPRs(repoName);
-    const openPRs = prs.filter((p: any) => p.status === "OPEN" || !p.status);
+    const openPRs = prs.filter((p: { status?: string }) => p.status === "OPEN" || !p.status);
 
     if (openPRs.length === 0) {
       return { hasConflicts: false, conflicts: [] };
@@ -1602,7 +1602,7 @@ DIRETRIZES OBRIGATÓRIAS:
     // Se o usuário optar por anexar à proposta aberta existente
     if (payload.targetProposalId) {
       const existingPR = repoPRs.find(
-        (p: any) => String(p.id) === String(payload.targetProposalId),
+        (p: { id?: number | string }) => String(p.id) === String(payload.targetProposalId),
       );
       if (!existingPR) {
         throw new Error(
@@ -1639,7 +1639,7 @@ DIRETRIZES OBRIGATÓRIAS:
             ["push", "origin", assertBranchName(existingPR.branch)],
             repoDir,
           );
-        } catch (pushErr: any) {
+        } catch (pushErr) {
           console.warn(
             "[PRsService] Falha ao sincronizar branch da proposta remota:",
             pushErr,

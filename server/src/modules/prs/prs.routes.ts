@@ -226,8 +226,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
         body.files,
       );
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message || "Erro ao verificar propostas concorrentes" });
+    } catch (err) {
+      return reply.status(500).send({ error: (err as Error).message || "Erro ao verificar propostas concorrentes" });
     }
   });
 
