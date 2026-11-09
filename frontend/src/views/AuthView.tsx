@@ -392,7 +392,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             }}
           >
             <Sparkles size={13} />
-            <span>Context OS • v{version || "1.0.6"}</span>
+            <span>Context OS • v{version || "1.0.7"}</span>
           </div>
 
           <h1
@@ -1159,7 +1159,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                 color: "var(--color-on-surface, #0f172a)",
               }}
             >
-              v{version || "1.0.6"}
+              v{version || "1.0.7"}
             </span>
           </div>
 

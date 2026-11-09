@@ -10,6 +10,57 @@ export class AuthService {
       throw new Error('Token do GitHub é obrigatório.');
     }
 
+    if (token.trim() === 'local_mode') {
+      const cfg = loadConfig();
+      cfg.authenticated = true;
+      cfg.mode = 'local';
+      cfg.token = 'local_mode';
+      cfg.git_provider = 'local';
+      cfg.user = {
+        login: 'local_dev',
+        name: 'Desenvolvedor Local',
+        avatar_url: '',
+        html_url: '',
+        email: 'local@contextos.local',
+      };
+
+      const localAccount = {
+        id: 'local',
+        user: cfg.user,
+        token: 'local_mode',
+        git_provider: 'local' as const,
+        orgs: [
+          {
+            login: 'local',
+            avatar_url: '',
+            description: 'Workspace Local',
+            full_name: 'Workspace Local',
+          },
+        ],
+        last_active: new Date().toISOString(),
+      };
+
+      if (!Array.isArray(cfg.accounts)) {
+        cfg.accounts = [];
+      }
+      const existingIdx = cfg.accounts.findIndex((a) => a.id === 'local');
+      if (existingIdx >= 0) {
+        cfg.accounts[existingIdx] = localAccount;
+      } else {
+        cfg.accounts.push(localAccount);
+      }
+
+      saveConfig(cfg);
+      governanceService.clearCache();
+      return {
+        authenticated: true,
+        user: cfg.user,
+        orgs: localAccount.orgs,
+        git_provider: 'local' as const,
+        accounts: this.getAccounts(),
+      };
+    }
+
     const { statusCode, data: user } = await callGitHubAPI('/user', token.trim(), 'GET');
     if (statusCode !== 200 || !user || !user.login) {
       if (statusCode === 401) {
@@ -247,7 +298,8 @@ export class AuthService {
     target.token = targetToken;
     cfg.authenticated = true;
     cfg.token = targetToken;
-    cfg.git_provider = target.git_provider || 'github';
+    cfg.mode = targetToken === 'local_mode' ? 'local' : 'remote';
+    cfg.git_provider = target.git_provider || (targetToken === 'local_mode' ? 'local' : 'github');
     delete cfg.git_provider_url;
     cfg.user = target.user;
     cfg.orgs = target.orgs || [];
@@ -469,13 +521,14 @@ export class AuthService {
     const activeRepo = cfg.active_repo;
     const repoName = activeRepo?.name || 'local';
     const pendingChanges = cfg.workspace_changes?.[repoName] || [];
+    const isLocal = cfg.mode === 'local' || cfg.token === 'local_mode';
 
     return {
       version: APP_VERSION,
-      authenticated: Boolean(cfg.authenticated && cfg.token),
+      authenticated: Boolean(cfg.authenticated && (cfg.token || isLocal)),
       user: cfg.user,
       active_repo: activeRepo,
-      git_provider: cfg.git_provider || 'github',
+      git_provider: cfg.git_provider || (isLocal ? 'local' : 'github'),
       accounts: this.getAccounts(),
       pending_changes_count: pendingChanges.length,
       ai_settings: {
