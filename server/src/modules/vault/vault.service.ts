@@ -1,6 +1,9 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import crypto from 'node:crypto';
+import { BASE_DIR } from '../../config/constants.js';
 
 interface KeyringEntryInstance {
   getPassword(): string | null;
@@ -16,6 +19,12 @@ let KeyringEntry: KeyringEntryConstructor | null = null;
 let keyringInitAttempted = false;
 
 function getKeyringEntryClass(): KeyringEntryConstructor | null {
+  // No macOS, a chamada direta ao SecKeychain via @napi-rs/keyring em aplicativos ad-hoc ou dev
+  // gera prompts repetitivos e intrusivos do Keychain Access. Usamos o cofre seguro AES-256-GCM.
+  if (process.platform === 'darwin') {
+    return null;
+  }
+
   if (keyringInitAttempted) return KeyringEntry;
   keyringInitAttempted = true;
   try {
@@ -67,12 +76,111 @@ export const VAULT_KEYS = {
 
 export type VaultKey = typeof VAULT_KEYS[keyof typeof VAULT_KEYS] | string;
 
+/**
+ * Cofre Seguro Criptografado com AES-256-GCM
+ * Garante armazenamento persistente, sem falhas de permissão e sem prompts intrusivos no macOS.
+ */
+class EncryptedFileVault {
+  private cache: Map<string, string> = new Map();
+  private loaded = false;
+
+  private getVaultPath(): string {
+    const dir = process.env.CONTEXT_OS_USER_DATA || BASE_DIR || process.cwd();
+    return path.join(dir, '.vault.enc');
+  }
+
+  private getKey(): Buffer {
+    const user = os.userInfo?.()?.username || process.env.USER || 'default';
+    const host = os.hostname?.() || 'localhost';
+    return crypto.scryptSync(`context-os-vault:${user}:${host}`, 'context-os-salt-2026', 32);
+  }
+
+  private encrypt(plainText: string): string {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', this.getKey(), iv);
+    const enc = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return Buffer.concat([iv, tag, enc]).toString('base64');
+  }
+
+  private decrypt(cipherTextBase64: string): string | null {
+    try {
+      const buf = Buffer.from(cipherTextBase64, 'base64');
+      if (buf.length < 28) return null;
+      const iv = buf.subarray(0, 12);
+      const tag = buf.subarray(12, 28);
+      const enc = buf.subarray(28);
+      const decipher = crypto.createDecipheriv('aes-256-gcm', this.getKey(), iv);
+      decipher.setAuthTag(tag);
+      return decipher.update(enc) + decipher.final('utf8');
+    } catch {
+      return null;
+    }
+  }
+
+  private load(): void {
+    if (this.loaded) return;
+    this.loaded = true;
+    try {
+      const vPath = this.getVaultPath();
+      if (fs.existsSync(vPath)) {
+        const raw = fs.readFileSync(vPath, 'utf8');
+        const jsonStr = this.decrypt(raw);
+        if (jsonStr) {
+          const parsed = JSON.parse(jsonStr);
+          for (const [k, v] of Object.entries(parsed)) {
+            if (typeof v === 'string') this.cache.set(k, v);
+          }
+        }
+      }
+    } catch {
+      // Ignora erro de leitura e inicia vazio
+    }
+  }
+
+  private save(): void {
+    try {
+      const vPath = this.getVaultPath();
+      const parentDir = path.dirname(vPath);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
+      const data: Record<string, string> = {};
+      for (const [k, v] of this.cache.entries()) {
+        data[k] = v;
+      }
+      const encrypted = this.encrypt(JSON.stringify(data));
+      fs.writeFileSync(vPath, encrypted, 'utf8');
+    } catch {
+      // Fallback em memória permanece íntegro
+    }
+  }
+
+  get(key: string): string | null {
+    this.load();
+    return this.cache.get(key) || null;
+  }
+
+  set(key: string, val: string): void {
+    this.load();
+    this.cache.set(key, val);
+    this.save();
+  }
+
+  delete(key: string): void {
+    this.load();
+    this.cache.delete(key);
+    this.save();
+  }
+}
+
 export class VaultService {
   private readonly serviceName = 'ContextOS';
-  private readonly fallbackStore = new Map<string, string>();
+  private readonly fileVault = new EncryptedFileVault();
 
   /**
    * Obtém um segredo armazenado no cofre nativo do Sistema Operacional (Keychain/DPAPI/SecretService)
+   * ou no cofre local criptografado AES-256-GCM.
    */
   getSecret(key: VaultKey): string | null {
     const Entry = getKeyringEntryClass();
@@ -86,11 +194,11 @@ export class VaultService {
         console.warn(`[VaultService] Aviso ao ler segredo '${key}' do cofre nativo:`, msg);
       }
     }
-    return this.fallbackStore.get(key) || null;
+    return this.fileVault.get(key);
   }
 
   /**
-   * Salva um segredo no cofre nativo do Sistema Operacional
+   * Salva um segredo no cofre do Sistema Operacional
    */
   setSecret(key: VaultKey, secret: string): boolean {
     const trimmed = secret?.trim() || '';
@@ -107,7 +215,7 @@ export class VaultService {
         console.warn(`[VaultService] Aviso ao gravar segredo '${key}' no cofre nativo:`, msg);
       }
     }
-    this.fallbackStore.set(key, trimmed);
+    this.fileVault.set(key, trimmed);
     return true;
   }
 
@@ -119,7 +227,7 @@ export class VaultService {
   }
 
   /**
-   * Remove um segredo do cofre nativo do Sistema Operacional
+   * Remove um segredo do cofre
    */
   deleteSecret(key: VaultKey): boolean {
     const Entry = getKeyringEntryClass();
@@ -131,12 +239,12 @@ export class VaultService {
         // Ignora erro se item não existir
       }
     }
-    this.fallbackStore.delete(key);
+    this.fileVault.delete(key);
     return true;
   }
 
   /**
-   * Verifica se o segredo existe e possui valor não vazio no cofre do SO
+   * Verifica se o segredo existe e possui valor não vazio no cofre
    */
   hasSecret(key: VaultKey): boolean {
     const val = this.getSecret(key);
@@ -145,4 +253,5 @@ export class VaultService {
 }
 
 export const vaultService = new VaultService();
+
 
