@@ -49,12 +49,30 @@ const fileCache = new Map<string, FileCacheEntry>();
 let inFlightFile: string | null = null;
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let statusTimer: ReturnType<typeof setTimeout> | null = null;
+let gitRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+const scheduleGitRefresh = (immediate = false) => {
+  if (gitRefreshTimer) {
+    clearTimeout(gitRefreshTimer);
+    gitRefreshTimer = null;
+  }
+  if (immediate) {
+    useGitStore.getState().refreshPendingChanges().catch(() => {});
+    return;
+  }
+  // Debounce de 3.5s durante digitação contínua para poupar subprocessos Git no macOS
+  gitRefreshTimer = setTimeout(() => {
+    useGitStore.getState().refreshPendingChanges().catch(() => {});
+    gitRefreshTimer = null;
+  }, 3500);
+};
 
 const performDiskSave = async (
   file: string,
   content: string,
   meta: Record<string, any>,
   targetRepo?: string,
+  immediateGit = false,
 ): Promise<{ success: boolean; error?: string }> => {
   if (!file) return { success: false, error: "Nenhum arquivo ativo para salvar" };
   const repoName = targetRepo || useRepoStore.getState().activeRepo?.name;
@@ -97,7 +115,7 @@ const performDiskSave = async (
         useEditorStore.setState({ saveStatus: "Pronto" });
       }, 2200);
 
-      useGitStore.getState().refreshPendingChanges().catch(() => {});
+      scheduleGitRefresh(immediateGit);
       return { success: true };
     } else {
       useEditorStore.setState({ saveStatus: "Erro" });
@@ -151,8 +169,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         set({ saveStatus: "Salvando..." });
         if (autoSaveTimer) clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(() => {
-          performDiskSave(activeFile, content, fileMetadata);
-        }, 600);
+          performDiskSave(activeFile, content, fileMetadata, undefined, false);
+        }, 1500);
       }
     }
   },
@@ -170,7 +188,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
     const { activeFile, fileContent, originalContent, fileMetadata } = get();
     if (activeFile && fileContent !== originalContent) {
-      await performDiskSave(activeFile, fileContent, fileMetadata);
+      await performDiskSave(activeFile, fileContent, fileMetadata, undefined, true);
     }
   },
 
@@ -363,7 +381,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...partialMeta,
     };
     set({ fileMetadata: mergedMeta });
-    await performDiskSave(activeFile, fileContent, mergedMeta);
+    await performDiskSave(activeFile, fileContent, mergedMeta, undefined, true);
   },
 
   updateDocumentTitle: async (newTitle: string) => {
@@ -375,13 +393,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       title: newTitle,
     };
     set({ fileMetadata: mergedMeta });
-    await performDiskSave(activeFile, fileContent, mergedMeta);
+    await performDiskSave(activeFile, fileContent, mergedMeta, undefined, true);
   },
 
   saveCurrentFile: async (meta?: Record<string, any>, content?: string) => {
     const { activeFile, fileContent, fileMetadata } = get();
     const contentToSave = content !== undefined ? content : fileContent;
     const metaToSave = meta !== undefined ? meta : fileMetadata;
-    return performDiskSave(activeFile, contentToSave, metaToSave);
+    return performDiskSave(activeFile, contentToSave, metaToSave, undefined, true);
   },
 }));

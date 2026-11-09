@@ -356,8 +356,13 @@ export class WorkspaceService {
       metaUpdatePayload,
     );
 
-    this.invalidateTreeCache(repoName);
-    const newTree = (await this.getTree(repoName, true)).tree;
+    // Otimização: arquivos modificados não alteram a topologia de pastas do workspace.
+    // Evita reconstrução recursiva do disco (buildTree) e re-render massivo do React a cada autosave.
+    let newTree: TreeNode[] | undefined = undefined;
+    if (changeType === "ADDED") {
+      this.invalidateTreeCache(repoName);
+      newTree = (await this.getTree(repoName, true)).tree;
+    }
 
     return {
       success: true,
