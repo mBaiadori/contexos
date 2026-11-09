@@ -3,6 +3,7 @@ import type { AISettingsState, ChatMessage, RawTurnTelemetry, RawTurnMetrics } f
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 import { useTemplateStore } from '../stores/templateStore';
+import { useEditorStore } from '../stores/editorStore';
 import { useCopilotStore, type DynamicContext } from '../stores/copilotStore';
 import { estimateTokens, calculateTokenCost } from '../utils/token-costs';
 
@@ -114,7 +115,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const {
     activeRepo,
     activeFile,
-    fileContent,
     fileMetadata,
     projectConfig,
     tree,
@@ -493,7 +493,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             if (processedFiles.has(f)) continue;
             processedFiles.add(f);
             if (f === activeFile) {
-              folderContents.push(`--- Arquivo: ${f} ---\n${fileContent}`);
+              folderContents.push(`--- Arquivo: ${f} ---\n${useEditorStore.getState().fileContent}`);
             } else {
               try {
                 const docData = await API.getProjectFile(f);
@@ -516,7 +516,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           if (!processedFiles.has(f)) {
             processedFiles.add(f);
             if (f === activeFile) {
-              contentsList.push(`=== DOCUMENTO: ${f} ===\n${fileContent}`);
+              contentsList.push(`=== DOCUMENTO: ${f} ===\n${useEditorStore.getState().fileContent}`);
             } else {
               try {
                 const docData = await API.getProjectFile(f);

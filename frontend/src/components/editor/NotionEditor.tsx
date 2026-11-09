@@ -245,6 +245,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const titleTextareaRef = useRef<HTMLTextAreaElement>(null);
   const isInternalChangeRef = useRef(false);
   const lastEmittedMarkdownRef = useRef<string>("");
+  const engineChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeLanguageRef = useRef(activeLanguage);
   activeLanguageRef.current = activeLanguage;
@@ -391,6 +392,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     ) {
       return;
     }
+    if (engineChangeTimerRef.current) {
+      clearTimeout(engineChangeTimerRef.current);
+      engineChangeTimerRef.current = null;
+    }
+
     const currentMd = engineRef.current
       ? engineRef.current.getMarkdown()
       : docBodyRef.current;
@@ -849,6 +855,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       return;
     }
 
+    if (engineChangeTimerRef.current) {
+      clearTimeout(engineChangeTimerRef.current);
+      engineChangeTimerRef.current = null;
+    }
+
     const currentMd = engineRef.current
       ? engineRef.current.getMarkdown()
       : docBodyRef.current;
@@ -1030,42 +1041,49 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       },
       onChange: () => {
         if (!engineRef.current) return;
-        const currentMd = engineRef.current.getMarkdown();
-        lastEmittedMarkdownRef.current = currentMd;
-        isInternalChangeRef.current = true;
-        if (editorTabRef.current === "document") {
-          docBodyRef.current = currentMd;
-          // Se estiver em modo tradução, NUNCA muta o buffer do documento oficial!
-          if (
-            activeLanguageRef.current.toLowerCase() !==
-            defaultLanguageRef.current.toLowerCase()
-          ) {
-            return;
-          }
-          const metaToUse = {
-            ...(parsedRef.current?.metadata || {}),
-            ...(fileMetadata || {}),
-          };
-          const hasAnyMeta =
-            Boolean(parsedRef.current?.hasFrontmatter) ||
-            Boolean(
-              metaToUse.templateId ||
-              metaToUse.status ||
-              metaToUse.categories ||
-              (Array.isArray(metaToUse.tags) && metaToUse.tags.length > 0),
-            );
-          const newContent = hasAnyMeta
-            ? serializeFrontmatter(metaToUse, currentMd)
-            : currentMd;
-          onChangeRef.current(newContent);
-        } else {
-          effectivePromptRef.current = currentMd;
-          if (onPromptChangeRef.current) {
-            onPromptChangeRef.current(currentMd);
-          } else {
-            updateFileMetadataRef.current({ prompt: currentMd });
-          }
+        if (engineChangeTimerRef.current) {
+          clearTimeout(engineChangeTimerRef.current);
         }
+        engineChangeTimerRef.current = setTimeout(() => {
+          engineChangeTimerRef.current = null;
+          if (!engineRef.current) return;
+          const currentMd = engineRef.current.getMarkdown();
+          lastEmittedMarkdownRef.current = currentMd;
+          isInternalChangeRef.current = true;
+          if (editorTabRef.current === "document") {
+            docBodyRef.current = currentMd;
+            // Se estiver em modo tradução, NUNCA muta o buffer do documento oficial!
+            if (
+              activeLanguageRef.current.toLowerCase() !==
+              defaultLanguageRef.current.toLowerCase()
+            ) {
+              return;
+            }
+            const metaToUse = {
+              ...(parsedRef.current?.metadata || {}),
+              ...(fileMetadata || {}),
+            };
+            const hasAnyMeta =
+              Boolean(parsedRef.current?.hasFrontmatter) ||
+              Boolean(
+                metaToUse.templateId ||
+                metaToUse.status ||
+                metaToUse.categories ||
+                (Array.isArray(metaToUse.tags) && metaToUse.tags.length > 0),
+              );
+            const newContent = hasAnyMeta
+              ? serializeFrontmatter(metaToUse, currentMd)
+              : currentMd;
+            onChangeRef.current(newContent);
+          } else {
+            effectivePromptRef.current = currentMd;
+            if (onPromptChangeRef.current) {
+              onPromptChangeRef.current(currentMd);
+            } else {
+              updateFileMetadataRef.current({ prompt: currentMd });
+            }
+          }
+        }, 120);
       },
       onSave: () => {
         if (handleSaveRef.current) {
@@ -1105,6 +1123,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
 
     return () => {
+      if (engineChangeTimerRef.current) {
+        clearTimeout(engineChangeTimerRef.current);
+        engineChangeTimerRef.current = null;
+      }
       engine.destroy();
       engineRef.current = null;
     };

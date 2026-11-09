@@ -475,6 +475,10 @@ export function recordChange(
       return;
     }
 
+    if (existing.new_content === safeNewContent && existing.old_content === preservedOldContent) {
+      return;
+    }
+
     changes[existingIdx] = {
       path: cleanPath,
       type:

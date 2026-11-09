@@ -4,9 +4,9 @@ import path from 'node:path';
 /**
  * Escreve um arquivo de texto de forma atômica utilizando o padrão:
  * 1. Escreve em arquivo temporário no mesmo diretório
- * 2. Garante flush no disco via fsync
- * 3. Renomeia atomicamente sobre o destino (rename)
- * Evita que quedas de energia, panes ou shutdowns corrompam arquivos de configuração com 0 bytes.
+ * 2. Renomeia atomicamente sobre o destino (rename)
+ * Evita bloqueios de fsync síncronos no Event Loop do Electron/Node.js no macOS,
+ * garantindo integridade contra arquivos parciais via atomic rename POSIX.
  */
 export function writeTextAtomic(filePath: string, text: string): void {
   const dir = path.dirname(filePath);
@@ -19,21 +19,10 @@ export function writeTextAtomic(filePath: string, text: string): void {
     `.${path.basename(filePath)}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
   );
 
-  let fd: number | null = null;
   try {
-    fd = fs.openSync(tmpPath, 'w');
-    fs.writeSync(fd, text, 0, 'utf-8');
-    fs.fsyncSync(fd);
-    fs.closeSync(fd);
-    fd = null;
-
+    fs.writeFileSync(tmpPath, text, 'utf-8');
     fs.renameSync(tmpPath, filePath);
   } catch (err) {
-    if (fd !== null) {
-      try {
-        fs.closeSync(fd);
-      } catch {}
-    }
     if (fs.existsSync(tmpPath)) {
       try {
         fs.unlinkSync(tmpPath);

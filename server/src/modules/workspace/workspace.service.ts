@@ -337,7 +337,9 @@ export class WorkspaceService {
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     }
 
-    fs.writeFileSync(fullPath, content, "utf-8");
+    if (changeType === "ADDED" || oldContent !== content) {
+      fs.writeFileSync(fullPath, content, "utf-8");
+    }
     recordChange(repoName, cleanPath, changeType, oldContent, content);
 
     // Extrair links e metadados automaticamente do conteúdo markdown para enriquecer o .docs.metadata.json

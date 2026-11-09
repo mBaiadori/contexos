@@ -150,7 +150,31 @@ const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefin
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  const editor = useEditorStore();
+  
+  // Seletores granulares do editor para isolar digitação e evitar re-renders na árvore global
+  const activeFile = useEditorStore((s) => s.activeFile);
+  const activeDocRepo = useEditorStore((s) => s.activeDocRepo);
+  const fileMetadata = useEditorStore((s) => s.fileMetadata);
+  const saveStatus = useEditorStore((s) => s.saveStatus);
+  const isSaving = useEditorStore((s) => s.isSaving);
+  const isLoadingFile = useEditorStore((s) => s.isLoadingFile);
+  const hasUnsavedChanges = useEditorStore((s) => s.hasUnsavedChanges);
+
+  const setActiveFile = useEditorStore((s) => s.setActiveFile);
+  const setActiveDocRepo = useEditorStore((s) => s.setActiveDocRepo);
+  const setFileContent = useEditorStore((s) => s.setFileContent);
+  const setOriginalContent = useEditorStore((s) => s.setOriginalContent);
+  const setFileMetadata = useEditorStore((s) => s.setFileMetadata);
+  const setSaveStatus = useEditorStore((s) => s.setSaveStatus);
+  const setIsSaving = useEditorStore((s) => s.setIsSaving);
+  const setIsLoadingFile = useEditorStore((s) => s.setIsLoadingFile);
+  const loadFile = useEditorStore((s) => s.loadFile);
+  const reloadActiveFile = useEditorStore((s) => s.reloadActiveFile);
+  const updateFileMetadata = useEditorStore((s) => s.updateFileMetadata);
+  const updateDocumentTitle = useEditorStore((s) => s.updateDocumentTitle);
+  const saveCurrentFile = useEditorStore((s) => s.saveCurrentFile);
+  const flushPendingSave = useEditorStore((s) => s.flushPendingSave);
+
   const repo = useRepoStore();
   const git = useGitStore();
   const gov = useGovernanceStore();
@@ -178,13 +202,76 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  const value = useMemo<WorkspaceContextType>(() => ({
-    ...editor,
-    ...repo,
-    ...git,
-    ...gov,
-    getRepoOwnerOrOrg,
-  }), [editor, repo, git, gov]);
+  const value = useMemo<WorkspaceContextType>(() => {
+    const base: Record<string, any> = {
+      activeFile,
+      activeDocRepo,
+      fileMetadata,
+      saveStatus,
+      isSaving,
+      isLoadingFile,
+      hasUnsavedChanges,
+      setActiveFile,
+      setActiveDocRepo,
+      setFileContent,
+      setOriginalContent,
+      setFileMetadata,
+      setSaveStatus,
+      setIsSaving,
+      setIsLoadingFile,
+      loadFile,
+      reloadActiveFile,
+      updateFileMetadata,
+      updateDocumentTitle,
+      saveCurrentFile,
+      flushPendingSave,
+      ...repo,
+      ...git,
+      ...gov,
+      getRepoOwnerOrOrg,
+    };
+
+    // Fornece fileContent e originalContent sob demanda via getters para evitar
+    // re-renders de 110 componentes a cada caractere digitado
+    Object.defineProperty(base, "fileContent", {
+      get: () => useEditorStore.getState().fileContent,
+      enumerable: true,
+      configurable: true,
+    });
+
+    Object.defineProperty(base, "originalContent", {
+      get: () => useEditorStore.getState().originalContent,
+      enumerable: true,
+      configurable: true,
+    });
+
+    return base as WorkspaceContextType;
+  }, [
+    activeFile,
+    activeDocRepo,
+    fileMetadata,
+    saveStatus,
+    isSaving,
+    isLoadingFile,
+    hasUnsavedChanges,
+    setActiveFile,
+    setActiveDocRepo,
+    setFileContent,
+    setOriginalContent,
+    setFileMetadata,
+    setSaveStatus,
+    setIsSaving,
+    setIsLoadingFile,
+    loadFile,
+    reloadActiveFile,
+    updateFileMetadata,
+    updateDocumentTitle,
+    saveCurrentFile,
+    flushPendingSave,
+    repo,
+    git,
+    gov,
+  ]);
 
   return (
     <WorkspaceContext.Provider value={value}>

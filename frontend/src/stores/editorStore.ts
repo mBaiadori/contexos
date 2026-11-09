@@ -169,7 +169,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         if (autoSaveTimer) clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(() => {
           performDiskSave(activeFile, content, fileMetadata, undefined, false);
-        }, 1500);
+        }, 750);
       }
     }
   },

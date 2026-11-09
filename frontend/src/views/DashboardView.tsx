@@ -18,6 +18,7 @@ import { useWorkspace } from "../context/WorkspaceContext";
 import { useAI } from "../context/AIContext";
 import { useAuth } from "../context/AuthContext";
 import { useRepoStore } from "../stores/repoStore";
+import { useEditorStore } from "../stores/editorStore";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { LoadingPane } from "../components/layout/LoadingPane";
 import { EditorSubView } from "./subviews/EditorSubView";
@@ -86,7 +87,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   const {
     activeFile,
     activeRepo,
-    fileContent,
     selectRepoByName,
     loadFile,
     hasUnreadWhatsNew,
@@ -522,7 +522,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             rawPayload={{
               repo: activeRepo?.name,
               docPath: activeFile,
-              contentLength: fileContent?.length || 0,
+              contentLength: useEditorStore.getState().fileContent?.length || 0,
               model: aiSettings?.active_model,
             }}
             rawResponse={messages[messages.length - 1] || null}
