@@ -1,4 +1,5 @@
 import { loadConfig, saveConfig } from '../../config/storage.js';
+import { APP_VERSION } from '../../config/constants.js';
 import { callGitHubAPI } from '../../utils/git.js';
 import { vaultService, VAULT_KEYS } from '../vault/vault.service.js';
 import { governanceService } from '../governance/governance.service.js';
@@ -470,7 +471,7 @@ export class AuthService {
     const pendingChanges = cfg.workspace_changes?.[repoName] || [];
 
     return {
-      version: '1.0.5',
+      version: APP_VERSION,
       authenticated: Boolean(cfg.authenticated && cfg.token),
       user: cfg.user,
       active_repo: activeRepo,

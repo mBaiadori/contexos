@@ -60,6 +60,18 @@ function findProjectRoot(): string {
 
 export const PROJECT_ROOT = findProjectRoot();
 
+export function getAppVersion(): string {
+  try {
+    const pkgPath = path.join(PROJECT_ROOT, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const data = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      if (data.version) return data.version;
+    }
+  } catch {}
+  return '1.0.6';
+}
+export const APP_VERSION = getAppVersion();
+
 export const BASE_DIR = USER_DATA_DIR && fs.existsSync(USER_DATA_DIR)
   ? USER_DATA_DIR
   : PROJECT_ROOT;
