@@ -6,6 +6,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import { writeJsonAtomic } from "../utils/atomic-write.js";
+import {
+  loadMarkdownTemplatesFromDir,
+  writeMarkdownTemplateFile,
+} from "../utils/template-markdown.js";
 
 // Root path of the project (2 levels up from server/src/config or desktop app resources)
 export const USER_DATA_DIR = process.env.CONTEXT_OS_USER_DATA || '';
@@ -257,21 +261,42 @@ function sanitizeTemplateItem(
 }
 
 export function loadProjectTemplates(repoName: string, ownerOrOrg?: string): ProjectTemplate[] {
+  const repoDir = resolveRepoDir(repoName, ownerOrOrg);
+  const templatesDir = path.join(repoDir, "templates");
+
+  const mdTemplates = fs.existsSync(templatesDir)
+    ? loadMarkdownTemplatesFromDir(templatesDir)
+    : [];
+
   const filePath = getProjectTemplatesPath(repoName, ownerOrOrg);
-  if (!fs.existsSync(filePath)) return [];
-  try {
-    const raw = fs.readFileSync(filePath, "utf-8").trim();
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((t) => sanitizeTemplateItem(t, "local"));
-  } catch (err) {
-    console.error(
-      `[loadProjectTemplates] Erro ao carregar templates de ${filePath}:`,
-      err,
-    );
-    return [];
+  let jsonTemplates: ProjectTemplate[] = [];
+  if (fs.existsSync(filePath)) {
+    try {
+      const raw = fs.readFileSync(filePath, "utf-8").trim();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          jsonTemplates = parsed.map((t) => sanitizeTemplateItem(t, "local"));
+        }
+      }
+    } catch (err) {
+      console.error(
+        `[loadProjectTemplates] Erro ao carregar templates de ${filePath}:`,
+        err,
+      );
+    }
   }
+
+  // Mescla priorizando os arquivos físicos .md na pasta templates/
+  const uniqueMap = new Map<string, ProjectTemplate>();
+  for (const t of jsonTemplates) {
+    if (t.id) uniqueMap.set(t.id, t);
+  }
+  for (const t of mdTemplates) {
+    if (t.id) uniqueMap.set(t.id, sanitizeTemplateItem(t, "local"));
+  }
+
+  return Array.from(uniqueMap.values());
 }
 
 export function saveProjectTemplates(
@@ -280,11 +305,29 @@ export function saveProjectTemplates(
   ownerOrOrg?: string,
 ): void {
   const repoDir = resolveRepoDir(repoName, ownerOrOrg);
+  const templatesDir = path.join(repoDir, "templates");
   const filePath = path.join(repoDir, ".templates.json");
   const sanitized = items.map((t) =>
     sanitizeTemplateItem(t, (t.source as any) || "local"),
   );
+
+  // 1. Grava no .templates.json (compatibilidade e fallback legado)
   writeJsonAtomic(filePath, sanitized);
+
+  // 2. Grava cada template como arquivo físico .md em templates/
+  try {
+    if (!fs.existsSync(templatesDir)) {
+      fs.mkdirSync(templatesDir, { recursive: true });
+    }
+    for (const tpl of sanitized) {
+      writeMarkdownTemplateFile(templatesDir, tpl);
+    }
+  } catch (err) {
+    console.error(
+      `[saveProjectTemplates] Erro ao gravar templates markdown em ${templatesDir}:`,
+      err,
+    );
+  }
 }
 
 export function loadCommunityTemplates(): ProjectTemplate[] {

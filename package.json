@@ -1,6 +1,6 @@
 {
   "name": "spec-driven-context-os",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "scripts": {
     "dev": "npx -y concurrently -k \"npm --prefix server run dev\" \"npm --prefix frontend run dev\"",

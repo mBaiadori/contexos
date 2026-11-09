@@ -3,10 +3,13 @@ import {
   saveCommunityTemplates,
   loadProjectTemplates,
   saveProjectTemplates,
+  resolveRepoDir,
   type ProjectTemplate,
 } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
 import { docsMetadataService } from '../workspace/docs-metadata.service.js';
+import { deleteMarkdownTemplateFile } from '../../utils/template-markdown.js';
+import path from 'node:path';
 
 function getActiveRepo(): string {
   const cfg = loadConfig();
@@ -178,6 +181,8 @@ export class TemplatesService {
 
     if (filtered.length < existing.length) {
       saveProjectTemplates(targetRepo, filtered);
+      const repoDir = resolveRepoDir(targetRepo);
+      deleteMarkdownTemplateFile(path.join(repoDir, 'templates'), id);
       removed = true;
     }
 

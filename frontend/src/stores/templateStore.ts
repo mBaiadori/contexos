@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { API } from '../services/api';
 import type { TemplateItem } from '../types';
+import { useGitStore } from './gitStore';
 
 export interface TemplateStoreState {
   templates: TemplateItem[];
@@ -120,6 +121,8 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
       });
       if (res.ok && res.data?.template) {
         await get().fetchTemplates();
+        useGitStore.getState().refreshGitStatus().catch(() => {});
+        useGitStore.getState().refreshPendingChanges().catch(() => {});
         return { success: true, template: res.data.template };
       }
       return { success: false, message: (res.data as any)?.error || 'Erro ao criar template.' };
@@ -133,6 +136,8 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
       const res = await API.updateProjectTemplate(id, data);
       if (res.ok && res.data?.template) {
         await get().fetchTemplates();
+        useGitStore.getState().refreshGitStatus().catch(() => {});
+        useGitStore.getState().refreshPendingChanges().catch(() => {});
         return { success: true, template: res.data.template };
       }
       return { success: false, message: (res.data as any)?.error || 'Erro ao atualizar template.' };
@@ -147,6 +152,8 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
       const res = await API.importTemplateFromCommunity(id);
       if (res.ok) {
         await get().fetchTemplates();
+        useGitStore.getState().refreshGitStatus().catch(() => {});
+        useGitStore.getState().refreshPendingChanges().catch(() => {});
         return { success: true, message: res.data?.message || 'Template importado.' };
       }
       return { success: false, message: (res.data as any)?.error || 'Erro ao importar.' };
@@ -164,6 +171,8 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
         : await API.deleteProjectTemplate(id);
       if (res.ok) {
         await Promise.all([get().fetchTemplates(), get().fetchCommunityTemplates()]);
+        useGitStore.getState().refreshGitStatus().catch(() => {});
+        useGitStore.getState().refreshPendingChanges().catch(() => {});
         return { success: true, message: res.data?.message || 'Template removido com sucesso.' };
       }
       return { success: false, message: (res.data as any)?.error || res.data?.message || 'Falha ao remover template.' };
