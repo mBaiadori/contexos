@@ -31,7 +31,7 @@ function getKeyringEntryClass(): KeyringEntryConstructor | null {
         KeyringEntry = mod?.Entry || mod?.default?.Entry || null;
       } catch {
         // Tenta resolver a partir de locais conhecidos no Electron empacotado e workspaces
-        const resources = (process as any).resourcesPath || process.env.CONTEXT_OS_RESOURCES || '';
+        const resources = (process as unknown as { resourcesPath?: string }).resourcesPath || process.env.CONTEXT_OS_RESOURCES || '';
         const candidatePaths = [
           path.join(resources, 'app.asar.unpacked', 'node_modules', '@napi-rs/keyring'),
           path.join(resources, 'node_modules', '@napi-rs/keyring'),

@@ -5,8 +5,10 @@ import { eventsService } from './modules/events/events.service.js';
 const DESIRED_PORT = Number(process.env.PORT) || 4100;
 const HOST = process.env.HOST || '127.0.0.1';
 
+type FastifyApp = Awaited<ReturnType<typeof buildApp>>;
+
 async function start() {
-  let app: any = null;
+  let app: FastifyApp | null = null;
   let isShuttingDown = false;
 
   const shutdown = async (_signal: string) => {
@@ -20,8 +22,9 @@ async function start() {
 
     try {
       eventsService.closeAll();
-      if (app?.server && typeof (app.server as any).closeAllConnections === 'function') {
-        (app.server as any).closeAllConnections();
+      const nodeServer = app?.server as unknown as { closeAllConnections?: () => void } | undefined;
+      if (nodeServer && typeof nodeServer.closeAllConnections === 'function') {
+        nodeServer.closeAllConnections();
       }
       if (app) {
         await app.close();

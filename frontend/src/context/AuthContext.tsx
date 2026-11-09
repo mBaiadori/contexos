@@ -59,8 +59,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     refreshAuth();
-    if (typeof window !== 'undefined' && (window as any).desktopBridge?.getVersion) {
-      (window as any).desktopBridge.getVersion().then((v: string) => {
+    const win = typeof window !== 'undefined' ? (window as unknown as { desktopBridge?: { getVersion?: () => Promise<string> } }) : null;
+    if (win?.desktopBridge?.getVersion) {
+      win.desktopBridge.getVersion().then((v: string) => {
         if (v) setVersion(v);
       }).catch(() => {});
     }

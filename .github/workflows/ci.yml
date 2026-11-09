@@ -162,14 +162,16 @@ jobs:
           $installDir = "$env:LOCALAPPDATA\Programs\Context OS"
           Write-Host "Executando instalador silencioso: $($installer.FullName)..."
           
-          # NSIS silencioso com caminho de destino explícito (/D deve ser sem aspas e o último parâmetro)
-          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S /D=$installDir" -PassThru
+          # Executa o instalador NSIS em modo estritamente silencioso
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -PassThru
           
           # Aguarda término da instalação com verificação periódica
-          $timeout = 90
+          $timeout = 120
+          $appExe = Join-Path $installDir "Context OS.exe"
+          $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
+          
           while ($timeout -gt 0) {
-            if (Test-Path (Join-Path $installDir "Context OS.exe")) {
-              # Aguarda breve momento para os arquivos restantes (como Git embutido) concluírem
+            if ((Test-Path $appExe) -and (Test-Path $gitExe)) {
               Start-Sleep -Seconds 5
               break
             }
@@ -179,16 +181,16 @@ jobs:
           
           Write-Host "Verificando instalação em: $installDir"
           if (-not (Test-Path $installDir)) {
+            Write-Host "Conteúdo de $env:LOCALAPPDATA\Programs:"
+            Get-ChildItem -Path "$env:LOCALAPPDATA\Programs" -ErrorAction SilentlyContinue | Select-Object Name
             throw "Diretório de instalação não encontrado: $installDir"
           }
           
-          $appExe = Join-Path $installDir "Context OS.exe"
           if (-not (Test-Path $appExe)) {
             throw "Executável Context OS.exe não encontrado em $appExe!"
           }
           Write-Host "✅ Context OS.exe instalado com sucesso!"
           
-          $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
           if (-not (Test-Path $gitExe)) {
             throw "MinGit embutido não encontrado em $gitExe!"
           }

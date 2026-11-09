@@ -317,7 +317,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
         onLoginSuccess();
       } else {
         setStatusMessage({
-          text: (res as any).error || "Erro ao entrar no modo local.",
+          text: (res as { error?: string })?.error || "Erro ao entrar no modo local.",
           type: "error",
         });
       }

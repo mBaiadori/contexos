@@ -56,11 +56,14 @@ jobs:
           }
           $installDir = "$env:LOCALAPPDATA\Programs\Context OS"
           Write-Host "Executando instalador oficial: $($installer.FullName)..."
-          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S /D=$installDir" -PassThru
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -PassThru
           
-          $timeout = 90
+          $timeout = 120
+          $appExe = Join-Path $installDir "Context OS.exe"
+          $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
+
           while ($timeout -gt 0) {
-            if (Test-Path (Join-Path $installDir "Context OS.exe")) {
+            if ((Test-Path $appExe) -and (Test-Path $gitExe)) {
               Start-Sleep -Seconds 5
               break
             }
@@ -70,16 +73,16 @@ jobs:
 
           Write-Host "Verificando diretório de instalação: $installDir"
           if (-not (Test-Path $installDir)) {
+            Write-Host "Conteúdo de $env:LOCALAPPDATA\Programs:"
+            Get-ChildItem -Path "$env:LOCALAPPDATA\Programs" -ErrorAction SilentlyContinue | Select-Object Name
             throw "Falha: O diretório de instalação '$installDir' não foi criado pelo NSIS!"
           }
 
-          $appExe = Join-Path $installDir "Context OS.exe"
           if (-not (Test-Path $appExe)) {
             throw "Falha: 'Context OS.exe' não encontrado na pasta de instalação!"
           }
           Write-Host "✅ Executável principal verificado: $appExe"
 
-          $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
           if (-not (Test-Path $gitExe)) {
             throw "Falha: O MinGit embutido não foi empacotado em $gitExe!"
           }
