@@ -177,30 +177,44 @@ class EncryptedFileVault {
 export class VaultService {
   private readonly serviceName = 'ContextOS';
   private readonly fileVault = new EncryptedFileVault();
+  private readonly memoryCache = new Map<string, { value: string | null; expiresAt: number }>();
 
   /**
    * Obtém um segredo armazenado no cofre nativo do Sistema Operacional (Keychain/DPAPI/SecretService)
-   * ou no cofre local criptografado AES-256-GCM.
+   * ou no cofre local criptografado AES-256-GCM com cache em memória (TTL 30s) para evitar sobrecarga do Keychain no macOS.
    */
   getSecret(key: VaultKey): string | null {
+    const cached = this.memoryCache.get(key);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.value;
+    }
+
+    let result: string | null = null;
     const Entry = getKeyringEntryClass();
     if (Entry) {
       try {
         const entry = new Entry(this.serviceName, key);
         const secret = entry.getPassword();
-        if (secret) return secret;
+        if (secret) {
+          result = secret;
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn(`[VaultService] Aviso ao ler segredo '${key}' do cofre nativo:`, msg);
       }
     }
-    return this.fileVault.get(key);
+    if (!result) {
+      result = this.fileVault.get(key);
+    }
+    this.memoryCache.set(key, { value: result, expiresAt: Date.now() + 30000 });
+    return result;
   }
 
   /**
    * Salva um segredo no cofre do Sistema Operacional
    */
   setSecret(key: VaultKey, secret: string): boolean {
+    this.memoryCache.delete(key);
     const trimmed = secret?.trim() || '';
     if (!trimmed) {
       return this.deleteSecret(key);
@@ -230,6 +244,7 @@ export class VaultService {
    * Remove um segredo do cofre
    */
   deleteSecret(key: VaultKey): boolean {
+    this.memoryCache.delete(key);
     const Entry = getKeyringEntryClass();
     if (Entry) {
       try {

@@ -127,6 +127,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
   // Atualização em tempo real das dependências e consumidores ao salvar documento ou metadados
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const handleDocumentSaved = (e: any) => {
       const savedPath = e.detail?.filePath;
       if (
@@ -136,15 +137,20 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         savedPath === filePath.split("#")[0] ||
         filePath.startsWith(savedPath)
       ) {
-        loadContext();
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          loadContext();
+        }, 1200);
       }
     };
     window.addEventListener("workspace:document-saved", handleDocumentSaved);
-    return () =>
+    return () => {
+      if (timer) clearTimeout(timer);
       window.removeEventListener(
         "workspace:document-saved",
         handleDocumentSaved,
       );
+    };
   }, [filePath, loadContext]);
 
   useEffect(() => {

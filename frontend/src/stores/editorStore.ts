@@ -166,7 +166,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       });
 
       if (hasUnsavedChanges) {
-        set({ saveStatus: "Salvando..." });
         if (autoSaveTimer) clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(() => {
           performDiskSave(activeFile, content, fileMetadata, undefined, false);

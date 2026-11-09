@@ -127,7 +127,25 @@ export function saveProjectsMasterConfig(cfg: any): void {
   writeJsonAtomic(PROJECTS_CONFIG_PATH, cfg);
 }
 
-export function loadConfig(): AppConfig {
+let configCache: { cfg: AppConfig; timestamp: number; mtime: number } | null = null;
+
+export function invalidateConfigCache(): void {
+  configCache = null;
+}
+
+export function loadConfig(force = false): AppConfig {
+  let currentMtime = 0;
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      currentMtime = fs.statSync(CONFIG_PATH).mtimeMs;
+    } catch {}
+  }
+
+  const now = Date.now();
+  if (!force && configCache && (now - configCache.timestamp < 4000) && configCache.mtime === currentMtime) {
+    return JSON.parse(JSON.stringify(configCache.cfg));
+  }
+
   const canonical = loadCanonicalTemplates();
   let cfg: any = {};
 
@@ -260,10 +278,17 @@ export function loadConfig(): AppConfig {
     cfg.mode = (cfg.token && cfg.token.trim()) ? 'remote' : 'local';
   }
 
+  configCache = {
+    cfg: cfg as AppConfig,
+    timestamp: now,
+    mtime: currentMtime,
+  };
+
   return cfg as AppConfig;
 }
 
 export function saveConfig(cfg: AppConfig): void {
+  invalidateConfigCache();
   try {
     // 1. Sincroniza segredos diretamente no cofre nativo do SO (Keychain / DPAPI)
     if (cfg.token !== undefined) {
