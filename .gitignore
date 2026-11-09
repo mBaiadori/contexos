@@ -37,6 +37,8 @@ loader.cjs
 .env
 .env.local
 .env.*.local
+.vault.enc
+*.vault.enc
 
 # =============================================================================
 # PYTHON & RUNTIME
