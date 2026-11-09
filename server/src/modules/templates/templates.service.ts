@@ -186,7 +186,7 @@ export class TemplatesService {
     }
 
     // 2. Fallback: check other repositories in projects directory
-    const otherRepos = ['condominiums', 'default', 'project-boilerplate', 'local'];
+    const otherRepos = ['condominiums', 'default', 'contexos', 'project-boilerplate', 'local'];
     for (const otherRepo of otherRepos) {
       if (otherRepo === targetRepo) continue;
       const otherList = loadProjectTemplates(otherRepo);

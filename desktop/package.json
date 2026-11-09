@@ -1,6 +1,6 @@
 {
   "name": "context-os-desktop",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Context OS - Spec-Driven Governance & Autonomous AI Platform",
   "type": "module",
   "main": "dist/main/index.js",

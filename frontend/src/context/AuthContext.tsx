@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [version, setVersion] = useState<string>('1.0.7');
+  const [version, setVersion] = useState<string>('1.0.8');
   const [provider, setProvider] = useState<'github' | 'local'>('github');
   const [providerUrl, setProviderUrl] = useState<string | undefined>(undefined);
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
