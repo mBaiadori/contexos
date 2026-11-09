@@ -1146,7 +1146,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
           >
             <span>Contexos Desktop</span>
             <span style={{ opacity: 0.5 }}>•</span>
-            <span>v{version || "1.0.9"}</span>
+            <span>v{version || "1.0.10"}</span>
           </div>
 
           {/* Banner de Atualização Disponível se houver */}

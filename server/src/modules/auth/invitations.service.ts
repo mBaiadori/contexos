@@ -143,10 +143,9 @@ export class InvitationsService {
       if (statusCode === 200) {
         return { success: true, message: `Convite para a organização ${orgLogin} aceito com sucesso!` };
       }
-      return {
-        success: false,
-        error: data?.message || `Falha ao aceitar convite da organização (HTTP ${statusCode}).`,
-      };
+      throw new Error(
+        data?.message || `Falha ao aceitar convite da organização (HTTP ${statusCode}).`
+      );
     }
 
     throw new Error(`Tipo de convite inválido: ${payload.type}`);
@@ -174,10 +173,9 @@ export class InvitationsService {
       if (statusCode === 204 || statusCode === 200) {
         return { success: true, message: 'Convite do repositório recusado.' };
       }
-      return {
-        success: false,
-        error: data?.message || `Falha ao recusar convite (HTTP ${statusCode}).`,
-      };
+      throw new Error(
+        data?.message || `Falha ao recusar convite (HTTP ${statusCode}).`
+      );
     }
 
     if (payload.type === 'org') {
@@ -193,10 +191,9 @@ export class InvitationsService {
       if (statusCode === 204 || statusCode === 200) {
         return { success: true, message: `Convite da organização ${orgLogin} recusado.` };
       }
-      return {
-        success: false,
-        error: data?.message || `Falha ao recusar convite da organização (HTTP ${statusCode}).`,
-      };
+      throw new Error(
+        data?.message || `Falha ao recusar convite da organização (HTTP ${statusCode}).`
+      );
     }
 
     throw new Error(`Tipo de convite inválido: ${payload.type}`);
