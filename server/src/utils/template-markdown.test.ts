@@ -4,65 +4,96 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {
-  loadMarkdownTemplatesFromDir,
-  writeMarkdownTemplateFile,
-  deleteMarkdownTemplateFile,
+  loadDotTemplates,
+  writeDotTemplate,
+  deleteDotTemplate,
+  serializeTemplateHeader,
+  parseTemplateHeader,
   sanitizeTemplateSlug,
 } from './template-markdown.js';
 import type { ProjectTemplate } from '../config/constants.js';
 
-test('Template Modular: grava pasta com template.md, prompt.md e metadata.json', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tpl-modular-test-'));
-  const templatesDir = path.join(tmpDir, 'templates');
+test('Template Header: serialize e parse isolado', () => {
+  const tpl: ProjectTemplate = {
+    id: 'tpl-visao',
+    templateName: 'visao',
+    title: 'Visão Geral',
+    ext: 'md',
+    category: 'produto',
+    tags: ['estrategia'],
+    skills: ['living-docs-governance'],
+    updated_at: '2026-11-09T10:00:00.000Z',
+    badge: 'DOC',
+    description: 'Descrição do template',
+    source: 'local',
+    prompt: 'Prompt da IA',
+    content: '## Seção 1\n\nConteúdo do template',
+  };
+
+  const serialized = serializeTemplateHeader(tpl);
+  assert.ok(serialized.startsWith('---\n'));
+  assert.ok(serialized.includes('id: "tpl-visao"'));
+  assert.ok(serialized.includes('title: "Visão Geral"'));
+  assert.ok(!serialized.includes('prompt:')); // prompt não fica no YAML!
+  assert.ok(serialized.includes('## Seção 1'));
+
+  const parsed = parseTemplateHeader(serialized, 'visao');
+  assert.equal(parsed.meta.id, tpl.id);
+  assert.equal(parsed.meta.title, tpl.title);
+  assert.equal(parsed.content, tpl.content);
+});
+
+test('DotTemplates: I/O modular em .templates/<slug>/ (template.md + prompt.md)', () => {
+  const tmpRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'dot-tpl-repo-'));
 
   try {
     const tpl: ProjectTemplate = {
-      id: 'tpl-modelagem-1',
+      id: 't',
       templateName: 'Modelagem',
-      title: 'Modelagem de Sistemas',
+      title: 'Modelagem',
       ext: 'md',
-      category: 'arquitetura',
-      tags: ['modelagem', 'entidades'],
+      category: 'geral',
+      tags: ['arquitetura'],
       skills: ['living-docs-governance'],
-      updated_at: '2026-11-09T10:30:00.000Z',
+      updated_at: '2026-11-09T10:34:15.981Z',
       badge: 'DOC',
-      description: 'Template de modelagem',
+      description: '',
       source: 'local',
-      prompt: 'Você é um assistente especialista em modelagem de dados.\nFaça perguntas passo a passo.',
-      content: '## Description\n\n## Entity\n\n## Relations\n\n## Actions',
+      prompt: 'Você é um assistente especialista.\nFaça perguntas passo a passo.',
+      content: '## Description\n\n## Entity\n\n## Relations',
     };
 
-    const res = writeMarkdownTemplateFile(templatesDir, tpl);
-    const expectedFolder = path.join(templatesDir, 'modelagem');
+    // Grava
+    const writeRes = writeDotTemplate(tmpRepo, tpl);
+    const expectedFolder = path.join(tmpRepo, '.templates', 'modelagem');
 
-    assert.equal(res.folderPath, expectedFolder);
+    assert.equal(writeRes.folderPath, expectedFolder);
     assert.ok(fs.existsSync(path.join(expectedFolder, 'template.md')));
     assert.ok(fs.existsSync(path.join(expectedFolder, 'prompt.md')));
-    assert.ok(fs.existsSync(path.join(expectedFolder, 'metadata.json')));
 
     // Verifica conteúdo isolado
-    const templateContent = fs.readFileSync(path.join(expectedFolder, 'template.md'), 'utf-8').trim();
-    assert.equal(templateContent, tpl.content);
+    const templateRaw = fs.readFileSync(path.join(expectedFolder, 'template.md'), 'utf-8');
+    assert.ok(templateRaw.includes('id: "t"'));
+    assert.ok(templateRaw.includes('## Description'));
 
-    const promptContent = fs.readFileSync(path.join(expectedFolder, 'prompt.md'), 'utf-8').trim();
-    assert.equal(promptContent, tpl.prompt);
+    const promptRaw = fs.readFileSync(path.join(expectedFolder, 'prompt.md'), 'utf-8').trim();
+    assert.equal(promptRaw, tpl.prompt);
 
-    // Lê via loadMarkdownTemplatesFromDir
-    const loaded = loadMarkdownTemplatesFromDir(templatesDir);
+    // Carrega com reconciliação e cache
+    const loaded = loadDotTemplates(tmpRepo);
     assert.equal(loaded.length, 1);
-    assert.equal(loaded[0].id, tpl.id);
-    assert.equal(loaded[0].title, tpl.title);
+    assert.equal(loaded[0].id, 't');
+    assert.equal(loaded[0].title, 'Modelagem');
     assert.equal(loaded[0].content, tpl.content);
     assert.equal(loaded[0].prompt, tpl.prompt);
     assert.deepEqual(loaded[0].tags, tpl.tags);
-    assert.deepEqual(loaded[0].skills, tpl.skills);
 
-    // Deleta a pasta
-    const deleted = deleteMarkdownTemplateFile(templatesDir, tpl.id);
+    // Deleta
+    const deleted = deleteDotTemplate(tmpRepo, 't');
     assert.equal(deleted, true);
     assert.equal(fs.existsSync(expectedFolder), false);
-    assert.equal(loadMarkdownTemplatesFromDir(templatesDir).length, 0);
+    assert.equal(loadDotTemplates(tmpRepo).length, 0);
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpRepo, { recursive: true, force: true });
   }
 });

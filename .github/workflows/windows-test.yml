@@ -54,11 +54,20 @@ jobs:
           if (-not $installer) {
             throw "Erro: Instalador .exe não foi encontrado em desktop/release/"
           }
-          Write-Host "Executando instalador oficial: $($installer.FullName)..."
-          Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait
-          Start-Sleep -Seconds 5
-
           $installDir = "$env:LOCALAPPDATA\Programs\Context OS"
+          Write-Host "Executando instalador oficial: $($installer.FullName)..."
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S /D=$installDir" -PassThru
+          
+          $timeout = 90
+          while ($timeout -gt 0) {
+            if (Test-Path (Join-Path $installDir "Context OS.exe")) {
+              Start-Sleep -Seconds 5
+              break
+            }
+            Start-Sleep -Seconds 2
+            $timeout -= 2
+          }
+
           Write-Host "Verificando diretório de instalação: $installDir"
           if (-not (Test-Path $installDir)) {
             throw "Falha: O diretório de instalação '$installDir' não foi criado pelo NSIS!"

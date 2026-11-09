@@ -923,7 +923,9 @@ export class WorkspaceService {
 
         for (const gf of allGitFiles) {
           const cleanPath = gf.path.trim().replace(/^\/+/, "");
-          if (!cleanPath || isPathHidden(cleanPath, hiddenList)) continue;
+          if (!cleanPath) continue;
+          const isSys = isSystemPath(cleanPath);
+          if (!isSys && isPathHidden(cleanPath, hiddenList)) continue;
 
           // Se já está no map de alterações da UI, mantém os dados originais preservados
           if (mergedMap.has(cleanPath)) continue;

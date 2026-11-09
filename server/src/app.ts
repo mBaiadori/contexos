@@ -44,6 +44,9 @@ import {
 import { validateRepoName } from "./utils/repo-ref.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
+  // Inicializa a sessão atômica no boot para persistir o token imediatamente no disco (evita race condition no Desktop)
+  getSessionToken();
+
   const isDev = process.env.NODE_ENV === "development";
   const trustProxy = process.env.BEHIND_PROXY === "true" || process.env.NODE_ENV === "production";
   const app = fastify({

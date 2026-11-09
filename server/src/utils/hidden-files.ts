@@ -104,6 +104,7 @@ export function isPathHidden(filePath: string, hiddenList?: string[]): boolean {
 }
 
 export const KNOWN_SYSTEM_FILES = [
+  ".templates",
   ".templates.json",
   ".templates.metadata.json",
   ".dictionary.json",
@@ -148,6 +149,7 @@ export function isSystemPath(filePath: string): boolean {
 
 export function getSystemFileFriendlyName(filePath: string): string {
   const cleanPath = (filePath || "").trim().replace(/^\/+/, "").replace(/\\/g, "/");
+  if (cleanPath.startsWith(".templates")) return `Template (${path.basename(path.dirname(cleanPath)) || path.basename(cleanPath)})`;
   if (cleanPath === ".templates.json") return "Templates e Modelos de Documento";
   if (cleanPath === ".templates.metadata.json") return "Metadados de Templates";
   if (cleanPath === ".dictionary.json") return "Dicionário de Termos e Vocabulário";

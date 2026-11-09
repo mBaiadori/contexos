@@ -279,9 +279,16 @@ ipcMain.handle('desktop:get-session-token', async (event) => {
   try {
     const userDataDir = app.getPath('userData');
     const tokenPath = path.join(userDataDir, '.context-os', 'session-token');
-    if (fs.existsSync(tokenPath)) {
-      return fs.readFileSync(tokenPath, 'utf-8').trim();
+
+    // Tenta ler o token do userDataDir aguardando inicialização do servidor se necessário
+    for (let i = 0; i < 15; i++) {
+      if (fs.existsSync(tokenPath)) {
+        const content = fs.readFileSync(tokenPath, 'utf-8').trim();
+        if (content) return content;
+      }
+      await new Promise((r) => setTimeout(r, 100));
     }
+
     const home = process.env.HOME || '';
     const homeTokenPath = path.join(home, '.context-os', 'session-token');
     if (fs.existsSync(homeTokenPath)) {

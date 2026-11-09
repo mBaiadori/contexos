@@ -9,12 +9,6 @@
   ShowUninstDetails show
 !macroend
 
-!macro customWelcomePage
-  !define MUI_WELCOMEPAGE_TITLE "Instalacao do Context OS"
-  !define MUI_WELCOMEPAGE_TEXT "Este assistente guiara voce durante a instalacao do Context OS no seu computador.$\r$\n$\r$\nO processo de instalacao e realizado nas seguintes etapas:$\r$\n  1. Preparacao e verificacao do sistema$\r$\n  2. Descompactacao da plataforma Context OS$\r$\n  3. Configuracao do motor Git integrado$\r$\n  4. Criacao de atalhos e registro no Windows$\r$\n  5. Finalizacao e inicializacao$\r$\n$\r$\nClique em 'Avancar' para continuar."
-  !insertmacro MUI_PAGE_WELCOME
-!macroend
-
 !macro customFiles_x64
   SetDetailsPrint both
   DetailPrint "======================================================================"

@@ -7,8 +7,8 @@ const __dirname = path.dirname(__filename);
 
 import { writeJsonAtomic } from "../utils/atomic-write.js";
 import {
-  loadMarkdownTemplatesFromDir,
-  writeMarkdownTemplateFile,
+  loadDotTemplates,
+  writeDotTemplate,
 } from "../utils/template-markdown.js";
 
 // Root path of the project (2 levels up from server/src/config or desktop app resources)
@@ -262,12 +262,11 @@ function sanitizeTemplateItem(
 
 export function loadProjectTemplates(repoName: string, ownerOrOrg?: string): ProjectTemplate[] {
   const repoDir = resolveRepoDir(repoName, ownerOrOrg);
-  const templatesDir = path.join(repoDir, "templates");
 
-  const mdTemplates = fs.existsSync(templatesDir)
-    ? loadMarkdownTemplatesFromDir(templatesDir)
-    : [];
+  // 1. Carrega templates modulares de .templates/<slug>/
+  const dotTemplates = loadDotTemplates(repoDir);
 
+  // 2. Carrega templates legados de .templates.json
   const filePath = getProjectTemplatesPath(repoName, ownerOrOrg);
   let jsonTemplates: ProjectTemplate[] = [];
   if (fs.existsSync(filePath)) {
@@ -287,12 +286,12 @@ export function loadProjectTemplates(repoName: string, ownerOrOrg?: string): Pro
     }
   }
 
-  // Mescla priorizando os arquivos físicos .md na pasta templates/
+  // Mescla priorizando os templates modulares de .templates/
   const uniqueMap = new Map<string, ProjectTemplate>();
   for (const t of jsonTemplates) {
     if (t.id) uniqueMap.set(t.id, t);
   }
-  for (const t of mdTemplates) {
+  for (const t of dotTemplates) {
     if (t.id) uniqueMap.set(t.id, sanitizeTemplateItem(t, "local"));
   }
 
@@ -305,7 +304,6 @@ export function saveProjectTemplates(
   ownerOrOrg?: string,
 ): void {
   const repoDir = resolveRepoDir(repoName, ownerOrOrg);
-  const templatesDir = path.join(repoDir, "templates");
   const filePath = path.join(repoDir, ".templates.json");
   const sanitized = items.map((t) =>
     sanitizeTemplateItem(t, (t.source as any) || "local"),
@@ -314,17 +312,14 @@ export function saveProjectTemplates(
   // 1. Grava no .templates.json (compatibilidade e fallback legado)
   writeJsonAtomic(filePath, sanitized);
 
-  // 2. Grava cada template como arquivo físico .md em templates/
+  // 2. Grava cada template no formato modular em .templates/<slug>/
   try {
-    if (!fs.existsSync(templatesDir)) {
-      fs.mkdirSync(templatesDir, { recursive: true });
-    }
     for (const tpl of sanitized) {
-      writeMarkdownTemplateFile(templatesDir, tpl);
+      writeDotTemplate(repoDir, tpl);
     }
   } catch (err) {
     console.error(
-      `[saveProjectTemplates] Erro ao gravar templates markdown em ${templatesDir}:`,
+      `[saveProjectTemplates] Erro ao gravar templates modulares em ${repoDir}/.templates:`,
       err,
     );
   }

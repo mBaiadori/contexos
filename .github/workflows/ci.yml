@@ -159,13 +159,24 @@ jobs:
           if (-not $installer) {
             throw "Instalador .exe não foi encontrado em desktop/release/"
           }
-          Write-Host "Executando instalador silencioso: $($installer.FullName)..."
-          Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait
-          
-          # Aguardar breve momento para garantir término do processo do NSIS
-          Start-Sleep -Seconds 5
-          
           $installDir = "$env:LOCALAPPDATA\Programs\Context OS"
+          Write-Host "Executando instalador silencioso: $($installer.FullName)..."
+          
+          # NSIS silencioso com caminho de destino explícito (/D deve ser sem aspas e o último parâmetro)
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S /D=$installDir" -PassThru
+          
+          # Aguarda término da instalação com verificação periódica
+          $timeout = 90
+          while ($timeout -gt 0) {
+            if (Test-Path (Join-Path $installDir "Context OS.exe")) {
+              # Aguarda breve momento para os arquivos restantes (como Git embutido) concluírem
+              Start-Sleep -Seconds 5
+              break
+            }
+            Start-Sleep -Seconds 2
+            $timeout -= 2
+          }
+          
           Write-Host "Verificando instalação em: $installDir"
           if (-not (Test-Path $installDir)) {
             throw "Diretório de instalação não encontrado: $installDir"

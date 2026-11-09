@@ -6,38 +6,42 @@ const DESIRED_PORT = Number(process.env.PORT) || 4100;
 const HOST = process.env.HOST || '127.0.0.1';
 
 async function start() {
+  let app: any = null;
+  let isShuttingDown = false;
+
+  const shutdown = async (_signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    // Timeout de segurança para garantir saída imediata caso haja sockets ou promises pendentes
+    const forceExitTimer = setTimeout(() => {
+      process.exit(0);
+    }, 1000);
+
+    try {
+      eventsService.closeAll();
+      if (app?.server && typeof (app.server as any).closeAllConnections === 'function') {
+        (app.server as any).closeAllConnections();
+      }
+      if (app) {
+        await app.close();
+      }
+    } catch {
+      // Ignora erros ao desligar
+    } finally {
+      clearTimeout(forceExitTimer);
+      process.exit(0);
+    }
+  };
+
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
+
   try {
     const port = await findAvailablePort(DESIRED_PORT);
-    const app = await buildApp();
+    app = await buildApp();
     await app.listen({ port, host: HOST });
     console.log(`🚀 Context OS Fastify Server rodando em http://localhost:${port}`);
-
-    let isShuttingDown = false;
-    const shutdown = async (_signal: string) => {
-      if (isShuttingDown) return;
-      isShuttingDown = true;
-
-      // Garante encerramento seguro permitindo que flush e fechamento de conexões ocorram (3s)
-      const forceExitTimer = setTimeout(() => {
-        process.exit(0);
-      }, 3000);
-      forceExitTimer.unref();
-
-      try {
-        eventsService.closeAll();
-        if (typeof (app.server as any)?.closeAllConnections === 'function') {
-          (app.server as any).closeAllConnections();
-        }
-        await app.close();
-      } catch {
-        // Ignora erros ao desligar
-      } finally {
-        process.exit(0);
-      }
-    };
-
-    process.once('SIGTERM', () => shutdown('SIGTERM'));
-    process.once('SIGINT', () => shutdown('SIGINT'));
   } catch (err) {
     console.error('Erro ao iniciar o servidor Fastify:', err);
     process.exit(1);

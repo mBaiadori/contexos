@@ -469,6 +469,7 @@ export function ensureGitIgnore(repoDir: string): void {
   ];
 
   const systemPatternsToUnignore = [
+    ".templates/",
     ".hidden_files.json",
     ".dictionary.json",
     ".templates.json",
