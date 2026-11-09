@@ -116,3 +116,21 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  publish-release:
+    name: Finalize & Publish Release
+    needs: [release-windows, release-mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish Draft Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "Publicando release oficial para a tag ${{ github.ref_name }}..."
+            gh release edit "${{ github.ref_name }}" --draft=false --latest
+          fi
+
+
