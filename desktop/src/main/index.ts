@@ -14,20 +14,54 @@ let mainWindow: BrowserWindow | null = null;
 let activeServerPort = 4100;
 
 /**
+ * Verifica de forma atômica e exclusiva se uma porta está livre em um host específico
+ */
+function isPortFreeOnHost(port: number, host: string): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const server = net.createServer();
+    server.unref();
+
+    let resolved = false;
+    const finish = (result: boolean) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(result);
+      }
+    };
+
+    server.once('error', () => {
+      finish(false);
+    });
+
+    try {
+      server.listen({ port, host, exclusive: true }, () => {
+        server.close(() => {
+          finish(true);
+        });
+      });
+    } catch {
+      finish(false);
+    }
+  });
+}
+
+/**
  * Encontra uma porta TCP livre a partir de startPort
+ * Suporta resiliência multiplataforma (macOS, Windows, Linux) checando 127.0.0.1 e 0.0.0.0 com exclusive: true
  */
 async function findAvailablePort(startPort: number = 4100, maxAttempts: number = 50): Promise<number> {
   for (let i = 0; i < maxAttempts; i++) {
     const port = startPort + i;
-    const isFree = await new Promise<boolean>((resolve) => {
-      const server = net.createServer();
-      server.unref();
-      server.on('error', () => resolve(false));
-      server.listen({ port, host: '0.0.0.0' }, () => {
-        server.close(() => resolve(true));
-      });
-    });
-    if (isFree) return port;
+
+    // 1. Testa loopback IPv4
+    const freeLoopback = await isPortFreeOnHost(port, '127.0.0.1');
+    if (!freeLoopback) continue;
+
+    // 2. Testa wildcard IPv4
+    const freeWildcard = await isPortFreeOnHost(port, '0.0.0.0');
+    if (!freeWildcard) continue;
+
+    return port;
   }
   return startPort;
 }

@@ -730,7 +730,8 @@ export class DocsMetadataService {
                 entry.name === "dist" ||
                 entry.name === "build" ||
                 entry.name === "coverage" ||
-                entry.name === ".spec-memory"
+                entry.name === ".spec-memory" ||
+                entry.name === "templates"
               )
                 continue;
               const full = path.join(dir, entry.name);
