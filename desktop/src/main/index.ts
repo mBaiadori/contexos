@@ -168,12 +168,19 @@ function createMainWindow(port: number) {
     ? path.join(__dirname, '../preload/index.cjs')
     : path.join(__dirname, '../preload/index.js');
 
+  const iconCandidates = [
+    path.join(__dirname, '../../resources/icon.png'),
+    path.join(process.resourcesPath || '', 'icon.png'),
+  ];
+  const windowIcon = iconCandidates.find(p => fs.existsSync(p));
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 700,
     title: 'Context OS',
+    icon: windowIcon,
     backgroundColor: '#0f172a',
     titleBarStyle: 'default',
     webPreferences: {

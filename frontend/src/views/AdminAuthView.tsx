@@ -144,7 +144,7 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
             }}
           >
             <ShieldCheck size={13} />
-            <span>Contexos • v{version || "1.0.8"}</span>
+            <span>Contexos • v{version || "1.0.9"}</span>
           </div>
 
           <h1
@@ -350,7 +350,7 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
         >
           <span>Contexos Desktop</span>
           <span style={{ opacity: 0.5 }}>•</span>
-          <span>v{version || "1.0.8"}</span>
+          <span>v{version || "1.0.9"}</span>
         </div>
       </div>
     </div>
