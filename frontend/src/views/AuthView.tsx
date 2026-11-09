@@ -1,7 +1,6 @@
 import {
   Building2,
   ExternalLink,
-  Sparkles,
   User as UserIcon,
   Trash2,
   LogIn,
@@ -48,11 +47,20 @@ interface DeviceCodeData {
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
   const { t } = useTranslation(["auth", "common", "repos"]);
-  const { accounts, switchAccount, removeAccount, refreshAuth, loginLocal, version } = useAuth();
+  const {
+    accounts,
+    switchAccount,
+    removeAccount,
+    refreshAuth,
+    loginLocal,
+    version,
+  } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>("initial");
   const [isLoading, setIsLoading] = useState(false);
-  const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(null);
+  const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(
+    null,
+  );
   const [statusMessage, setStatusMessage] = useState<{
     text: string;
     type: "error" | "info" | "success";
@@ -317,7 +325,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
         onLoginSuccess();
       } else {
         setStatusMessage({
-          text: (res as { error?: string })?.error || "Erro ao entrar no modo local.",
+          text:
+            (res as { error?: string })?.error ||
+            "Erro ao entrar no modo local.",
           type: "error",
         });
       }
@@ -374,41 +384,17 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             gap: "8px",
           }}
         >
-          <div
+          <img
+            src="/logo.png"
+            alt="Contexos"
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "4px 12px",
-              borderRadius: "16px",
-              background: "var(--color-primary-container)",
-              color: "var(--color-primary)",
-              fontSize: "11.5px",
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              border:
-                "1px solid rgba(var(--color-primary-rgb, 59, 130, 246), 0.2)",
+              height: "48px",
+              width: "auto",
+              objectFit: "contain",
+              marginBottom: "4px",
             }}
-          >
-            <Sparkles size={13} />
-            <span>Context OS • v{version || "1.0.7"}</span>
-          </div>
+          />
 
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "26px",
-              fontWeight: 800,
-              color: "var(--color-on-surface)",
-              letterSpacing: "-0.02em",
-              lineHeight: 1.25,
-            }}
-          >
-            {mode === "org_onboarding"
-              ? "Configurar Espaço da Empresa"
-              : "Conectar com a Empresa"}
-          </h1>
           <p
             style={{
               margin: 0,
@@ -506,7 +492,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                       style={{
                         flex: 1,
                         height: "1px",
-                        backgroundColor: "var(--color-outline-variant, #e2e8f0)",
+                        backgroundColor:
+                          "var(--color-outline-variant, #e2e8f0)",
                       }}
                     />
                     <span
@@ -524,7 +511,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                       style={{
                         flex: 1,
                         height: "1px",
-                        backgroundColor: "var(--color-outline-variant, #e2e8f0)",
+                        backgroundColor:
+                          "var(--color-outline-variant, #e2e8f0)",
                       }}
                     />
                   </div>
@@ -623,7 +611,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                             <Button
                               variant="secondary"
                               size="sm"
-                              disabled={isLoading || Boolean(switchingAccountId)}
+                              disabled={
+                                isLoading || Boolean(switchingAccountId)
+                              }
                               loading={switchingAccountId === acc.id}
                               onClick={() => handleSelectAccount(acc.id)}
                               leftIcon={<LogIn size={13} />}
@@ -633,7 +623,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                             <IconButton
                               size="sm"
                               tooltip="Remover"
-                              disabled={isLoading || Boolean(switchingAccountId)}
+                              disabled={
+                                isLoading || Boolean(switchingAccountId)
+                              }
                               onClick={() => removeAccount(acc.id)}
                             >
                               <Trash2
@@ -654,8 +646,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                       alignItems: "center",
                       justifyContent: "space-between",
                       padding: "10px 12px",
-                      backgroundColor: "var(--color-surface-container-low, rgba(0,0,0,0.02))",
-                      border: "1px dashed var(--color-outline-variant, #cbd5e1)",
+                      backgroundColor:
+                        "var(--color-surface-container-low, rgba(0,0,0,0.02))",
+                      border:
+                        "1px dashed var(--color-outline-variant, #cbd5e1)",
                       borderRadius: "10px",
                     }}
                   >
@@ -672,7 +666,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                           width: "32px",
                           height: "32px",
                           borderRadius: "8px",
-                          backgroundColor: "var(--color-surface-container-high, #e2e8f0)",
+                          backgroundColor:
+                            "var(--color-surface-container-high, #e2e8f0)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -744,11 +739,14 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                       transition: "all 0.15s ease",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.color = "var(--color-primary, #3b82f6)";
-                      e.currentTarget.style.backgroundColor = "var(--color-surface-container, rgba(0,0,0,0.04))";
+                      e.currentTarget.style.color =
+                        "var(--color-primary, #3b82f6)";
+                      e.currentTarget.style.backgroundColor =
+                        "var(--color-surface-container, rgba(0,0,0,0.04))";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.color = "var(--color-outline, #64748b)";
+                      e.currentTarget.style.color =
+                        "var(--color-outline, #64748b)";
                       e.currentTarget.style.backgroundColor = "transparent";
                     }}
                   >
@@ -1146,21 +1144,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               gap: "8px",
             }}
           >
-            <span>Context OS Desktop</span>
+            <span>Contexos Desktop</span>
             <span style={{ opacity: 0.5 }}>•</span>
-            <span
-              style={{
-                fontFamily: "monospace",
-                fontWeight: 600,
-                padding: "2px 6px",
-                borderRadius: "4px",
-                background: "var(--color-surface-container-high, #e2e8f0)",
-                border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                color: "var(--color-on-surface, #0f172a)",
-              }}
-            >
-              v{version || "1.0.7"}
-            </span>
+            <span>v{version || "1.0.7"}</span>
           </div>
 
           {/* Banner de Atualização Disponível se houver */}
@@ -1180,11 +1166,18 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               }}
             >
               <CloudDownload size={14} />
-              <span>Nova versão {updateInfo.version ? `v${updateInfo.version} ` : ""}disponível</span>
+              <span>
+                Nova versão{" "}
+                {updateInfo.version ? `v${updateInfo.version} ` : ""}disponível
+              </span>
               {updateInfo.downloadUrl && (
                 <button
                   type="button"
-                  onClick={() => window.desktopBridge?.openExternal?.(updateInfo.downloadUrl!)}
+                  onClick={() =>
+                    window.desktopBridge?.openExternal?.(
+                      updateInfo.downloadUrl!,
+                    )
+                  }
                   style={{
                     background: "#2563eb",
                     color: "#ffffff",

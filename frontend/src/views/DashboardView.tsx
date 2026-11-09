@@ -496,7 +496,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             isOpen={true}
             onClose={() => setActiveCopilotSidebar(null)}
             systemPrompt={systemPrompt}
-            defaultPrompt="Você é o Arquiteto de Software & Assistente do Spec-Driven Context OS."
+            defaultPrompt="Você é o Arquiteto de Software & Assistente do Contexos."
             onSavePrompt={(p) => setSystemPrompt(p)}
             onResetPrompt={() => setSystemPrompt("")}
             onOpenAIModal={openSettingsModal}

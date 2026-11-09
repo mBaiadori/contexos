@@ -62,7 +62,7 @@ export const AICenterHeader: React.FC<AICenterHeaderProps> = ({
                 border: "1px solid var(--color-primary, #1a73e8)",
               }}
             >
-              Context OS & Hub Global
+              Contexos & Hub Global
             </span>
           </div>
           <p

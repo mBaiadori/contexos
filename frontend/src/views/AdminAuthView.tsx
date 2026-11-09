@@ -115,6 +115,17 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
             gap: "8px",
           }}
         >
+          <img
+            src="/logo.png"
+            alt="Contexos"
+            style={{
+              height: "36px",
+              width: "auto",
+              objectFit: "contain",
+              marginBottom: "4px",
+            }}
+          />
+
           <div
             style={{
               display: "inline-flex",
@@ -133,7 +144,7 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
             }}
           >
             <ShieldCheck size={13} />
-            <span>Context OS • v{version || "1.0.7"}</span>
+            <span>Contexos • v{version || "1.0.7"}</span>
           </div>
 
           <h1
@@ -337,21 +348,9 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
             color: "var(--color-on-surface-variant, #64748b)",
           }}
         >
-          <span>Context OS Desktop</span>
+          <span>Contexos Desktop</span>
           <span style={{ opacity: 0.5 }}>•</span>
-          <span
-            style={{
-              fontFamily: "monospace",
-              fontWeight: 600,
-              padding: "2px 6px",
-              borderRadius: "4px",
-              background: "var(--color-surface-container-high, #e2e8f0)",
-              border: "1px solid var(--color-outline-variant, #cbd5e1)",
-              color: "var(--color-on-surface, #0f172a)",
-            }}
-          >
-            v{version || "1.0.7"}
-          </span>
+          <span>v{version || "1.0.7"}</span>
         </div>
       </div>
     </div>

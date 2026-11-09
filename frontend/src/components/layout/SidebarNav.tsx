@@ -199,20 +199,41 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         className="dash-sidebar-footer"
         style={{
           display: "flex",
-          flexDirection: "column",
-          gap: "6px",
           alignItems: "center",
+          justifyContent: "center",
+          padding: isCollapsed ? "10px 0" : "10px 12px",
+          minHeight: "40px",
+          borderTop: "1px solid var(--border-subtle, rgba(0, 0, 0, 0.08))",
         }}
       >
-        <span
-          style={{
-            fontSize: "10.5px",
-            color: "var(--text-dim)",
-            textAlign: "center",
-          }}
-        >
-          Context OS
-        </span>
+        {isCollapsed ? (
+          <img
+            src="/favicon.svg"
+            alt="Contexos"
+            title="Contexos"
+            style={{
+              width: "18px",
+              height: "18px",
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
+        ) : (
+          <img
+            src="/logo.png"
+            alt="contexos"
+            title="contexos"
+            className="dash-sidebar-logo"
+            style={{
+              width: "100%",
+              maxWidth: "96px",
+              height: "auto",
+              maxHeight: "16px",
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
+        )}
       </div>
     </aside>
   );

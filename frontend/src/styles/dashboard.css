@@ -360,11 +360,16 @@
 }
 
 .dash-sidebar-footer {
-  padding: 8px;
+  padding: 8px 12px;
   border-top: 1px solid var(--border-subtle);
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  justifyContent: center;
+}
+
+[data-theme="dark"] .dash-sidebar-logo,
+.dark-theme .dash-sidebar-logo {
+  content: url("/logo-dark.png");
 }
 
 .dash-sidebar-toggle {

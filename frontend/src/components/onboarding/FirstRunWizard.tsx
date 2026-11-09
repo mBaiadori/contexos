@@ -300,7 +300,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                     color: "var(--color-on-surface, #0f172a)",
                   }}
                 >
-                  Configuração Inicial do Context OS
+                  Configuração Inicial do Contexos
                 </h2>
                 <span
                   style={{
@@ -421,7 +421,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                     lineHeight: 1.5,
                   }}
                 >
-                  Insira sua chave de licença comercial do Context OS ou utilize
+                  Insira sua chave de licença comercial do Contexos ou utilize
                   o modo gratuito de avaliação com todos os recursos
                   habilitados.
                 </p>
@@ -589,7 +589,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                     lineHeight: 1.5,
                   }}
                 >
-                  O Context OS se conecta diretamente aos provedores de ponta.
+                  O Contexos se conecta diretamente aos provedores de ponta.
                   Sua chave fica salva exclusivamente na sua máquina de forma
                   criptografada.
                 </p>
@@ -1296,7 +1296,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                 }}
               >
                 {isSubmitting ? <Spinner size="sm" /> : <Sparkles size={16} />}
-                Iniciar Context OS
+                Iniciar Contexos
               </Button>
             )}
           </div>

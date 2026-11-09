@@ -35,7 +35,7 @@ export const NotificationsTab: React.FC<NotificationsTabProps> = ({ repoName, is
         enabled: true,
         provider: 'resend',
         sender_address: 'notifications@contextos.dev',
-        sender_name: 'Context OS Governança',
+        sender_name: 'Contexos',
       },
       webhook: {
         enabled: false,

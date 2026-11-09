@@ -48,7 +48,7 @@
   "cardDefaultDesc": "Specification and governance repository",
   "actionEditTooltip": "Edit repository settings (Name, Description, Visibility)",
   "actionCloneTooltip": "Clone existing repository",
-  "actionUnlinkTooltip": "Unlink from Context OS (free disk space)",
+  "actionUnlinkTooltip": "Unlink from Contexos (free disk space)",
   "actionDeleteLocalTooltip": "Delete local repository",
   "actionDeleteRemoteTooltip": "Delete remote repository",
   "cardOpening": "Opening...",

@@ -73,7 +73,7 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
       } else {
         const errorText = res.data?.error || res.data?.message || "Erro ao processar exclusão.";
         if (deleteRemote && (errorText.includes("403") || errorText.includes("401") || errorText.includes("remoto"))) {
-          setErrorMsg(`${errorText}. Dica: marque a opção "Apenas desvincular do Context OS" para remover o repositório da sua máquina.`);
+          setErrorMsg(`${errorText}. Dica: marque a opção "Apenas desvincular do Contexos" para remover o repositório da sua máquina.`);
         } else {
           setErrorMsg(errorText);
         }
@@ -217,7 +217,7 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
                 />
                 <HardDrive size={15} style={{ color: "var(--text-muted)" }} />
                 <div>
-                  <span style={{ fontWeight: 500 }}>Apenas desvincular do Context OS</span>
+                  <span style={{ fontWeight: 500 }}>Apenas desvincular do Contexos</span>
                   <div style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
                     Remove o cache local de <code>projects/{repo.name}</code> mantendo o repositório intacto no servidor remoto.
                   </div>

@@ -26,11 +26,11 @@
   --text-dim: var(--md-sys-color-outline, #747775);
   
   /* Brand / Primary Accent */
-  --primary: var(--md-sys-color-primary, #1a73e8);
-  --primary-hover: #1557b0;
-  --primary-subtle: var(--md-sys-color-primary-container, #d2e3fc);
-  --primary-text: var(--md-sys-color-on-primary-container, #041e49);
-  --accent-glow: rgba(26, 115, 232, 0.16);
+  --primary: var(--md-sys-color-primary, #1e40af);
+  --primary-hover: #1e3a8a;
+  --primary-subtle: var(--md-sys-color-primary-container, #dbeafe);
+  --primary-text: var(--md-sys-color-on-primary-container, #0c2340);
+  --accent-glow: rgba(30, 64, 175, 0.16);
   
   /* Status Colors */
   --success: var(--md-sys-color-tertiary, #188038);

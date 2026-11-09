@@ -352,7 +352,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                   window.desktopBridge?.openExternal?.(updateInfo.downloadUrl);
                 }
               }}
-              title="Clique para baixar a nova versão do Context OS"
+              title="Clique para baixar a nova versão do Contexos"
             >
               Baixar Atualização {updateInfo.version ? `(v${updateInfo.version})` : ""}
             </Button>

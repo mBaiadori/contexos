@@ -5,14 +5,23 @@
 
 :root {
   /* ========================================================================= */
+  /* CONTEXOS BRAND IDENTITY PALETTE                                           */
+  /* ========================================================================= */
+  --contexos-brand-navy: #0C2340;       /* Predominante/Texto: Confiança, governança, segurança */
+  --contexos-brand-royal: #1E40AF;      /* Transição: Tecnologia, git, versionamento */
+  --contexos-brand-ocean: #0284C7;      /* Integração, fluxo de dados */
+  --contexos-brand-cyan: #06B6D4;       /* Destaque: Inovação, inteligência artificial, colaboração */
+  --contexos-brand-mint: #10B981;       /* Iluminação: Desenvolvimento de produtos, dinamismo */
+
+  /* ========================================================================= */
   /* COLOR SYSTEM - LIGHT THEME (Google Material 3)                           */
   /* ========================================================================= */
 
   /* Primary */
-  --md-sys-color-primary: #1a73e8;
+  --md-sys-color-primary: #1e40af;
   --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #d2e3fc;
-  --md-sys-color-on-primary-container: #041e49;
+  --md-sys-color-primary-container: #dbeafe;
+  --md-sys-color-on-primary-container: #0c2340;
 
   /* Secondary */
   --md-sys-color-secondary: #5f6368;
@@ -224,10 +233,10 @@
 /* COLOR SYSTEM - DARK THEME                                                 */
 /* ========================================================================= */
 [data-theme="dark"], .dark-theme {
-  --md-sys-color-primary: #8ab4f8;
-  --md-sys-color-on-primary: #041e49;
-  --md-sys-color-primary-container: #174ea6;
-  --md-sys-color-on-primary-container: #d2e3fc;
+  --md-sys-color-primary: #38bdf8;
+  --md-sys-color-on-primary: #0c2340;
+  --md-sys-color-primary-container: #1e40af;
+  --md-sys-color-on-primary-container: #e0f2fe;
 
   --md-sys-color-secondary: #bdc1c6;
   --md-sys-color-on-secondary: #202124;

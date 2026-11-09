@@ -48,7 +48,7 @@
   "cardDefaultDesc": "Repositório de especificações e governança",
   "actionEditTooltip": "Editar configurações do repositório (Nome, Descrição, Visibilidade)",
   "actionCloneTooltip": "Clonar repositório existente",
-  "actionUnlinkTooltip": "Desvincular do Context OS (liberar espaço em disco)",
+  "actionUnlinkTooltip": "Desvincular do Contexos (liberar espaço em disco)",
   "actionDeleteLocalTooltip": "Excluir repositório local",
   "actionDeleteRemoteTooltip": "Excluir repositório remoto",
   "cardOpening": "Abrindo...",
