@@ -7,6 +7,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  version: string;
   provider: 'github' | 'local';
   providerUrl?: string;
   accounts: SavedAccount[];
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [version, setVersion] = useState<string>('1.0.5');
   const [provider, setProvider] = useState<'github' | 'local'>('github');
   const [providerUrl, setProviderUrl] = useState<string | undefined>(undefined);
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
@@ -30,6 +32,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshAuth = async () => {
     try {
       const status = await API.getStatus();
+      if (status.version) {
+        setVersion(status.version);
+      }
       if (status.authenticated && status.user) {
         setUser(status.user);
         if (status.git_provider) {
@@ -54,6 +59,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     refreshAuth();
+    if (typeof window !== 'undefined' && (window as any).desktopBridge?.getVersion) {
+      (window as any).desktopBridge.getVersion().then((v: string) => {
+        if (v) setVersion(v);
+      }).catch(() => {});
+    }
   }, []);
 
   const loginWithToken = async (token: string) => {
@@ -157,6 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         isLoading,
+        version,
         provider,
         providerUrl,
         accounts,

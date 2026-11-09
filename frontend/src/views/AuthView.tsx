@@ -10,6 +10,8 @@ import {
   Loader2,
   ArrowRight,
   KeyRound,
+  Monitor,
+  CloudDownload,
 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +28,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { API } from "../services/api";
+import type { UpdaterStatusEvent } from "../services/api/client";
 import type { User } from "../types";
 
 interface AuthViewProps {
@@ -45,14 +48,16 @@ interface DeviceCodeData {
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
   const { t } = useTranslation(["auth", "common", "repos"]);
-  const { accounts, switchAccount, removeAccount, refreshAuth } = useAuth();
+  const { accounts, switchAccount, removeAccount, refreshAuth, loginLocal, version } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>("initial");
   const [isLoading, setIsLoading] = useState(false);
+  const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{
     text: string;
     type: "error" | "info" | "success";
   } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdaterStatusEvent | null>(null);
 
   // Device Flow State (RFC 8628)
   const [deviceData, setDeviceData] = useState<DeviceCodeData | null>(null);
@@ -66,8 +71,22 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const [orgWebFlowUrl, setOrgWebFlowUrl] = useState<string | null>(null);
 
-  // Limpeza de timers de polling ao desmontar
+  // Limpeza de timers de polling ao desmontar e monitoramento de atualizações
   useEffect(() => {
+    const bridge = window.desktopBridge;
+    if (bridge?.onUpdaterStatus) {
+      const unsub = bridge.onUpdaterStatus((data) => {
+        setUpdateInfo(data);
+      });
+      bridge.checkForUpdates?.().catch(() => {});
+      return () => {
+        unsub();
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+        }
+      };
+    }
+
     return () => {
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
@@ -267,7 +286,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
    * Seleção de Conta Salva
    */
   const handleSelectAccount = async (accountId: string) => {
-    setIsLoading(true);
+    setSwitchingAccountId(accountId);
     setStatusMessage(null);
     try {
       const res = await switchAccount(accountId);
@@ -281,6 +300,32 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
       }
     } catch {
       setStatusMessage({ text: t("auth:statusServerError"), type: "error" });
+    } finally {
+      setSwitchingAccountId(null);
+    }
+  };
+
+  /**
+   * Acesso Rápido: Modo Local (Offline)
+   */
+  const handleLocalLogin = async () => {
+    setIsLoading(true);
+    setStatusMessage(null);
+    try {
+      const res = await loginLocal();
+      if (res.success) {
+        onLoginSuccess();
+      } else {
+        setStatusMessage({
+          text: (res as any).error || "Erro ao entrar no modo local.",
+          type: "error",
+        });
+      }
+    } catch {
+      setStatusMessage({
+        text: "Erro de conexão ao iniciar no modo local.",
+        type: "error",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -347,7 +392,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             }}
           >
             <Sparkles size={13} />
-            <span>Context OS • Workspace Corporativo</span>
+            <span>Context OS • v{version || "1.0.5"}</span>
           </div>
 
           <h1
@@ -440,16 +485,52 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                   <ArrowRight size={18} style={{ marginLeft: "auto" }} />
                 </Button>
 
-                {/* Contas Salvas no Cofre (se houver) */}
-                {accounts.length > 0 && (
+                {/* Seção de Acessos Rápidos (Contas Salvas e Modo Local) */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                    marginTop: "6px",
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
-                      flexDirection: "column",
+                      alignItems: "center",
                       gap: "10px",
-                      marginTop: "4px",
+                      margin: "2px 0",
                     }}
                   >
+                    <div
+                      style={{
+                        flex: 1,
+                        height: "1px",
+                        backgroundColor: "var(--color-outline-variant, #e2e8f0)",
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "var(--color-on-surface-variant, #64748b)",
+                      }}
+                    >
+                      Acessos Rápidos
+                    </span>
+                    <div
+                      style={{
+                        flex: 1,
+                        height: "1px",
+                        backgroundColor: "var(--color-outline-variant, #e2e8f0)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Contas Salvas no Cofre (se houver) */}
+                  {accounts.length > 0 && (
                     <div
                       style={{
                         display: "flex",
@@ -468,7 +549,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                             backgroundColor:
                               "var(--color-surface-container-low)",
                             border: "1px solid var(--color-outline-variant)",
-                            borderRadius: "8px",
+                            borderRadius: "10px",
+                            transition: "all 0.15s ease",
                           }}
                         >
                           <div
@@ -541,7 +623,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                             <Button
                               variant="secondary"
                               size="sm"
-                              disabled={isLoading}
+                              disabled={isLoading || Boolean(switchingAccountId)}
+                              loading={switchingAccountId === acc.id}
                               onClick={() => handleSelectAccount(acc.id)}
                               leftIcon={<LogIn size={13} />}
                             >
@@ -550,6 +633,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                             <IconButton
                               size="sm"
                               tooltip="Remover"
+                              disabled={isLoading || Boolean(switchingAccountId)}
                               onClick={() => removeAccount(acc.id)}
                             >
                               <Trash2
@@ -561,8 +645,78 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                         </div>
                       ))}
                     </div>
+                  )}
+
+                  {/* Acesso Rápido: Modo Local (Offline) */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      backgroundColor: "var(--color-surface-container-low, rgba(0,0,0,0.02))",
+                      border: "1px dashed var(--color-outline-variant, #cbd5e1)",
+                      borderRadius: "10px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        minWidth: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "8px",
+                          backgroundColor: "var(--color-surface-container-high, #e2e8f0)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--color-on-surface-variant, #475569)",
+                        }}
+                      >
+                        <Monitor size={16} />
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "var(--color-on-surface)",
+                          }}
+                        >
+                          Modo Local (Offline)
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "var(--color-on-surface-variant)",
+                          }}
+                        >
+                          Trabalhe sem conexão corporativa
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      id="btn-quick-local-login"
+                      variant="ghost"
+                      size="sm"
+                      disabled={isLoading || Boolean(switchingAccountId)}
+                      onClick={handleLocalLogin}
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Iniciar
+                    </Button>
                   </div>
-                )}
+                </div>
 
                 {/* Atalho discreto para Login Administrativo / PAT */}
                 <div
@@ -971,6 +1125,121 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             )}
           </CardContent>
         </Card>
+
+        {/* Rodapé com Versão do App e Notificação de Atualização */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            padding: "4px 0",
+            fontSize: "12px",
+            color: "var(--color-on-surface-variant, #64748b)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span>Context OS Desktop</span>
+            <span style={{ opacity: 0.5 }}>•</span>
+            <span
+              style={{
+                fontFamily: "monospace",
+                fontWeight: 600,
+                padding: "2px 6px",
+                borderRadius: "4px",
+                background: "var(--color-surface-container-high, #e2e8f0)",
+                border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                color: "var(--color-on-surface, #0f172a)",
+              }}
+            >
+              v{version || "1.0.5"}
+            </span>
+          </div>
+
+          {/* Banner de Atualização Disponível se houver */}
+          {updateInfo?.status === "available-manual" && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "6px 12px",
+                borderRadius: "8px",
+                background: "rgba(37, 99, 235, 0.1)",
+                border: "1px solid rgba(37, 99, 235, 0.3)",
+                color: "var(--color-primary, #3b82f6)",
+                fontSize: "11.5px",
+                fontWeight: 600,
+              }}
+            >
+              <CloudDownload size={14} />
+              <span>Nova versão {updateInfo.version ? `v${updateInfo.version} ` : ""}disponível</span>
+              {updateInfo.downloadUrl && (
+                <button
+                  type="button"
+                  onClick={() => window.desktopBridge?.openExternal?.(updateInfo.downloadUrl!)}
+                  style={{
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "4px",
+                    padding: "3px 8px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    marginLeft: "4px",
+                  }}
+                >
+                  Baixar
+                </button>
+              )}
+            </div>
+          )}
+
+          {updateInfo?.status === "downloaded" && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "6px 12px",
+                borderRadius: "8px",
+                background: "rgba(16, 185, 129, 0.1)",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+                color: "#10b981",
+                fontSize: "11.5px",
+                fontWeight: 600,
+              }}
+            >
+              <CloudDownload size={14} />
+              <span>Atualização pronta para instalação</span>
+              <button
+                type="button"
+                onClick={() => window.desktopBridge?.quitAndInstallUpdate?.()}
+                style={{
+                  background: "#10b981",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "4px",
+                  padding: "3px 8px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  marginLeft: "4px",
+                }}
+              >
+                Reiniciar
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

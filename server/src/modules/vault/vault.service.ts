@@ -1,4 +1,6 @@
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import path from 'node:path';
 
 interface KeyringEntryInstance {
   getPassword(): string | null;
@@ -24,8 +26,29 @@ function getKeyringEntryClass(): KeyringEntryConstructor | null {
       req = createRequire(import.meta.url);
     }
     if (req) {
-      const mod = req('@napi-rs/keyring') as { Entry?: KeyringEntryConstructor; default?: { Entry?: KeyringEntryConstructor } };
-      KeyringEntry = mod?.Entry || mod?.default?.Entry || null;
+      try {
+        const mod = req('@napi-rs/keyring') as { Entry?: KeyringEntryConstructor; default?: { Entry?: KeyringEntryConstructor } };
+        KeyringEntry = mod?.Entry || mod?.default?.Entry || null;
+      } catch {
+        // Tenta resolver a partir de locais conhecidos no Electron empacotado e workspaces
+        const resources = (process as any).resourcesPath || process.env.CONTEXT_OS_RESOURCES || '';
+        const candidatePaths = [
+          path.join(resources, 'app.asar.unpacked', 'node_modules', '@napi-rs/keyring'),
+          path.join(resources, 'node_modules', '@napi-rs/keyring'),
+          path.resolve(process.cwd(), 'desktop', 'node_modules', '@napi-rs/keyring'),
+          path.resolve(process.cwd(), 'server', 'node_modules', '@napi-rs/keyring'),
+          path.resolve(process.cwd(), 'node_modules', '@napi-rs/keyring'),
+        ];
+        for (const candidate of candidatePaths) {
+          try {
+            if (fs.existsSync(candidate)) {
+              const mod = req(candidate) as { Entry?: KeyringEntryConstructor; default?: { Entry?: KeyringEntryConstructor } };
+              KeyringEntry = mod?.Entry || mod?.default?.Entry || null;
+              if (KeyringEntry) break;
+            }
+          } catch {}
+        }
+      }
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

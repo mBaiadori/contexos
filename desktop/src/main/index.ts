@@ -298,6 +298,12 @@ ipcMain.handle('desktop:get-session-token', async (event) => {
   return null;
 });
 
+// Fornece a versão do executável/aplicativo
+ipcMain.handle('desktop:get-version', async (event) => {
+  validateIpcSender(event);
+  return app.getVersion();
+});
+
 // Abre links externos no navegador padrão do sistema de forma segura
 ipcMain.handle('desktop:open-external', async (event, url: string) => {
   validateIpcSender(event);

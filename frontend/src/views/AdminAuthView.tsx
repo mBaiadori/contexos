@@ -21,7 +21,7 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
   onLoginSuccess,
 }) => {
   const navigate = useNavigate();
-  const { loginWithToken, loginLocal } = useAuth();
+  const { loginWithToken, loginLocal, version } = useAuth();
 
   const [manualToken, setManualToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -115,6 +115,27 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
             gap: "8px",
           }}
         >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "4px 12px",
+              borderRadius: "16px",
+              background: "var(--color-primary-container)",
+              color: "var(--color-primary)",
+              fontSize: "11.5px",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              border:
+                "1px solid rgba(var(--color-primary-rgb, 59, 130, 246), 0.2)",
+            }}
+          >
+            <ShieldCheck size={13} />
+            <span>Context OS • v{version || "1.0.5"}</span>
+          </div>
+
           <h1
             style={{
               margin: 0,
@@ -303,6 +324,35 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
             </div>
           </CardContent>
         </Card>
+
+        {/* Rodapé com Versão */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            padding: "4px 0",
+            fontSize: "12px",
+            color: "var(--color-on-surface-variant, #64748b)",
+          }}
+        >
+          <span>Context OS Desktop</span>
+          <span style={{ opacity: 0.5 }}>•</span>
+          <span
+            style={{
+              fontFamily: "monospace",
+              fontWeight: 600,
+              padding: "2px 6px",
+              borderRadius: "4px",
+              background: "var(--color-surface-container-high, #e2e8f0)",
+              border: "1px solid var(--color-outline-variant, #cbd5e1)",
+              color: "var(--color-on-surface, #0f172a)",
+            }}
+          >
+            v{version || "1.0.5"}
+          </span>
+        </div>
       </div>
     </div>
   );

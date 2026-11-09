@@ -137,6 +137,7 @@ export interface SavedAccount {
 }
 
 export interface WorkspaceStatus {
+  version?: string;
   authenticated: boolean;
   user: User | null;
   active_repo: Repo | null;

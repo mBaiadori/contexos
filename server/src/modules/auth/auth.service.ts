@@ -225,8 +225,15 @@ export class AuthService {
     }
 
     let targetToken: string | null = target.token || null;
-    if (!targetToken) {
-      targetToken = vaultService.getSecret(`account_token_${target.id}`) || null;
+    if (target.git_provider === 'local' || target.id === 'local') {
+      targetToken = 'local_mode';
+    } else if (!targetToken) {
+      targetToken =
+        vaultService.getSecret(`account_token_${target.id}`) ||
+        (target.user?.login ? vaultService.getSecret(`account_token_github:${target.user.login}`) : null) ||
+        (target.user?.login ? vaultService.getSecret(`account_token_${target.user.login}`) : null) ||
+        null;
+
       if (!targetToken && target.user?.login && cfg.user?.login?.toLowerCase() === target.user.login.toLowerCase()) {
         targetToken = vaultService.getSecret(VAULT_KEYS.GITHUB_TOKEN);
       }
@@ -463,6 +470,7 @@ export class AuthService {
     const pendingChanges = cfg.workspace_changes?.[repoName] || [];
 
     return {
+      version: '1.0.5',
       authenticated: Boolean(cfg.authenticated && cfg.token),
       user: cfg.user,
       active_repo: activeRepo,

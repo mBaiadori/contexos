@@ -4,6 +4,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('desktopBridge', {
   isDesktop: true,
   platform: process.platform,
+  getVersion: () => ipcRenderer.invoke('desktop:get-version'),
   getSessionToken: () => ipcRenderer.invoke('desktop:get-session-token'),
   encrypt: (plainText: string) => ipcRenderer.invoke('secure-store:encrypt', plainText),
   decrypt: (encryptedBase64: string) => ipcRenderer.invoke('secure-store:decrypt', encryptedBase64),
