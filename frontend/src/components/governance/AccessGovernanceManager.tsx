@@ -63,36 +63,36 @@ export interface AccessGovernanceManagerProps {
 const PERMISSION_OPTIONS = [
   {
     id: "pull",
-    label: "Leitura (Pull)",
-    description: "Apenas ler e clonar documentos",
+    label: "Leitura",
+    description: "Visualizar e ler documentos do projeto",
     color: "#0284c7", // Sky
     bg: "rgba(2, 132, 199, 0.12)",
   },
   {
     id: "triage",
-    label: "Triagem (Triage)",
-    description: "Criar issues e gerenciar discussões",
+    label: "Triagem",
+    description: "Criar tarefas, apontar pendências e gerenciar discussões",
     color: "#0d9488", // Teal
     bg: "rgba(13, 148, 136, 0.12)",
   },
   {
     id: "push",
-    label: "Escrita (Push)",
-    description: "Criar branches, editar e propor PRs",
+    label: "Edição e Escrita",
+    description: "Criar rascunhos, editar documentos e propor alterações",
     color: "#10b981", // Emerald
     bg: "rgba(16, 185, 129, 0.12)",
   },
   {
     id: "maintain",
-    label: "Mantenedor (Maintain)",
-    description: "Gerenciar branches e merge de PRs",
+    label: "Coordenação",
+    description: "Revisar, aprovar e integrar propostas à versão oficial",
     color: "#8b5cf6", // Indigo / Purple
     bg: "rgba(139, 92, 246, 0.12)",
   },
   {
     id: "admin",
-    label: "Administrador (Admin)",
-    description: "Acesso total, governança e configurações",
+    label: "Administração",
+    description: "Acesso total, governança e configurações do repositório",
     color: "#ec4899", // Rose / Pink
     bg: "rgba(236, 72, 153, 0.12)",
   },

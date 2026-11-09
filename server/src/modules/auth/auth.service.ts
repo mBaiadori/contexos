@@ -1,6 +1,7 @@
 import { loadConfig, saveConfig } from '../../config/storage.js';
 import { callGitHubAPI } from '../../utils/git.js';
 import { vaultService, VAULT_KEYS } from '../vault/vault.service.js';
+import { governanceService } from '../governance/governance.service.js';
 
 export class AuthService {
   async authenticateWithToken(token: string) {
@@ -24,9 +25,18 @@ export class AuthService {
 
     const cfg = loadConfig();
     const orgsMap = new Map<string, any>();
+    const accountId = `github:${user.login}`;
 
-    // 1. Preserva organizações já salvas ou vinculadas anteriormente
-    if (Array.isArray(cfg.orgs)) {
+    // 1. Preserva organizações já salvas ou vinculadas anteriormente APENAS da mesma conta
+    const existingAccount = Array.isArray(cfg.accounts)
+      ? cfg.accounts.find((a) => a.id === accountId || a.user?.login?.toLowerCase() === user.login.toLowerCase())
+      : null;
+
+    if (existingAccount && Array.isArray(existingAccount.orgs)) {
+      for (const o of existingAccount.orgs) {
+        if (o?.login) orgsMap.set(o.login.toLowerCase(), o);
+      }
+    } else if (cfg.user?.login?.toLowerCase() === user.login.toLowerCase() && Array.isArray(cfg.orgs)) {
       for (const o of cfg.orgs) {
         if (o?.login) orgsMap.set(o.login.toLowerCase(), o);
       }
@@ -149,8 +159,6 @@ export class AuthService {
     };
     cfg.orgs = orgList;
 
-    const accountId = `github:${user.login}`;
-
     const savedAccount = {
       id: accountId,
       user: {
@@ -182,6 +190,7 @@ export class AuthService {
     }
 
     saveConfig(cfg);
+    governanceService.clearCache();
     return {
       authenticated: true,
       user: cfg.user,
@@ -240,6 +249,7 @@ export class AuthService {
     cfg.active_repo = null;
 
     saveConfig(cfg);
+    governanceService.clearCache();
 
     return {
       success: true,
@@ -280,6 +290,7 @@ export class AuthService {
     }
 
     saveConfig(cfg);
+    governanceService.clearCache();
     return {
       success: true,
       accounts: this.getAccounts(),
@@ -296,6 +307,7 @@ export class AuthService {
     cfg.orgs = [];
     cfg.active_repo = null;
     saveConfig(cfg);
+    governanceService.clearCache();
     return { success: true };
   }
 

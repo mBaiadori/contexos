@@ -97,6 +97,7 @@ interface RepoState {
   cloneLocalRepo: (targetRepo?: Repo) => Promise<{ success: boolean; error?: string }>;
   pullLocalRepo: (targetRepo?: Repo) => Promise<{ success: boolean; message?: string; error?: string }>;
   resetActiveRepo: () => void;
+  clearPermissionsCache: () => void;
   refreshEffectivePermission: (targetRepo?: Repo) => Promise<void>;
   moveFileOrFolder: (
     sourcePath: string,
@@ -113,6 +114,18 @@ interface RepoState {
 
 const treesByRepoCache: Record<string, TreeNode[]> = {};
 const effectivePermissionsByRepo: Record<string, EffectiveUserPermission> = {};
+
+export const clearEffectivePermissionsCache = () => {
+  for (const k of Object.keys(effectivePermissionsByRepo)) {
+    delete effectivePermissionsByRepo[k];
+  }
+};
+
+function getPermCacheKey(repoName: string, owner?: string): string {
+  const o = owner || resolveRepoOwnerOrOrg();
+  return `${(o || "local").toLowerCase()}/${repoName.toLowerCase()}`;
+}
+
 let inFlightRepo: string | null = null;
 
 const initialOrg = (): Organization | null => {
@@ -272,7 +285,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   refreshEffectivePermission: async (targetRepo?: Repo) => {
     const r = targetRepo || get().activeRepo;
     if (!r?.name) return;
-    const cached = effectivePermissionsByRepo[r.name];
+    const ownerLogin = getRepoOwnerOrOrg(r);
+    const cacheKey = getPermCacheKey(r.name, ownerLogin);
+    const cached = effectivePermissionsByRepo[cacheKey];
     if (cached) {
       set({ effectivePermission: cached, isLoadingPermission: false });
     } else {
@@ -280,10 +295,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     }
 
     try {
-      const ownerLogin = getRepoOwnerOrOrg(r);
       const res = await API.getEffectiveUserPermission(r.name, ownerLogin);
       if (res.ok && res.data) {
-        effectivePermissionsByRepo[r.name] = res.data;
+        effectivePermissionsByRepo[cacheKey] = res.data;
         if (get().activeRepo?.name === r.name) {
           set({ effectivePermission: res.data });
         }
@@ -335,7 +349,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       set({ isLoadingTree: true });
     }
 
-    const cachedPerm = effectivePermissionsByRepo[repo.name];
+    const ownerLogin = getRepoOwnerOrOrg(repo);
+    const permKey = getPermCacheKey(repo.name, ownerLogin);
+    const cachedPerm = effectivePermissionsByRepo[permKey];
     set({
       effectivePermission: cachedPerm || null,
       isLoadingPermission: !cachedPerm,
@@ -358,11 +374,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         tree: hasCachedTree ? cachedTree : [],
       });
 
-      const ownerLogin = getRepoOwnerOrOrg(repo);
       API.getEffectiveUserPermission(repo.name, ownerLogin)
         .then((res) => {
           if (res.ok && res.data) {
-            effectivePermissionsByRepo[repo.name] = res.data;
+            effectivePermissionsByRepo[permKey] = res.data;
             if (get().activeRepo?.name === repo.name) {
               set({ effectivePermission: res.data });
             }
@@ -543,8 +558,14 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     set({
       activeRepo: null,
       tree: [],
+      effectivePermission: null,
     });
     useEditorStore.getState().loadFile("");
+  },
+
+  clearPermissionsCache: () => {
+    clearEffectivePermissionsCache();
+    set({ effectivePermission: null });
   },
 
   moveFileOrFolder: async (

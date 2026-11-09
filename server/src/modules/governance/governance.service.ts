@@ -38,6 +38,10 @@ const ephemeralTokens = new Map<string, EphemeralAIToken>();
 
 // Cache em memória para permissões calculadas do GitHub
 const effectivePermissionCache = new Map<string, { timestamp: number; data: EffectiveUserPermission }>();
+
+export function clearEffectivePermissionCache(): void {
+  effectivePermissionCache.clear();
+}
 const PERM_CACHE_TTL_MS = 3 * 60 * 1000;
 
 export class GovernanceService {
@@ -508,7 +512,7 @@ export class GovernanceService {
       action: "COLLABORATOR_INVITED",
       actor,
       target: `@${cleanUsername}`,
-      details: `Convidado com permissão Git '${permission}', cargo '${roleName}', departamentos: [${departments.join(", ")}] e rotas: [${allowedPaths.join(", ")}].`,
+      details: `Convidado com nível de acesso '${permission}', cargo '${roleName}', departamentos: [${departments.join(", ")}] e rotas: [${allowedPaths.join(", ")}].`,
     });
 
     const colInfo: CollaboratorInfo = {
@@ -953,13 +957,13 @@ export class GovernanceService {
     this.logAudit(targetRepoName, {
       action: "BRANCH_PROTECTED",
       actor,
-      target: `branch '${defaultBranch}'`,
-      details: `Regras de proteção ativadas: ${minApprovals} aprovações exigidas, push direto bloqueado e revisões obsoletas dispensadas no push.`,
+      target: `versão '${defaultBranch}'`,
+      details: `Regras de proteção ativadas: ${minApprovals} aprovações exigidas, envio direto bloqueado e revisões obsoletas dispensadas na atualização.`,
     });
 
     return {
       success: true,
-      message: `Branch '${defaultBranch}' protegida com sucesso! Push direto bloqueado e ${minApprovals} aprovações requeridas.`,
+      message: `Versão principal '${defaultBranch}' protegida com sucesso! Envio direto bloqueado e ${minApprovals} aprovações requeridas.`,
       protection: protectionStatus,
     };
   }
@@ -1593,23 +1597,52 @@ export class GovernanceService {
 
     // Fallback completo para repositório local / sem token remoto
     if (!cfg.token || resolvedFullName.startsWith("local/")) {
+      const isExplicitLocal = resolvedFullName.startsWith("local/") || !cfg.active_repo || cfg.active_repo.is_local;
+      if (isExplicitLocal) {
+        return {
+          login: activeUser,
+          isOrgOwner: true,
+          isOrgMember: true,
+          isOutsideCollaborator: false,
+          repoPermission: "admin",
+          roleName: "Owner",
+          allowedActions: {
+            canRead: true,
+            canWrite: true,
+            canTriage: true,
+            canMaintain: true,
+            canAdmin: true,
+            canManageGovernance: true,
+            canManageTeams: true,
+            canDeleteRepo: true,
+            canManageBranchProtection: true,
+          },
+          teamMemberships: [],
+        };
+      }
+      // Se não for repositório local e houver permissões salvas no repositório ativo
+      const p = cfg.active_repo?.permissions;
+      const isAdmin = Boolean(p?.admin);
+      const isPush = Boolean(p?.push || isAdmin);
+      const isPull = Boolean(p?.pull || isPush);
+      const role = isAdmin ? "Administrador" : isPush ? "Editor" : "Leitor";
       return {
         login: activeUser,
-        isOrgOwner: true,
-        isOrgMember: true,
-        isOutsideCollaborator: false,
-        repoPermission: "admin",
-        roleName: "Owner",
+        isOrgOwner: false,
+        isOrgMember: false,
+        isOutsideCollaborator: true,
+        repoPermission: isAdmin ? "admin" : isPush ? "push" : "pull",
+        roleName: role,
         allowedActions: {
-          canRead: true,
-          canWrite: true,
-          canTriage: true,
-          canMaintain: true,
-          canAdmin: true,
-          canManageGovernance: true,
-          canManageTeams: true,
-          canDeleteRepo: true,
-          canManageBranchProtection: true,
+          canRead: isPull,
+          canWrite: isPush,
+          canTriage: isPush,
+          canMaintain: isAdmin,
+          canAdmin: isAdmin,
+          canManageGovernance: isAdmin,
+          canManageTeams: false,
+          canDeleteRepo: isAdmin,
+          canManageBranchProtection: isAdmin,
         },
         teamMemberships: [],
       };
@@ -1659,75 +1692,78 @@ export class GovernanceService {
       return result;
     }
 
-    // 2. Checar papel na organização via credenciais locais e endpoints do GitHub
+    // 2. Checar papel na organização via credenciais remotas ou storage local
     if (targetOrg && !isPersonalRepo) {
-      // Checa se a organização está presente no storage do app
-      if (Array.isArray(cfg.orgs)) {
-        const found = cfg.orgs.find(
-          (o: any) =>
-            (typeof o === "string" ? o : o?.login)?.toLowerCase() ===
-            targetOrg.toLowerCase(),
-        );
-        if (found) {
-          isOrgMember = true;
-          if (found.role === "admin" || found.is_admin !== false) {
-            isOrgOwner = true;
-          }
-        }
-      }
-
-      // Checa via endpoint de memberships do usuário
-      try {
-        const userOrgMemRes = await callGitHubAPI(
-          `/user/memberships/orgs/${targetOrg}`,
-          cfg.token,
-          "GET",
-        );
-        if (userOrgMemRes.statusCode === 200 && userOrgMemRes.data) {
-          isOrgMember = userOrgMemRes.data.state === "active";
-          if (userOrgMemRes.data.role === "admin") {
-            isOrgOwner = true;
-          }
-        }
-      } catch {}
-
-      if (!isOrgMember) {
+      if (cfg.token) {
+        // Checa membership na organização para o usuário autenticado via API do GitHub
         try {
-          const orgMemRes = await callGitHubAPI(
-            `/orgs/${targetOrg}/memberships/${activeUser}`,
+          const userOrgMemRes = await callGitHubAPI(
+            `/user/memberships/orgs/${targetOrg}`,
             cfg.token,
             "GET",
           );
-          if (orgMemRes.statusCode === 200 && orgMemRes.data) {
-            isOrgMember = orgMemRes.data.state === "active";
-            if (orgMemRes.data.role === "admin") {
+          if (userOrgMemRes.statusCode === 200 && userOrgMemRes.data) {
+            isOrgMember = userOrgMemRes.data.state === "active";
+            if (userOrgMemRes.data.role === "admin") {
               isOrgOwner = true;
             }
           }
         } catch {}
-      }
 
-      if (!isOrgMember) {
-        try {
-          const userOrgsRes = await callGitHubAPI(
-            `/user/orgs?per_page=100`,
-            cfg.token,
-            "GET",
-          );
-          if (
-            userOrgsRes.statusCode === 200 &&
-            Array.isArray(userOrgsRes.data)
-          ) {
-            const foundOrg = userOrgsRes.data.find(
-              (o: any) =>
-                o?.login && o.login.toLowerCase() === targetOrg.toLowerCase(),
+        if (!isOrgMember) {
+          try {
+            const orgMemRes = await callGitHubAPI(
+              `/orgs/${targetOrg}/memberships/${activeUser}`,
+              cfg.token,
+              "GET",
             );
-            if (foundOrg) {
-              isOrgMember = true;
+            if (orgMemRes.statusCode === 200 && orgMemRes.data) {
+              isOrgMember = orgMemRes.data.state === "active";
+              if (orgMemRes.data.role === "admin") {
+                isOrgOwner = true;
+              }
+            }
+          } catch {}
+        }
+
+        if (!isOrgMember) {
+          try {
+            const userOrgsRes = await callGitHubAPI(
+              `/user/orgs?per_page=100`,
+              cfg.token,
+              "GET",
+            );
+            if (
+              userOrgsRes.statusCode === 200 &&
+              Array.isArray(userOrgsRes.data)
+            ) {
+              const foundOrg = userOrgsRes.data.find(
+                (o: any) =>
+                  o?.login && o.login.toLowerCase() === targetOrg.toLowerCase(),
+              );
+              if (foundOrg) {
+                isOrgMember = true;
+                // Atenção: ser listado em /user/orgs apenas atesta que o usuário é membro ativo da organização,
+                // NÃO que ele seja admin/owner da organização.
+              }
+            }
+          } catch {}
+        }
+      } else {
+        // Fallback offline / sem token: checa se a organização está presente no storage local
+        if (Array.isArray(cfg.orgs)) {
+          const found = cfg.orgs.find(
+            (o: any) =>
+              (typeof o === "string" ? o : o?.login)?.toLowerCase() ===
+              targetOrg.toLowerCase(),
+          );
+          if (found) {
+            isOrgMember = true;
+            if (found.role === "admin" || found.is_admin === true) {
               isOrgOwner = true;
             }
           }
-        } catch {}
+        }
       }
     }
 
@@ -1760,10 +1796,6 @@ export class GovernanceService {
           const p = repoRes.data.permissions;
           if (p.admin) {
             repoPermission = "admin";
-            isOrgMember = true;
-            if (targetOrg) {
-              isOrgOwner = true;
-            }
           } else if (p.maintain) {
             repoPermission = "maintain";
           } else if (p.push) {
@@ -1787,19 +1819,19 @@ export class GovernanceService {
     const canTriage = canWrite || repoPermission === "triage";
     const canRead = canTriage || repoPermission === "pull";
 
-    if (!isOrgMember && targetOrg && !canAdmin && !canMaintain && !canWrite) {
+    if (!isOrgMember && targetOrg) {
       isOutsideCollaborator = true;
     }
 
-    let roleName = "Leitura (Pull)";
+    let roleName = "Leitor";
     if (isOrgOwner) {
       roleName = "Owner";
     } else if (canAdmin) {
-      roleName = "Admin do Repositório";
+      roleName = "Administrador";
     } else if (canMaintain) {
       roleName = "Mantenedor";
     } else if (canWrite) {
-      roleName = "Escrita (Push)";
+      roleName = "Editor";
     } else if (canTriage) {
       roleName = "Triagem";
     } else if (isOutsideCollaborator) {
@@ -1938,6 +1970,10 @@ jobs:
         `Falha ao instalar workflow de GitHub Actions: ${err.message}`,
       );
     }
+  }
+
+  clearCache(): void {
+    clearEffectivePermissionCache();
   }
 }
 

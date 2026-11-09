@@ -70,7 +70,7 @@ export const STARTER_TEMPLATES = [
     category: "_rules",
     title: "Regra de Governança: Conformidade LGPD & Logs Sanitizados",
     slug: "regra-lgpd-sanitizacao-logs",
-    content: `## Propósito\nGarantir que nenhum dado pessoal sensível (PII), chaves de API, senhas ou tokens trafeguem ou sejam persistidos em logs abertos.\n\n## Invariantes Obrigatórias\n1. **Sanitização Automática:** Todos os logs e transcrições passam por filtros de expressão regular antes de gravação no Git.\n2. **Sem Credenciais no Código:** Segredos devem ser injetados exclusivamente via variáveis de ambiente ou Infisical.\n3. **Auditoria:** Apenas identificadores anônimos (UUID) podem ser indexados em métricas públicas.`,
+    content: `## Propósito\nGarantir que nenhum dado pessoal sensível (PII), chaves de API, senhas ou tokens trafeguem ou sejam persistidos em logs abertos.\n\n## Invariantes Obrigatórias\n1. **Sanitização Automática:** Todos os logs e transcrições passam por filtros de expressão regular antes de persistência no histórico.\n2. **Sem Credenciais no Código:** Segredos devem ser injetados exclusivamente via variáveis de ambiente ou Infisical.\n3. **Auditoria:** Apenas identificadores anônimos (UUID) podem ser indexados em métricas públicas.`,
   },
 ];
 

@@ -182,7 +182,7 @@ export const CloneRepoModal: React.FC<CloneRepoModalProps> = ({
                   <span>{isPrivate ? "Repositório Clonado Privado" : "Repositório Clonado Público"}</span>
                 </span>
               }
-              description="Define a visibilidade da nova cópia no Git Provider."
+              description="Define a visibilidade da nova cópia no servidor remoto."
             />
           </div>
         )}

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User, SavedAccount } from '../types';
 import { API } from '../services/api';
+import { useRepoStore } from '../stores/repoStore';
 
 interface AuthContextType {
   user: User | null;
@@ -61,7 +62,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.ok && res.data.user) {
         setUser(res.data.user);
         setProvider('github');
+        useRepoStore.getState().clearPermissionsCache();
         await refreshAuth();
+        useRepoStore.getState().refreshEffectivePermission();
         return { success: true };
       }
       return { success: false, error: res.data.error || 'Falha ao autenticar com token GitHub' };
@@ -79,7 +82,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (res.data.accounts) {
           setAccounts(res.data.accounts);
         }
+        useRepoStore.getState().clearPermissionsCache();
         await refreshAuth();
+        useRepoStore.getState().refreshEffectivePermission();
         return { success: true };
       }
       return { success: false, error: res.data.error || 'Falha ao alternar conta' };
@@ -100,7 +105,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (res.data.user !== undefined) {
           setUser(res.data.user);
         }
+        useRepoStore.getState().clearPermissionsCache();
         await refreshAuth();
+        useRepoStore.getState().refreshEffectivePermission();
         return { success: true };
       }
       return { success: false, error: 'Falha ao remover conta' };
@@ -115,15 +122,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.ok && res.data.user) {
         setUser(res.data.user);
         setProvider('local');
+        useRepoStore.getState().clearPermissionsCache();
         await refreshAuth();
+        useRepoStore.getState().refreshEffectivePermission();
         return { success: true };
       }
       setUser({ login: 'local_dev', name: 'Desenvolvedor Local', role: 'Administrador Local', is_local: true });
       setProvider('local');
+      useRepoStore.getState().clearPermissionsCache();
       return { success: true };
     } catch (err) {
       setUser({ login: 'local_dev', name: 'Desenvolvedor Local', role: 'Administrador Local', is_local: true });
       setProvider('local');
+      useRepoStore.getState().clearPermissionsCache();
       return { success: true };
     }
   };
@@ -134,6 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error('[AuthContext] Erro ao deslogar:', err);
     } finally {
+      useRepoStore.getState().clearPermissionsCache();
       setUser(null);
       await refreshAuth();
     }

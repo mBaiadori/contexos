@@ -188,7 +188,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       });
       if (res.ok && res.data?.briefing) {
         setBriefing(res.data.briefing);
-        setFeedback("Memória consolidada no Git! 🧠");
+        setFeedback("Memória persistida com sucesso! 🧠");
         setTimeout(() => setFeedback(null), 2500);
       }
     } catch (err) {
@@ -1015,7 +1015,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 >
                   {searchTerm
                     ? `Nenhum resultado corresponde ao termo "${searchTerm}".`
-                    : "Todas as suas mensagens no Copilot são gravadas e versionadas automaticamente no Git."}
+                    : "Todas as suas mensagens no Copilot são gravadas e versionadas automaticamente no histórico seguro."}
                 </p>
                 {searchTerm ? (
                   <Button

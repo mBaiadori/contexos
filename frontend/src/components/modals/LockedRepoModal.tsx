@@ -159,7 +159,7 @@ export const LockedRepoModal: React.FC<LockedRepoModalProps> = ({
           </div>
 
           <div style={{ fontSize: '13px', color: 'var(--color-on-surface, #334155)', lineHeight: 1.6 }}>
-            Você não possui permissão de leitura (<code style={{ padding: '2px 5px', borderRadius: '4px', backgroundColor: 'var(--color-surface-container-high, #e2e8f0)', fontSize: '12px' }}>read/pull</code>) ou não pertence à equipe autorizada deste repositório na organização <strong>{targetOrg}</strong>.
+            Você não possui permissão de leitura ou acesso à equipe autorizada deste repositório na organização <strong>{targetOrg}</strong>.
           </div>
 
           <div

@@ -812,7 +812,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               engineRef.current.applyDictionaryHighlights();
             }
             setEditorToast({
-              text: `Proposta #${prId} atualizada com sucesso na branch!`,
+              text: `Proposta #${prId} atualizada com sucesso!`,
               type: "success",
             });
             setTimeout(() => setEditorToast(null), 2500);
@@ -1923,7 +1923,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 }
                 setIsConflictModalOpen(false);
                 setEditorToast({
-                  text: "Conflito resolvido e gravado na branch do PR!",
+                  text: "Conflito resolvido e gravado na proposta de alteração!",
                   type: "success",
                 });
                 setTimeout(() => setEditorToast(null), 3000);

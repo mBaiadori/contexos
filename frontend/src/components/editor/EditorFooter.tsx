@@ -37,7 +37,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           }}
         >
           {isGitMode ? (
-            <span>Modo Git & Auditoria Ativo</span>
+            <span>Histórico & Auditoria Ativos</span>
           ) : isTemplateMode ? (
             <>
               <span

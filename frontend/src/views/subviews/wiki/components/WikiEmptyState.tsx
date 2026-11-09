@@ -17,7 +17,7 @@ export const WikiEmptyState: React.FC<WikiEmptyStateProps> = ({
       <EmptyState
         icon={<BookOpen size={48} />}
         title="Wiki & Memória Contínua"
-        description="Esta base armazena o conhecimento vivo de arquitetura, invariantes e ADRs sincronizadas diretamente no Git sob .spec-memory/."
+        description="Esta base armazena o conhecimento vivo de arquitetura, invariantes e ADRs sincronizadas diretamente na base do projeto sob .spec-memory/."
         actionLabel="Criar Primeira Nota"
         onAction={onStartNewEntry}
       />

@@ -593,11 +593,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   }
                   title={
                     isAIConfigured
-                      ? "Gerar título Conventional Commits e descrição com IA"
-                      : "Gerar resumo estruturado via Git Diff (IA não configurada)"
+                      ? "Gerar título padronizado e descrição com IA"
+                      : "Gerar resumo estruturado das alterações (IA não configurada)"
                   }
                 >
-                  {isAIConfigured ? "Resumo Automático por IA" : "Resumo por Diff"}
+                  {isAIConfigured ? "Resumo Automático por IA" : "Resumo de Alterações"}
                 </Button>
               </div>
             }
@@ -618,7 +618,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 gap: "6px",
               }}
             >
-              <span style={{ opacity: 0.8 }}>Linha técnica (branch):</span>
+              <span style={{ opacity: 0.8 }}>Versão de trabalho:</span>
               <code
                 style={{
                   padding: "1px 6px",

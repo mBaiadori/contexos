@@ -163,7 +163,17 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
           ) : (
             <span
               id="dash-user-perm-badge"
-              title={`Seu papel efetivo: ${effectivePermission.roleName} (Permissão: ${effectivePermission.repoPermission})`}
+              title={`Seu papel: ${effectivePermission.roleName}${
+                effectivePermission.repoPermission === "admin"
+                  ? " • Nível: Administração"
+                  : effectivePermission.repoPermission === "maintain"
+                    ? " • Nível: Coordenação"
+                    : effectivePermission.repoPermission === "push"
+                      ? " • Nível: Escrita"
+                      : effectivePermission.repoPermission === "triage"
+                        ? " • Nível: Triagem"
+                        : " • Nível: Leitura"
+              }${effectivePermission.isOutsideCollaborator ? " • Colaborador Externo" : ""}`}
               style={{
                 display: "inline-flex",
                 alignItems: "center",

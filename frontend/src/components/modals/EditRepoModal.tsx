@@ -94,7 +94,7 @@ export const EditRepoModal: React.FC<EditRepoModalProps> = ({
           >
             <AlertTriangle size={18} style={{ color: "#f59e0b", flexShrink: 0, marginTop: 1 }} />
             <div>
-              <strong>Atenção ao renomear:</strong> Alterar o nome do repositório modifica sua URL remota no Git Provider e renomeia a pasta local de cache. Webhooks e links compartilhados podem precisar de atualização.
+              <strong>Atenção ao renomear:</strong> Alterar o nome do repositório modifica sua URL remota no servidor e renomeia a pasta local de cache. Webhooks e links compartilhados podem precisar de atualização.
             </div>
           </div>
         )}
@@ -143,7 +143,7 @@ export const EditRepoModal: React.FC<EditRepoModalProps> = ({
               description={
                 isPrivate
                   ? "Acesso restrito apenas aos colaboradores e administradores autorizados."
-                  : "Repositório público e visível para todos no Git Provider."
+                  : "Repositório público e visível para todos no servidor remoto."
               }
             />
           </div>
