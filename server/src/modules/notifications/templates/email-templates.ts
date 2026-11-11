@@ -26,7 +26,7 @@ export function renderEmailHtml(payload: NotificationPayload): string {
       <div style="margin: 28px 0; text-align: center;">
         <a href="${payload.actionUrl}" 
            style="background-color: #2563EB; color: #FFFFFF; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-block; box-shadow: 0 2px 4px rgba(37,99,235,0.2);">
-          Visualizar no Context OS &rarr;
+          Visualizar no Contexos &rarr;
         </a>
       </div>
     `

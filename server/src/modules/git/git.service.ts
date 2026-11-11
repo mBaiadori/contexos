@@ -943,7 +943,7 @@ export class GitService {
     if (action === "stash") {
       if (!isClean) {
         const fromBranch = status.branch || "desconhecida";
-        const stashMsg = `Auto-stash Context OS (${fromBranch} -> ${targetRef})`;
+        const stashMsg = `Auto-stash Contexos (${fromBranch} -> ${targetRef})`;
         await executeGit(["stash", "push", "-u", "-m", stashMsg], repoDir);
       }
       await switchTarget();

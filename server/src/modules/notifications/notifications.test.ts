@@ -51,7 +51,7 @@ describe('Notificações - Fase 1: Schemas, Vault & Contratos', () => {
               enabled: true,
               provider: 'resend',
               sender_address: 'notifications@contextos.dev',
-              sender_name: 'Context OS Governança',
+              sender_name: 'Contexos Governança',
             },
             webhook: {
               enabled: true,
@@ -147,7 +147,7 @@ describe('Notificações - Fase 2: Engine, Provedores & Anti-Fadiga', () => {
     };
 
     const html = renderEmailHtml(payload);
-    assert.ok(html.includes('Context OS'), 'Deve conter título Context OS');
+    assert.ok(html.includes('Contexos'), 'Deve conter título Contexos');
     assert.ok(html.includes('projeto-teste'), 'Deve conter nome do repositório');
     assert.ok(html.includes('#10B981'), 'Deve aplicar a cor dinâmica do status');
     assert.ok(html.includes('https://contextos.dev/prs/5'), 'Deve conter link de ação');
@@ -164,7 +164,7 @@ describe('Notificações - Fase 2: Engine, Provedores & Anti-Fadiga', () => {
     };
 
     const text = renderEmailText(payload);
-    assert.ok(text.includes('[Context OS • Governança - seguranca-core]'));
+    assert.ok(text.includes('[Contexos • Governança - seguranca-core]'));
     assert.ok(text.includes('ALERTA DE COMPLIANCE'));
     assert.ok(text.includes('dev1'));
   });
