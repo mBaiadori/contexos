@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { spawn } from 'child_process';
 import electronUpdater from 'electron-updater';
 
 const { autoUpdater } = electronUpdater;
@@ -21,7 +22,7 @@ async function checkGitHubReleaseForMac(getMainWindow: () => BrowserWindow | nul
     console.log(`[AutoUpdater Mac] Verificando versão mais recente no GitHub Releases (atual: ${currentVersion})...`);
     getMainWindow()?.webContents.send('updater:status', { status: 'checking' });
 
-    const response = await fetch('https://api.github.com/repos/mBaiadori/project-boilerplate/releases/latest', {
+    const response = await fetch('https://api.github.com/repos/mBaiadori/contexos/releases/latest', {
       headers: {
         'User-Agent': 'Contexos-Desktop-Updater',
         Accept: 'application/vnd.github.v3+json',
@@ -45,16 +46,15 @@ async function checkGitHubReleaseForMac(getMainWindow: () => BrowserWindow | nul
     if (isNewerVersion(latestVersion, currentVersion)) {
       console.log(`[AutoUpdater Mac] Nova versão encontrada: ${latestVersion} (atual: ${currentVersion})`);
       const arch = process.arch;
-      // Prioriza o pacote .pkg nativo para macOS (evita quarentena e tela de danificado)
-      const pkgAsset =
-        release.assets?.find((a) => a.name?.includes(arch) && a.name?.endsWith('.pkg')) ||
-        release.assets?.find((a) => a.name?.endsWith('.pkg'));
+      const zipAsset =
+        release.assets?.find((a) => a.name?.includes(arch) && a.name?.endsWith('.zip')) ||
+        release.assets?.find((a) => a.name?.endsWith('.zip'));
 
       const dmgAsset =
         release.assets?.find((a) => a.name?.includes(arch) && a.name?.endsWith('.dmg')) ||
         release.assets?.find((a) => a.name?.endsWith('.dmg'));
 
-      const asset = pkgAsset || dmgAsset;
+      const asset = zipAsset || dmgAsset;
       const downloadUrl = asset?.browser_download_url || release.html_url || '';
 
       getMainWindow()?.webContents.send('updater:status', {
@@ -166,9 +166,30 @@ export function setupAutoUpdater(
 
   ipcMain.handle('updater:quit-and-install', async (event) => {
     validateIpcSender(event);
-    if (app.isPackaged && process.platform === 'win32') {
-      console.log('[AutoUpdater] Reiniciando aplicativo para aplicar atualização...');
+    if (!app.isPackaged) return;
+
+    if (process.platform === 'win32') {
+      console.log('[AutoUpdater Windows] Reiniciando aplicativo para aplicar atualização...');
       autoUpdater.quitAndInstall();
+    } else if (process.platform === 'darwin') {
+      console.log('[AutoUpdater Mac] Disparando script de atualização automática com reinicialização...');
+      getMainWindow()?.webContents.send('updater:status', { status: 'updating' });
+
+      // Script de atualização oficial que roda em background, substitui o .app e reabre
+      const updaterScript = `
+        sleep 1
+        curl -sSL https://raw.githubusercontent.com/mBaiadori/contexos/main/scripts/install-mac.sh | bash -s -- --relaunch
+      `;
+
+      const child = spawn('/bin/bash', ['-c', updaterScript], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+
+      setTimeout(() => {
+        app.quit();
+      }, 1000);
     }
   });
 

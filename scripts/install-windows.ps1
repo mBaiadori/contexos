@@ -4,7 +4,7 @@
 # ==============================================================================
 $ErrorActionPreference = "Stop"
 
-$repo = "mBaiadori/project-boilerplate"
+$repo = "mBaiadori/contexos"
 $appName = "Contexos"
 
 Write-Host "🚀 Iniciando instalação do $appName no Windows..." -ForegroundColor Cyan

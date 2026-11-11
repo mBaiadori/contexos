@@ -110,7 +110,6 @@ jobs:
         with:
           name: mac-release-bundle
           path: |
-            desktop/release/*.pkg
             desktop/release/*.dmg
             desktop/release/*.zip
             desktop/release/latest-mac.yml

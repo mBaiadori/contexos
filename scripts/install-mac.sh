@@ -6,7 +6,7 @@ set -e
 # Baixa e instala a versão mais recente em /Applications sem alertas do Gatekeeper
 # ==============================================================================
 
-REPO="mBaiadori/project-boilerplate"
+REPO="mBaiadori/contexos"
 APP_NAME="Contexos"
 TARGET_DIR="/Applications"
 APP_DEST="$TARGET_DIR/$APP_NAME.app"
@@ -58,8 +58,11 @@ fi
 echo "📲 Instalando em $TARGET_DIR..."
 # Fecha instâncias antigas se estiverem abertas
 killall -q "$APP_NAME" 2>/dev/null || true
+killall -q "Context OS" 2>/dev/null || true
+killall -q "contexos" 2>/dev/null || true
 
 rm -rf "$APP_DEST"
+rm -rf "$TARGET_DIR/Context OS.app"
 cp -R "$SRC_APP" "$TARGET_DIR/"
 
 echo "🛡️ Configurando permissões e liberando Gatekeeper..."
@@ -70,3 +73,8 @@ xattr -cr "$APP_DEST"
 echo ""
 echo "🎉 Contexos ($LATEST_TAG) instalado com 100% de sucesso!"
 echo "👉 Abra pelo Spotlight (Cmd + Barra de Espaço) ou em /Applications/$APP_NAME.app"
+
+if [ "$1" = "--relaunch" ] || [ "$RELAUNCH" = "true" ]; then
+  echo "🚀 Reabrindo $APP_NAME..."
+  open -a "$APP_DEST"
+fi

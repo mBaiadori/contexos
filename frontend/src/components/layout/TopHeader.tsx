@@ -10,6 +10,7 @@ import {
   User,
   Shield,
   CloudDownload,
+  Loader2,
   LogOut,
   Mail,
 } from "lucide-react";
@@ -348,13 +349,32 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                 animation: "pulse 2s infinite",
               }}
               onClick={() => {
-                if (updateInfo.downloadUrl) {
+                if (window.desktopBridge?.quitAndInstallUpdate) {
+                  window.desktopBridge.quitAndInstallUpdate();
+                } else if (updateInfo.downloadUrl) {
                   window.desktopBridge?.openExternal?.(updateInfo.downloadUrl);
                 }
               }}
-              title="Clique para baixar a nova versão do Contexos"
+              title="Clique para atualizar e reiniciar o Contexos automaticamente"
             >
-              Baixar Atualização {updateInfo.version ? `(v${updateInfo.version})` : ""}
+              Instalar Atualização {updateInfo.version ? `(v${updateInfo.version})` : ""}
+            </Button>
+          )}
+
+          {updateInfo?.status === "updating" && (
+            <Button
+              id="btn-updating"
+              variant="secondary"
+              size="sm"
+              disabled
+              leftIcon={<Loader2 size={15} className="animate-spin" />}
+              style={{
+                backgroundColor: "#475569",
+                color: "#ffffff",
+                borderColor: "#334155",
+              }}
+            >
+              Atualizando Contexos...
             </Button>
           )}
 

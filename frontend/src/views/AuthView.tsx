@@ -1173,11 +1173,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               {updateInfo.downloadUrl && (
                 <button
                   type="button"
-                  onClick={() =>
-                    window.desktopBridge?.openExternal?.(
-                      updateInfo.downloadUrl!,
-                    )
-                  }
+                  onClick={() => {
+                    if (window.desktopBridge?.quitAndInstallUpdate) {
+                      window.desktopBridge.quitAndInstallUpdate();
+                    } else if (updateInfo.downloadUrl) {
+                      window.desktopBridge?.openExternal?.(
+                        updateInfo.downloadUrl,
+                      );
+                    }
+                  }}
                   style={{
                     background: "#2563eb",
                     color: "#ffffff",
@@ -1190,7 +1194,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     marginLeft: "4px",
                   }}
                 >
-                  Baixar
+                  Atualizar
                 </button>
               )}
             </div>

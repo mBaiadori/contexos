@@ -1,5 +1,5 @@
 export interface UpdaterStatusEvent {
-  status: 'checking' | 'available' | 'available-manual' | 'up-to-date' | 'downloaded' | 'error';
+  status: 'checking' | 'available' | 'available-manual' | 'up-to-date' | 'downloaded' | 'updating' | 'error';
   version?: string;
   releaseDate?: string;
   downloadUrl?: string;

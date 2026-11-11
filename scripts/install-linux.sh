@@ -6,7 +6,7 @@ set -e
 # Baixa e instala a versão mais recente em ~/.local/bin
 # ==============================================================================
 
-REPO="mBaiadori/project-boilerplate"
+REPO="mBaiadori/contexos"
 APP_NAME="Contexos"
 BIN_DIR="$HOME/.local/bin"
 DESKTOP_DIR="$HOME/.local/share/applications"
