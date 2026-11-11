@@ -61,14 +61,25 @@ function findProjectRoot(): string {
 export const PROJECT_ROOT = findProjectRoot();
 
 export function getAppVersion(): string {
+  if (process.env.APP_VERSION) {
+    return process.env.APP_VERSION;
+  }
   try {
-    const pkgPath = path.join(PROJECT_ROOT, 'package.json');
-    if (fs.existsSync(pkgPath)) {
-      const data = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      if (data.version) return data.version;
+    const candidates = [
+      path.join(PROJECT_ROOT, 'package.json'),
+      path.join(process.cwd(), 'package.json'),
+      path.join(__dirname, '../package.json'),
+      path.join(__dirname, '../../package.json'),
+      path.join(__dirname, '../../../package.json'),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (data.version) return data.version;
+      }
     }
   } catch {}
-  return '1.0.10';
+  return '1.0.14';
 }
 export const APP_VERSION = getAppVersion();
 

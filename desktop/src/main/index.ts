@@ -99,6 +99,7 @@ async function startEmbeddedServer(): Promise<number> {
   process.env.CONTEXT_OS_USER_DATA = userDataDir;
   process.env.CONTEXT_OS_RESOURCES = resourcesDir;
   process.env.PORT = String(port);
+  process.env.APP_VERSION = app.getVersion();
   process.env.NODE_ENV = isDev ? 'development' : 'production';
 
   const serverJsc = isDev

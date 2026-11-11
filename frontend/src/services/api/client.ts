@@ -16,6 +16,7 @@ export interface UpdaterProgressEvent {
 interface DesktopBridge {
   isDesktop?: boolean;
   platform?: string;
+  getVersion?: () => Promise<string>;
   getSessionToken?: () => Promise<string | null>;
   encrypt?: (plainText: string) => Promise<string>;
   decrypt?: (encryptedBase64: string) => Promise<string>;
