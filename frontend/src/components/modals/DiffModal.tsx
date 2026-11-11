@@ -545,7 +545,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           )}
 
           <FormField
-            label="Título da Proposta de Evolução:"
+            label="Nome da Proposta de Versão:"
             required
             helperText={
               <div
@@ -593,11 +593,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   }
                   title={
                     isAIConfigured
-                      ? "Gerar título padronizado e descrição com IA"
-                      : "Gerar resumo estruturado das alterações (IA não configurada)"
+                      ? "Sugerir nome e descrição em linguagem natural com IA"
+                      : "Gerar resumo estruturado das alterações"
                   }
                 >
-                  {isAIConfigured ? "Resumo Automático por IA" : "Resumo de Alterações"}
+                  {isAIConfigured ? "Sugerir com IA" : "Resumo de Alterações"}
                 </Button>
               </div>
             }
@@ -606,35 +606,33 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               id="unified-pr-title-input"
               value={prTitle}
               onChange={(e) => setPrTitle(e.target.value)}
-              placeholder="Descreva o objetivo desta proposta..."
+              placeholder="Ex: Atualização das regras de governança e termos"
             />
-            <div
-              style={{
-                fontSize: "11px",
-                color: "var(--text-secondary)",
-                marginTop: "4px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <span style={{ opacity: 0.8 }}>Versão de trabalho:</span>
-              <code
+            {targetProposalId && (
+              <div
                 style={{
-                  padding: "1px 6px",
-                  borderRadius: "4px",
-                  backgroundColor: "var(--bg-surface, rgba(0,0,0,0.05))",
-                  color: "#7c3aed",
-                  fontWeight: 500,
+                  fontSize: "11px",
+                  color: "var(--text-secondary)",
+                  marginTop: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
                 }}
               >
-                {targetProposalId
-                  ? `Anexa à linha da Proposta #${targetProposalId}`
-                  : prTitle.trim()
-                    ? `prop-<ID>-${prTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "atualizacao"}`
-                    : "prop-<ID>-<titulo>"}
-              </code>
-            </div>
+                <span style={{ opacity: 0.8 }}>Destino:</span>
+                <span
+                  style={{
+                    padding: "1px 6px",
+                    borderRadius: "4px",
+                    backgroundColor: "rgba(124, 58, 237, 0.1)",
+                    color: "#7c3aed",
+                    fontWeight: 600,
+                  }}
+                >
+                  Anexa à Proposta #{targetProposalId} existente
+                </span>
+              </div>
+            )}
           </FormField>
 
           <FormField label="Descrição & Justificativa:">

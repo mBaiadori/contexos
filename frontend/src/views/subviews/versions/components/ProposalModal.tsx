@@ -402,26 +402,26 @@ export const ProposalModal: React.FC<ProposalModalProps> = ({
                 }
                 title={
                   isAIConfigured
-                    ? "Gerar título Conventional Commits e descrição com IA"
-                    : "Gerar resumo estruturado via Git Diff (IA não configurada)"
+                    ? "Analisar alterações e sugerir nome e descrição em linguagem natural com IA"
+                    : "Gerar resumo estruturado das alterações"
                 }
               >
                 {isGeneratingAI
                   ? "Gerando..."
                   : isAIConfigured
-                  ? "Gerar com IA"
-                  : "Gerar Resumo (Diff)"}
+                  ? "Sugerir com IA"
+                  : "Gerar Resumo"}
               </Button>
             </div>
           </div>
 
           <FormField
-            label="Título da Proposta"
+            label="Nome da Proposta de Versão"
             required
-            helperText="Resumo claro das alterações para a esteira de revisão"
+            helperText="Este nome identificará suas alterações na esteira de revisão e na Árvore de Versões"
           >
             <Input
-              placeholder="Ex: docs: atualização dos termos e documentações canônicas"
+              placeholder="Ex: Atualização dos termos e documentações canônicas"
               value={prTitle}
               onChange={(e) => setPrTitle(e.target.value)}
               disabled={isCreatingPR}

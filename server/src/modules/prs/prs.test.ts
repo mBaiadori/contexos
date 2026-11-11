@@ -121,8 +121,9 @@ describe('PRsService - Geração Inteligente de Resumos (IA e Diff)', () => {
     const summary = await prsService.generatePRSummary(TEST_REPO);
     assert.strictEqual(summary.success, true);
     assert.strictEqual(summary.is_ai_generated, false);
-    // Título deve seguir Conventional Commits
-    assert.match(summary.title, /^(?:feat|docs|refactor)/);
+    // Título deve ser humano e semântico em linguagem natural (sem prefixos técnicos como feat:/docs:)
+    assert.match(summary.title, /^(?:Inclusão|Atualização|Edição|Remoção|Alterações)/);
+    assert.doesNotMatch(summary.title, /^(?:feat|docs|refactor|fix|chore):/);
     // Descrição deve conter nota explicativa de fallback e análise estrutural
     assert.match(summary.description, /Resumo gerado via análise estruturada de alterações/);
     assert.match(summary.description, /auth\.md/);

@@ -3,6 +3,7 @@ import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
 import type { DiscardedDraftItem } from "../../types";
 import { Modal, Button } from "../ui";
+import { humanizeBranchName } from "../../views/subviews/prs/utils/prFormatters";
 import {
   Trash2,
   RotateCcw,
@@ -22,7 +23,7 @@ export const DraftsTrashModal: React.FC<DraftsTrashModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { activeRepo, refreshGitStatus, refreshPendingChanges } = useWorkspace();
+  const { activeRepo, refreshGitStatus, refreshPendingChanges, versionGraph } = useWorkspace();
   const [trashItems, setTrashItems] = useState<DiscardedDraftItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -267,7 +268,7 @@ export const DraftsTrashModal: React.FC<DraftsTrashModalProps> = ({
 
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--text-secondary)" }}>
                       <GitBranch size={12} style={{ color: "#7c3aed" }} />
-                      <span>{item.fromBranch}</span>
+                      <span>{humanizeBranchName(item.fromBranch, versionGraph?.nodes)}</span>
                       <span>·</span>
                       <span>{item.fileCount} {item.fileCount === 1 ? "arquivo" : "arquivos"}</span>
                     </div>
@@ -290,7 +291,7 @@ export const DraftsTrashModal: React.FC<DraftsTrashModalProps> = ({
                       {selectedItem.message || "Rascunho descartado"}
                     </h3>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--text-secondary)" }}>
-                      <span>Origem: <strong>{selectedItem.fromBranch}</strong></span>
+                      <span>Origem: <strong>{humanizeBranchName(selectedItem.fromBranch, versionGraph?.nodes)}</strong></span>
                       <span>·</span>
                       <span>Descartado em: {formatDate(selectedItem.discardedAt)}</span>
                     </div>

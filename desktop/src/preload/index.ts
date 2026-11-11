@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('desktopBridge', {
   encrypt: (plainText: string) => ipcRenderer.invoke('secure-store:encrypt', plainText),
   decrypt: (encryptedBase64: string) => ipcRenderer.invoke('secure-store:decrypt', encryptedBase64),
   checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  getUpdateStatus: () => ipcRenderer.invoke('updater:get-status'),
   quitAndInstallUpdate: () => ipcRenderer.invoke('updater:quit-and-install'),
   openExternal: (url: string) => ipcRenderer.invoke('desktop:open-external', url),
   onUpdaterStatus: (callback: (data: any) => void) => {

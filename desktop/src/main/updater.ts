@@ -4,6 +4,21 @@ import electronUpdater from 'electron-updater';
 
 const { autoUpdater } = electronUpdater;
 
+export interface UpdaterStatusPayload {
+  status: 'checking' | 'available' | 'available-manual' | 'up-to-date' | 'downloaded' | 'updating' | 'error';
+  version?: string;
+  releaseDate?: string;
+  downloadUrl?: string;
+  error?: string;
+}
+
+let lastUpdateStatus: UpdaterStatusPayload | null = null;
+
+function broadcastStatus(getMainWindow: () => BrowserWindow | null, data: UpdaterStatusPayload) {
+  lastUpdateStatus = data;
+  getMainWindow()?.webContents.send('updater:status', data);
+}
+
 function isNewerVersion(latest: string, current: string): boolean {
   const l = latest.split('.').map((n) => parseInt(n, 10) || 0);
   const c = current.split('.').map((n) => parseInt(n, 10) || 0);
@@ -20,7 +35,7 @@ async function checkGitHubReleaseForMac(getMainWindow: () => BrowserWindow | nul
   try {
     const currentVersion = app.getVersion();
     console.log(`[AutoUpdater Mac] Verificando versão mais recente no GitHub Releases (atual: ${currentVersion})...`);
-    getMainWindow()?.webContents.send('updater:status', { status: 'checking' });
+    broadcastStatus(getMainWindow, { status: 'checking' });
 
     const response = await fetch('https://api.github.com/repos/mBaiadori/contexos/releases/latest', {
       headers: {
@@ -31,6 +46,10 @@ async function checkGitHubReleaseForMac(getMainWindow: () => BrowserWindow | nul
 
     if (!response.ok) {
       console.warn(`[AutoUpdater Mac] Resposta do GitHub Releases: HTTP ${response.status}`);
+      broadcastStatus(getMainWindow, {
+        status: 'error',
+        error: `HTTP ${response.status} ao verificar atualizações`,
+      });
       return;
     }
 
@@ -57,14 +76,14 @@ async function checkGitHubReleaseForMac(getMainWindow: () => BrowserWindow | nul
       const asset = zipAsset || dmgAsset;
       const downloadUrl = asset?.browser_download_url || release.html_url || '';
 
-      getMainWindow()?.webContents.send('updater:status', {
+      broadcastStatus(getMainWindow, {
         status: 'available-manual',
         version: latestVersion,
         downloadUrl,
       });
     } else {
       console.log(`[AutoUpdater Mac] O aplicativo já está na versão mais recente: ${currentVersion}`);
-      getMainWindow()?.webContents.send('updater:status', {
+      broadcastStatus(getMainWindow, {
         status: 'up-to-date',
         version: currentVersion,
       });
@@ -72,7 +91,7 @@ async function checkGitHubReleaseForMac(getMainWindow: () => BrowserWindow | nul
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn('[AutoUpdater Mac] Falha ao verificar release no GitHub:', message);
-    getMainWindow()?.webContents.send('updater:status', {
+    broadcastStatus(getMainWindow, {
       status: 'error',
       error: message,
     });
@@ -87,65 +106,12 @@ export function setupAutoUpdater(
   getMainWindow: () => BrowserWindow | null,
   validateIpcSender: (event: Electron.IpcMainInvokeEvent) => void
 ) {
-  if (!app.isPackaged) {
-    console.log('[AutoUpdater] Modo desenvolvimento ativo: auto-updater em standby.');
-    return;
-  }
+  // Handlers IPC para controle pelo frontend registrados globalmente
+  ipcMain.handle('updater:get-status', (event) => {
+    validateIpcSender(event);
+    return lastUpdateStatus;
+  });
 
-  if (process.platform === 'win32') {
-    // Configurações do autoUpdater nativo do Electron com download automático em background para Windows
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-
-    autoUpdater.on('checking-for-update', () => {
-      console.log('[AutoUpdater] Verificando atualizações no GitHub Releases...');
-      getMainWindow()?.webContents.send('updater:status', { status: 'checking' });
-    });
-
-    autoUpdater.on('update-available', (info) => {
-      console.log(`[AutoUpdater] Nova versão encontrada: ${info.version}`);
-      getMainWindow()?.webContents.send('updater:status', {
-        status: 'available',
-        version: info.version,
-        releaseDate: info.releaseDate,
-      });
-    });
-
-    autoUpdater.on('update-not-available', (info) => {
-      console.log(`[AutoUpdater] O aplicativo já está na versão mais recente: ${info.version}`);
-      getMainWindow()?.webContents.send('updater:status', {
-        status: 'up-to-date',
-        version: info.version,
-      });
-    });
-
-    autoUpdater.on('error', (err) => {
-      console.warn('[AutoUpdater] Erro durante verificação de atualizações:', err?.message || err);
-      getMainWindow()?.webContents.send('updater:status', {
-        status: 'error',
-        error: err?.message || 'Erro ao checar atualizações',
-      });
-    });
-
-    autoUpdater.on('download-progress', (progressObj) => {
-      getMainWindow()?.webContents.send('updater:progress', {
-        percent: Math.round(progressObj.percent),
-        bytesPerSecond: progressObj.bytesPerSecond,
-        transferred: progressObj.transferred,
-        total: progressObj.total,
-      });
-    });
-
-    autoUpdater.on('update-downloaded', (info) => {
-      console.log(`[AutoUpdater] Versão ${info.version} baixada e pronta para instalação.`);
-      getMainWindow()?.webContents.send('updater:status', {
-        status: 'downloaded',
-        version: info.version,
-      });
-    });
-  }
-
-  // Handlers IPC para controle pelo frontend
   ipcMain.handle('updater:check', async (event) => {
     validateIpcSender(event);
     if (!app.isPackaged) {
@@ -153,11 +119,11 @@ export function setupAutoUpdater(
     }
     if (process.platform === 'darwin') {
       await checkGitHubReleaseForMac(getMainWindow);
-      return { status: 'checked' };
+      return { status: 'checked', updateInfo: lastUpdateStatus };
     }
     try {
       const result = await autoUpdater.checkForUpdates();
-      return { status: 'checked', updateInfo: result?.updateInfo };
+      return { status: 'checked', updateInfo: lastUpdateStatus || result?.updateInfo };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       return { status: 'error', error: message };
@@ -168,12 +134,13 @@ export function setupAutoUpdater(
     validateIpcSender(event);
     if (!app.isPackaged) return;
 
+    broadcastStatus(getMainWindow, { status: 'updating' });
+
     if (process.platform === 'win32') {
       console.log('[AutoUpdater Windows] Reiniciando aplicativo para aplicar atualização...');
       autoUpdater.quitAndInstall();
     } else if (process.platform === 'darwin') {
       console.log('[AutoUpdater Mac] Disparando script de atualização automática com reinicialização...');
-      getMainWindow()?.webContents.send('updater:status', { status: 'updating' });
 
       // Script de atualização oficial que roda em background, substitui o .app e reabre
       const updaterScript = `
@@ -192,6 +159,64 @@ export function setupAutoUpdater(
       }, 1000);
     }
   });
+
+  if (!app.isPackaged) {
+    console.log('[AutoUpdater] Modo desenvolvimento ativo: auto-updater em standby.');
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    // Configurações do autoUpdater nativo do Electron com download automático em background para Windows
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('checking-for-update', () => {
+      console.log('[AutoUpdater] Verificando atualizações no GitHub Releases...');
+      broadcastStatus(getMainWindow, { status: 'checking' });
+    });
+
+    autoUpdater.on('update-available', (info) => {
+      console.log(`[AutoUpdater] Nova versão encontrada: ${info.version}`);
+      broadcastStatus(getMainWindow, {
+        status: 'available',
+        version: info.version,
+        releaseDate: info.releaseDate,
+      });
+    });
+
+    autoUpdater.on('update-not-available', (info) => {
+      console.log(`[AutoUpdater] O aplicativo já está na versão mais recente: ${info.version}`);
+      broadcastStatus(getMainWindow, {
+        status: 'up-to-date',
+        version: info.version,
+      });
+    });
+
+    autoUpdater.on('error', (err) => {
+      console.warn('[AutoUpdater] Erro durante verificação de atualizações:', err?.message || err);
+      broadcastStatus(getMainWindow, {
+        status: 'error',
+        error: err?.message || 'Erro ao checar atualizações',
+      });
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      getMainWindow()?.webContents.send('updater:progress', {
+        percent: Math.round(progressObj.percent),
+        bytesPerSecond: progressObj.bytesPerSecond,
+        transferred: progressObj.transferred,
+        total: progressObj.total,
+      });
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+      console.log(`[AutoUpdater] Versão ${info.version} baixada e pronta para instalação.`);
+      broadcastStatus(getMainWindow, {
+        status: 'downloaded',
+        version: info.version,
+      });
+    });
+  }
 
   // Executa uma checagem automática 5 segundos após o boot da janela
   setTimeout(() => {

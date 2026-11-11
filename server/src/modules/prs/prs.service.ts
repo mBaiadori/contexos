@@ -1259,27 +1259,27 @@ export class PRsService {
             ? `${diffText.substring(0, 14000)}\n\n... [diff truncado para respeitar limites de tokens] ...`
             : diffText;
 
-        const systemPrompt = `Você é um Arquiteto de Software e Especialista em Governança de Código e Documentação.
-Sua missão é analisar as alterações e o diff do Git fornecidos e gerar um resumo conciso, profissional e de alto valor técnico para o Pull Request / Proposta de Versão.
+        const systemPrompt = `Você é um Especialista em Documentação e Governança de Conteúdo.
+Sua missão é analisar as alterações e o diff fornecidos e gerar um título semântico, claro e humano e um resumo de alto valor para a Proposta de Versão.
 
 DIRETRIZES OBRIGATÓRIAS:
-1. TÍTULO: Deve seguir rigorosamente a convenção Conventional Commits em português:
-   - Formato: <tipo>(<escopo>): <descrição objetiva em minúsculas>
-   - Tipos válidos: feat, fix, docs, refactor, chore, test, style.
-   - Exemplo: "feat(auth): adiciona fluxo de autenticação mfa e termos de uso" ou "docs(arquitetura): atualiza diagramas e endpoints da api"
-   - Seja conciso e direto no título (máximo 75 caracteres).
-2. DESCRIÇÃO: Deve ser formatada em Markdown profissional estruturada da seguinte forma:
+1. TÍTULO: Deve ser em linguagem natural, claro, amigável e direto (sem jargões técnicos para usuários não-técnicos):
+   - NUNCA use prefixos técnicos de Conventional Commits (proibido usar "docs:", "feat:", "fix:", "chore:", "refactor:", etc.).
+   - Escreva uma frase concisa em português com inicial maiúscula (máximo 60 caracteres).
+   - Exemplo bom: "Atualização das Regras de Acesso e Termos de Uso" ou "Revisão dos Diagramas de Arquitetura e Contratos"
+   - Exemplo proibido: "docs(auth): add mfa flow" ou "feat: novas regras"
+2. DESCRIÇÃO: Deve ser formatada em Markdown estruturada da seguinte forma:
    ## 📋 Visão Geral
-   2 a 3 frases explicando com clareza o objetivo principal das alterações e o benefício funcional para o repositório.
+   2 a 3 frases explicando com clareza o objetivo principal das alterações e o benefício para o projeto.
 
    ### 🔍 Principais Mudanças
-   Tópicos objetivos explicando o que realmente mudou em cada documento/módulo com contexto semântico e técnico (não liste apenas os arquivos, explique as alterações funcionais).
+   Tópicos objetivos explicando o que realmente mudou em cada documento com contexto amigável e claro.
 
-   ### 🏛️ Impacto e Governança
-   Itens que demandam atenção dos revisores (seções novas, status de governança alterados, novas regras ou quebras de compatibilidade).
+   ### 🏛️ Destaques para Revisão
+   Itens que demandam atenção dos revisores (novas seções, regras atualizadas ou itens críticos).
 
 3. FORMATO DE SAÍDA: Retorne ESTRITAMENTE um JSON válido com os campos "title" e "description", sem blocos de código envolventes. Exemplo:
-{"title": "docs(modulo): resumo objetivo", "description": "## 📋 Visão Geral\\n\\n..."}`;
+{"title": "Atualização das Regras de Governança", "description": "## 📋 Visão Geral\\n\\n..."}`;
 
         const userPrompt =
           `Analise os seguintes arquivos alterados e o diff do repositório "${repoName}":\n\n` +
@@ -1346,28 +1346,17 @@ DIRETRIZES OBRIGATÓRIAS:
     // Fallback Estruturado por Diff (Abordagem B: Determinística e sem dependência de chaves de IA)
     const allNew = fileDetails.every((f) => f.action === "Novo Documento");
     const allDeleted = fileDetails.every((f) => f.action === "Removido");
-    const commitPrefix = allNew ? "feat" : allDeleted ? "refactor" : "docs";
-
-    const uniqueModules = Array.from(
-      new Set(fileDetails.map((f) => f.module).filter((m) => m !== "raiz")),
-    );
-    const moduleScope =
-      uniqueModules.length === 1
-        ? `(${uniqueModules[0]})`
-        : uniqueModules.length > 1
-          ? `(${uniqueModules.slice(0, 2).join("-")})`
-          : "";
 
     const titleAction = allNew
-      ? "adicionar"
+      ? "Inclusão de"
       : allDeleted
-        ? "remover"
-        : "atualizar";
+        ? "Remoção de"
+        : "Atualização em";
     const namesList = fileDetails
       .slice(0, 3)
-      .map((f) => f.name.replace(/\.md$/i, ""))
+      .map((f) => f.title || f.name.replace(/\.md$/i, ""))
       .join(", ");
-    const autoTitle = `${commitPrefix}${moduleScope}: ${titleAction} especificações de ${namesList}${fileDetails.length > 3 ? ` e mais ${fileDetails.length - 3} arquivo(s)` : ""}`;
+    const autoTitle = `${titleAction} ${namesList}${fileDetails.length > 3 ? ` e mais ${fileDetails.length - 3} documento(s)` : ""}`;
 
     let totalAdditions = 0;
     let totalDeletions = 0;
@@ -1685,6 +1674,14 @@ DIRETRIZES OBRIGATÓRIAS:
       await healRepositoryState(repoDir, { token: activeToken });
       await createAndCheckoutBranch(repoDir, branchName);
 
+      // Persiste o título semântico humano associado à branch no Git config
+      if (payload.title?.trim()) {
+        await executeGit(
+          ["config", `branch.${branchName}.title`, payload.title.trim()],
+          repoDir,
+        ).catch(() => {});
+      }
+
       // 2. Commit changes to Git branch - estritamente os arquivos alterados pelo usuário
       const commitMsg = payload.title || `Atualização de Governança #${newId}`;
       await commitChanges(repoDir, commitMsg, allChangedPaths);
@@ -1830,7 +1827,7 @@ DIRETRIZES OBRIGATÓRIAS:
     return {
       success: true,
       pr: newPR,
-      message: `Pull Request #${newPR.id} criado com sucesso na branch '${branchName}'!`,
+      message: `Proposta de versão "${newPR.title}" enviada para revisão com sucesso!`,
     };
   }
 
@@ -2530,7 +2527,7 @@ DIRETRIZES OBRIGATÓRIAS:
       auditLines.length > 0
         ? `\n\n${auditLines.join("\n")}\nReviewed-in: Contexos Governance Platform`
         : "";
-    const commitMsg = `Merge PR #${targetPR.id}: ${targetPR.title}${trailers}`;
+    const commitMsg = `Publicação da versão: ${targetPR.title}${trailers}`;
 
     // 1. Limpa arquivo transitório de mudanças e executa auto-cura do repositório
     clearWorkspaceChanges(repoName);

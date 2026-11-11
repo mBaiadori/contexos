@@ -152,8 +152,13 @@ export const VersionGraphRenderer: React.FC<VersionGraphRendererProps> = ({
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "240px", flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-heading)" }}>
-                    {isMain ? "Principal" : node.name}
+                    {isMain ? "Versão Oficial" : (node.displayName || node.proposal?.title || node.name)}
                   </span>
+                  {!isMain && node.displayName && node.displayName !== node.name && (
+                    <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                      ({node.name})
+                    </span>
+                  )}
 
                   {/* Badges de Status simples */}
                   {isMain && (
@@ -268,7 +273,7 @@ export const VersionGraphRenderer: React.FC<VersionGraphRendererProps> = ({
                       e.stopPropagation();
                       onSwitchNode(node);
                     }}
-                    title={`Alternar workspace para a versão ${node.name}`}
+                    title={`Alternar workspace para a versão ${node.displayName || node.name}`}
                   >
                     Alternar
                   </Button>

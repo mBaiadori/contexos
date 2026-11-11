@@ -18,6 +18,7 @@ import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 import { InvitationsModal } from "../modals/InvitationsModal";
 import { HeaderVersionPill } from "./HeaderVersionPill";
 import { SavedChangesPill } from "./SavedChangesPill";
+import { useUpdaterStore } from "../../stores/updaterStore";
 
 interface TopHeaderProps {
   onOpenDiffModal: () => void;
@@ -72,38 +73,13 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
     };
 
     const [avatarError, setAvatarError] = React.useState(false);
-    const [updateInfo, setUpdateInfo] = React.useState<{
-      status: string;
-      version?: string;
-      percent?: number;
-      downloadUrl?: string;
-    } | null>(null);
+    const updateInfo = useUpdaterStore((s) => s.updateInfo);
+    const applyUpdate = useUpdaterStore((s) => s.applyUpdate);
+    const initUpdater = useUpdaterStore((s) => s.init);
 
     React.useEffect(() => {
-      const bridge = window.desktopBridge;
-      if (!bridge?.onUpdaterStatus) return;
-
-      const unsubStatus = bridge.onUpdaterStatus((data) => {
-        if (data.status === "available") {
-          setUpdateInfo((prev) => ({ ...prev, status: "available", version: data.version }));
-        } else if (data.status === "available-manual") {
-          setUpdateInfo({ status: "available-manual", version: data.version, downloadUrl: data.downloadUrl });
-        } else if (data.status === "downloaded") {
-          setUpdateInfo((prev) => ({ ...prev, status: "downloaded", version: data.version }));
-        }
-      });
-
-      const unsubProgress = bridge.onUpdaterProgress?.((prog) => {
-        setUpdateInfo((prev) =>
-          prev ? { ...prev, percent: prog.percent } : { status: "available", percent: prog.percent },
-        );
-      });
-
-      return () => {
-        unsubStatus();
-        unsubProgress?.();
-      };
-    }, []);
+      initUpdater();
+    }, [initUpdater]);
 
     return (
       <header className="dashboard-navbar" style={{ position: "relative" }}>
@@ -348,13 +324,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                 borderColor: "#1d4ed8",
                 animation: "pulse 2s infinite",
               }}
-              onClick={() => {
-                if (window.desktopBridge?.quitAndInstallUpdate) {
-                  window.desktopBridge.quitAndInstallUpdate();
-                } else if (updateInfo.downloadUrl) {
-                  window.desktopBridge?.openExternal?.(updateInfo.downloadUrl);
-                }
-              }}
+              onClick={applyUpdate}
               title="Clique para atualizar e reiniciar o Contexos automaticamente"
             >
               Instalar Atualização {updateInfo.version ? `(v${updateInfo.version})` : ""}
@@ -390,7 +360,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                 borderColor: "#059669",
                 animation: "pulse 2s infinite",
               }}
-              onClick={() => window.desktopBridge?.quitAndInstallUpdate?.()}
+              onClick={applyUpdate}
               title="Clique para reiniciar e aplicar a nova versão"
             >
               Reiniciar para Atualizar {updateInfo.version ? `(v${updateInfo.version})` : ""}

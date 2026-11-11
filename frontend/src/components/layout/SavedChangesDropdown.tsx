@@ -3,6 +3,7 @@ import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
 import type { StashDetails } from "../../types";
 import { Button } from "../ui";
+import { humanizeBranchName } from "../../views/subviews/prs/utils/prFormatters";
 import {
   RotateCcw,
   Download,
@@ -70,8 +71,11 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
   if (!isOpen || stashes.length === 0) return null;
 
   const currentBranch = versionGraph?.currentBranch || "main";
-  const fromBranch = details?.fromBranch || "Principal";
+  const fromBranch = details?.fromBranch || "main";
   const isSameBranch = currentBranch === fromBranch;
+
+  const currentBranchLabel = humanizeBranchName(currentBranch, versionGraph?.nodes);
+  const fromBranchLabel = humanizeBranchName(fromBranch, versionGraph?.nodes);
 
   // Formatar tempo relativo
   const formatDate = (isoString?: string) => {
@@ -98,7 +102,9 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
         if (!switchRes?.success) {
           setFeedback({
             type: "error",
-            message: switchRes?.message || `Não foi possível alternar para a versão de origem "${fromBranch}".`,
+            message:
+              switchRes?.message ||
+              `Não foi possível alternar para a versão de origem "${fromBranchLabel}".`,
           });
           setIsProcessing(false);
           return;
@@ -109,7 +115,7 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
       if (popRes.success) {
         setFeedback({
           type: "success",
-          message: `Rascunho restaurado com sucesso na versão "${fromBranch}"!`,
+          message: `Rascunho restaurado com sucesso na versão "${fromBranchLabel}"!`,
         });
         if (refreshGitStatus) await refreshGitStatus(activeRepo?.name);
         if (refreshVersionGraph) await refreshVersionGraph(activeRepo?.name);
@@ -141,7 +147,7 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
       if (popRes.success) {
         setFeedback({
           type: "success",
-          message: `Rascunho aplicado com sucesso na versão atual "${currentBranch}"!`,
+          message: `Rascunho aplicado com sucesso na versão atual "${currentBranchLabel}"!`,
         });
         if (refreshGitStatus) await refreshGitStatus(activeRepo?.name);
         if (refreshVersionGraph) await refreshVersionGraph(activeRepo?.name);
@@ -313,7 +319,7 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
               <GitBranch size={13} style={{ color: "#7c3aed" }} />
               <span style={{ color: "var(--text-secondary)" }}>Origem:</span>
-              <strong style={{ color: "var(--text-primary)" }}>{fromBranch}</strong>
+              <strong style={{ color: "var(--text-primary)" }}>{fromBranchLabel}</strong>
               {!isSameBranch && (
                 <span
                   style={{
@@ -325,7 +331,7 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
                     marginLeft: "auto",
                   }}
                 >
-                  ativa: {currentBranch}
+                  ativa: {currentBranchLabel}
                 </span>
               )}
             </div>
@@ -424,7 +430,7 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
               <span>
                 {isSameBranch
                   ? "Restaurar edições nesta versão"
-                  : `Voltar para "${fromBranch}" e Restaurar`}
+                  : `Voltar para "${fromBranchLabel}" e Restaurar`}
               </span>
             </Button>
 
@@ -444,7 +450,7 @@ export const SavedChangesDropdown: React.FC<SavedChangesDropdownProps> = ({
                 }}
               >
                 <Download size={13} />
-                <span>Aplicar na versão ativa atual ("{currentBranch}")</span>
+                <span>Aplicar na versão ativa atual ("{currentBranchLabel}")</span>
               </Button>
             )}
 

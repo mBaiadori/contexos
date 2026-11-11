@@ -603,6 +603,8 @@ export interface VersionProposalInfo {
 
 export interface VersionNode {
   name: string;
+  displayName?: string;
+  parentDisplayName?: string;
   isCurrent: boolean;
   isDefault: boolean;
   type: 'main' | 'proposal' | 'draft';

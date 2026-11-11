@@ -27,8 +27,8 @@ import {
 } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { API } from "../services/api";
-import type { UpdaterStatusEvent } from "../services/api/client";
 import type { User } from "../types";
+import { useUpdaterStore } from "../stores/updaterStore";
 
 interface AuthViewProps {
   onLoginSuccess: () => void;
@@ -65,7 +65,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     text: string;
     type: "error" | "info" | "success";
   } | null>(null);
-  const [updateInfo, setUpdateInfo] = useState<UpdaterStatusEvent | null>(null);
+  const updateInfo = useUpdaterStore((s) => s.updateInfo);
+  const applyUpdate = useUpdaterStore((s) => s.applyUpdate);
+  const initUpdater = useUpdaterStore((s) => s.init);
 
   // Device Flow State (RFC 8628)
   const [deviceData, setDeviceData] = useState<DeviceCodeData | null>(null);
@@ -79,28 +81,16 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const [orgWebFlowUrl, setOrgWebFlowUrl] = useState<string | null>(null);
 
-  // Limpeza de timers de polling ao desmontar e monitoramento de atualizações
+  // Limpeza de timers de polling ao desmontar e monitoramento global de atualizações
   useEffect(() => {
-    const bridge = window.desktopBridge;
-    if (bridge?.onUpdaterStatus) {
-      const unsub = bridge.onUpdaterStatus((data) => {
-        setUpdateInfo(data);
-      });
-      bridge.checkForUpdates?.().catch(() => {});
-      return () => {
-        unsub();
-        if (pollTimerRef.current) {
-          clearInterval(pollTimerRef.current);
-        }
-      };
-    }
+    initUpdater();
 
     return () => {
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
       }
     };
-  }, []);
+  }, [initUpdater]);
 
   const stopPolling = () => {
     if (pollTimerRef.current) {
@@ -1170,33 +1160,43 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                 Nova versão{" "}
                 {updateInfo.version ? `v${updateInfo.version} ` : ""}disponível
               </span>
-              {updateInfo.downloadUrl && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.desktopBridge?.quitAndInstallUpdate) {
-                      window.desktopBridge.quitAndInstallUpdate();
-                    } else if (updateInfo.downloadUrl) {
-                      window.desktopBridge?.openExternal?.(
-                        updateInfo.downloadUrl,
-                      );
-                    }
-                  }}
-                  style={{
-                    background: "#2563eb",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: "4px",
-                    padding: "3px 8px",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    marginLeft: "4px",
-                  }}
-                >
-                  Atualizar
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={applyUpdate}
+                style={{
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "4px",
+                  padding: "3px 8px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  marginLeft: "4px",
+                }}
+              >
+                Atualizar
+              </button>
+            </div>
+          )}
+
+          {updateInfo?.status === "updating" && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "6px 12px",
+                borderRadius: "8px",
+                background: "rgba(100, 116, 139, 0.1)",
+                border: "1px solid rgba(100, 116, 139, 0.3)",
+                color: "#64748b",
+                fontSize: "11.5px",
+                fontWeight: 600,
+              }}
+            >
+              <Loader2 size={14} className="animate-spin" />
+              <span>Atualizando Contexos...</span>
             </div>
           )}
 
@@ -1219,7 +1219,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               <span>Atualização pronta para instalação</span>
               <button
                 type="button"
-                onClick={() => window.desktopBridge?.quitAndInstallUpdate?.()}
+                onClick={applyUpdate}
                 style={{
                   background: "#10b981",
                   color: "#ffffff",

@@ -62,6 +62,7 @@ export interface TrunkCommitItem extends GitCommitInfo {
   y: number;
   isMergeCommit: boolean;
   mergedBranchName?: string;
+  branchesSide?: -1 | 1 | "none" | "both";
 }
 
 // Conector horizontal suave estilo Sankey (Curva cúbica de Bézier entre colunas)
@@ -94,15 +95,19 @@ export function cleanCommitTitle(text?: string): string {
       )
       .replace(/^([0-9a-f]{7,40}[:\s-]*)/i, "")
       .replace(
-        /^(merge pull request #\d+ from [^\n]+|merge branch [^\n]+)/i,
-        "Merge de versão",
+        /^(merge pull request #\d+ from [^\n]+|merge branch [^\n]+|publicação da versão:\s*)/i,
+        "Publicação da versão: ",
+      )
+      .replace(
+        /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?:\s*/i,
+        "",
       )
       .trim() || text
   );
 }
 
 // Dimensões Padrão Unificadas (Design Moderno & Compacto com Altura Dinâmica de Níveis)
-const CARD_WIDTH = 152;
+const CARD_WIDTH = 176;
 const CARD_HEIGHT = 28;
 const BASE_LEAF_HEIGHT = 46; // Altura base para nós folha (card 28px + respiro)
 const COMMIT_LABEL_WIDTH = 144; // Largura do card/label de commit
@@ -316,7 +321,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
           shortHash: (node.baseHash || node.name).slice(0, 7),
           author: "Git",
           date: node.baseDate || "",
-          message: `Origem de ${node.name}`,
+          message: `Origem de ${node.displayName || node.name}`,
         });
       }
 
@@ -571,11 +576,24 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
         mergeCommitMap.has(c.hash.toLowerCase()) ||
         c.message.toLowerCase().startsWith("merge ");
 
+      const branchesAtCommit = commitDirectBranchesMap.get(c.hash) || [];
+      const hasLeft = branchesAtCommit.some(
+        (b) => branchSideMap.get(b.name) === -1,
+      );
+      const hasRight = branchesAtCommit.some(
+        (b) => branchSideMap.get(b.name) === 1,
+      );
+      let branchesSide: -1 | 1 | "none" | "both" = "none";
+      if (hasLeft && hasRight) branchesSide = "both";
+      else if (hasRight) branchesSide = 1;
+      else if (hasLeft) branchesSide = -1;
+
       trunkCommits.push({
         ...c,
         y: currentCommitY,
         isMergeCommit: isMerge,
         mergedBranchName: mergeCommitMap.get(c.hash.toLowerCase()),
+        branchesSide,
       });
     }
 
@@ -1233,7 +1251,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
             onClick={() => {
               setPan((p) => ({ ...p, y: 100 - layout.trunkTopY * zoom }));
             }}
-            title="Navegar para o Topo (Fim)"
+            title="Navegar para a Linha Principal (Topo)"
             style={{
               border: "none",
               background: "transparent",
@@ -1245,7 +1263,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               borderRadius: "4px",
             }}
           >
-            Topo ↑
+            Principal ↑
           </button>
 
           <button
@@ -1253,7 +1271,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
             onClick={() => {
               setPan((p) => ({ ...p, y: 400 - layout.trunkBaseY * zoom }));
             }}
-            title="Navegar para o Início (Base)"
+            title="Navegar para a Origem do Repositório (Base)"
             style={{
               border: "none",
               background: "transparent",
@@ -1265,7 +1283,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               borderRadius: "4px",
             }}
           >
-            Início ↓
+            Origem ↓
           </button>
 
           <button
@@ -1320,7 +1338,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
           <button
             type="button"
             onClick={() => onSwitchNode?.(layout.defaultNode!)}
-            title={`Alternar de volta para a Linha Principal (${layout.defaultNode.name})`}
+            title={`Alternar para a Linha Principal (${layout.defaultNode.name})`}
             style={{
               display: "flex",
               alignItems: "center",
@@ -1343,7 +1361,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
             >
               arrow_back
             </span>
-            Voltar para {layout.defaultNode.name}
+            Principal
           </button>
         )}
       </div>
@@ -1418,59 +1436,67 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                 <circle cx="0" cy="0" r="16" fill="transparent" />
 
                 {/* Pulso e destaque especial se for o commit ATIVO */}
-                {isCommitActive && (
-                  <g style={{ pointerEvents: "none" }}>
-                    <circle
-                      cx="0"
-                      cy="0"
-                      r={COMMIT_RADIUS + 7}
-                      fill="none"
-                      stroke="#2563eb"
-                      strokeWidth="2.5"
-                      opacity="0.85"
-                    >
-                      <animate
-                        attributeName="r"
-                        values={`${COMMIT_RADIUS + 5};${COMMIT_RADIUS + 13};${COMMIT_RADIUS + 5}`}
-                        dur="2.2s"
-                        repeatCount="indefinite"
-                      />
-                      <animate
-                        attributeName="opacity"
-                        values="0.9;0.15;0.9"
-                        dur="2.2s"
-                        repeatCount="indefinite"
-                      />
-                    </circle>
+                {isCommitActive && (() => {
+                  // Se as branches abrem à direita (1), o badge abre à esquerda (-1)
+                  // Se as branches abrem à esquerda (-1), o badge abre à direita (1)
+                  const badgeSide: -1 | 1 = c.branchesSide === 1 ? -1 : 1;
+                  const badgeW = 76;
+                  const badgeX = badgeSide === -1 ? -badgeW - 14 : 14;
 
-                    {/* Badge destacada ATIVO (HEAD) */}
-                    <g transform="translate(14, -11)">
-                      <rect
-                        x="0"
-                        y="0"
-                        width="96"
-                        height="22"
-                        rx="11"
-                        fill="#2563eb"
-                        style={{
-                          filter: "drop-shadow(0 2px 6px rgba(37,99,235,0.45))",
-                        }}
-                      />
-                      <circle cx="11" cy="11" r="3.5" fill="#ffffff" />
-                      <text
-                        x="22"
-                        y="11.5"
-                        dominantBaseline="central"
-                        fill="#ffffff"
-                        fontSize="10"
-                        fontWeight="700"
-                        fontFamily="system-ui, -apple-system, sans-serif"
+                  return (
+                    <g style={{ pointerEvents: "none" }}>
+                      <circle
+                        cx="0"
+                        cy="0"
+                        r={COMMIT_RADIUS + 7}
+                        fill="none"
+                        stroke="#2563eb"
+                        strokeWidth="2.5"
+                        opacity="0.85"
                       >
-                        Ativo
-                      </text>
+                        <animate
+                          attributeName="r"
+                          values={`${COMMIT_RADIUS + 5};${COMMIT_RADIUS + 13};${COMMIT_RADIUS + 5}`}
+                          dur="2.2s"
+                          repeatCount="indefinite"
+                        />
+                        <animate
+                          attributeName="opacity"
+                          values="0.9;0.15;0.9"
+                          dur="2.2s"
+                          repeatCount="indefinite"
+                        />
+                      </circle>
+
+                      {/* Badge destacada Principal - posicionada sem sobreposição */}
+                      <g transform={`translate(${badgeX}, -11)`}>
+                        <rect
+                          x="0"
+                          y="0"
+                          width={badgeW}
+                          height="22"
+                          rx="11"
+                          fill="#2563eb"
+                          style={{
+                            filter: "drop-shadow(0 2px 6px rgba(37,99,235,0.45))",
+                          }}
+                        />
+                        <circle cx={badgeSide === -1 ? 12 : 11} cy="11" r="3" fill="#ffffff" />
+                        <text
+                          x={badgeSide === -1 ? 22 : 21}
+                          y="11.5"
+                          dominantBaseline="central"
+                          fill="#ffffff"
+                          fontSize="10"
+                          fontWeight="700"
+                          fontFamily="system-ui, -apple-system, sans-serif"
+                        >
+                          Principal
+                        </text>
+                      </g>
                     </g>
-                  </g>
-                )}
+                  );
+                })()}
 
                 {/* Highlight ao passar mouse, selecionar ou ser o destino do merge */}
                 {(isHovered || isSelected || isMergeTarget) &&
@@ -1545,7 +1571,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
             );
           })}
 
-          {/* NÓ INÍCIO (BASE NO SUL) */}
+          {/* NÓ INÍCIO / ORIGEM HISTÓRICA (BASE NO SUL) */}
           {layout.defaultNode && (
             <g
               transform={`translate(${layout.trunkX}, ${layout.trunkBaseY})`}
@@ -1555,24 +1581,25 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               onMouseLeave={() => setHoveredNodeName(null)}
               style={{ cursor: "pointer" }}
             >
+              <title>Origem do repositório / Primeiro marco histórico</title>
               <circle cx="0" cy="0" r="20" fill="transparent" />
               <circle
                 cx="0"
                 cy="0"
                 r={NODE_RADIUS}
-                fill="#2563eb"
+                fill="#475569"
                 stroke="#ffffff"
                 strokeWidth="2.2"
               />
               <rect
-                x="-26"
+                x="-28"
                 y="8"
-                width="52"
+                width="56"
                 height="20"
                 rx="10"
-                fill="#2563eb"
+                fill="#475569"
                 style={{
-                  filter: "drop-shadow(0 1px 3px rgba(37,99,235,0.25))",
+                  filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.18))",
                 }}
               />
               <text
@@ -1585,40 +1612,39 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                 fontWeight="700"
                 fontFamily="system-ui, -apple-system, sans-serif"
               >
-                Início
+                Origem
               </text>
             </g>
           )}
 
-          {/* NÓ FIM (TOPO NO NORTE) - COM ESPAÇAMENTO ADEQUADO E SEM SOBREPOSIÇÃO */}
+          {/* NÓ TERMINAL DO TOPO DO TRONCO (Fim) */}
           <g transform={`translate(${layout.trunkX}, ${layout.trunkTopY})`}>
             {/* Ponto terminal do topo */}
             <circle
               cx="0"
               cy="0"
-              r="4.5"
+              r="4"
               fill="#1e293b"
               stroke="#ffffff"
-              strokeWidth="1.5"
+              strokeWidth="2"
             />
-            {/* Badge 'Fim' posicionado com folga limpa acima do ponto terminal */}
-            <g transform="translate(0, -22)">
+            {/* Badge de Fim do tronco */}
+            <g transform="translate(-24, -30)">
               <rect
-                x="-24"
-                y="-10"
-                width="48"
-                height="20"
-                rx="10"
-                fill="#1e293b"
-                style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.22))" }}
-              />
-              <text
                 x="0"
                 y="0"
+                width="48"
+                height="22"
+                rx="11"
+                fill="#1e293b"
+                style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.15))" }}
+              />
+              <text
+                x="24"
+                y="14"
                 textAnchor="middle"
-                dominantBaseline="central"
                 fill="#ffffff"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fontFamily="system-ui, -apple-system, sans-serif"
               >
@@ -1706,7 +1732,12 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                     fontWeight="700"
                     fontFamily="system-ui, -apple-system, sans-serif"
                   >
-                    {`✓ Merge de ${activeMergedBranch.node.name.length > 13 ? `${activeMergedBranch.node.name.slice(0, 13)}...` : activeMergedBranch.node.name}`}
+                    {(() => {
+                      const mTitle =
+                        activeMergedBranch.node.displayName ||
+                        activeMergedBranch.node.name;
+                      return `✓ ${mTitle.length > 15 ? `${mTitle.slice(0, 15)}...` : mTitle}`;
+                    })()}
                   </text>
                 </g>
               </g>
@@ -1742,11 +1773,15 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
 
             // Espaço reservado para o texto da versão
             const textStartX = isCurrent ? br.cardX + 22 : br.cardX + 12;
-            const maxChars = hasCommits ? 14 : 17;
+            const maxChars = hasCommits ? 18 : 22;
+            const rawLabel =
+              br.node.displayName ||
+              cleanCommitTitle(br.node.proposal?.title) ||
+              br.node.name;
             const displayName =
-              br.node.name.length > maxChars
-                ? `${br.node.name.slice(0, maxChars - 1)}…`
-                : br.node.name;
+              rawLabel.length > maxChars
+                ? `${rawLabel.slice(0, maxChars - 1)}…`
+                : rawLabel;
 
             return (
               <g
@@ -1991,7 +2026,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                   </g>
                 )}
 
-                <title>{`${br.node.name} (${br.commitCount} commit(s))`}</title>
+                <title>{`${br.node.displayName || br.node.proposal?.title || br.node.name} • ${br.commitCount} alteração(ões)`}</title>
               </g>
             );
           })}

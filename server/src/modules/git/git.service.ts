@@ -252,6 +252,7 @@ export class GitService {
     repoNameParam?: string,
     ownerParam?: string,
     baseBranch?: string,
+    displayTitle?: string,
   ) {
     const cfg = loadConfig();
     const repoName = repoNameParam || cfg.active_repo?.name || "local";
@@ -260,6 +261,12 @@ export class GitService {
       throw new Error(`Repositório ${repoName} não está clonado localmente.`);
     }
     const res = await createAndCheckoutBranch(repoDir, branchName, baseBranch);
+    if (res.success && displayTitle?.trim()) {
+      await executeGit(
+        ["config", `branch.${branchName}.title`, displayTitle.trim()],
+        repoDir,
+      ).catch(() => {});
+    }
     workspaceService.invalidateTreeCache(repoName);
     return res;
   }
@@ -382,6 +389,7 @@ export class GitService {
         nodes: [
           {
             name: defaultBranch,
+            displayName: "Versão Oficial",
             isCurrent: true,
             isDefault: true,
             type: "main" as const,
@@ -508,8 +516,9 @@ export class GitService {
       }
     } catch {}
 
-    // 2. Otimização em Massa: Todas as configs branch.<name>.parent em 1 único comando
+    // 2. Otimização em Massa: Todas as configs branch.<name>.parent e branch.<name>.title em comandos únicos
     const branchConfigParents = new Map<string, string>();
+    const branchConfigTitles = new Map<string, string>();
     try {
       const cfgRes = await executeGit(
         ["config", "--get-regexp", "^branch\\..*\\.parent$"],
@@ -523,6 +532,22 @@ export class GitService {
             const match = line.match(/^branch\.(.+)\.parent\s+(.+)$/);
             if (match) {
               branchConfigParents.set(match[1].trim(), match[2].trim());
+            }
+          });
+      }
+
+      const titlesRes = await executeGit(
+        ["config", "--get-regexp", "^branch\\..*\\.title$"],
+        repoDir,
+      );
+      if (titlesRes.success && titlesRes.stdout.trim()) {
+        titlesRes.stdout
+          .trim()
+          .split("\n")
+          .forEach((line) => {
+            const match = line.match(/^branch\.(.+)\.title\s+(.+)$/);
+            if (match) {
+              branchConfigTitles.set(match[1].trim(), match[2].trim());
             }
           });
       }
@@ -758,19 +783,60 @@ export class GitService {
             }
           } catch {}
 
-          if (ahead > 0) {
+          // Obter o ponto exato de divergência entre a branch e a sua branch-mãe (ou defaultBranch)
+          let forkPoint = "";
+          if (parentBranch && parentBranch !== defaultBranch) {
+            forkPoint = await getMergeBase(parentBranch, branch);
+          }
+          if (!forkPoint) {
+            forkPoint = baseHash || (await getMergeBase(defaultBranch, branch));
+          }
+
+          // Atualiza baseHash e baseDate para refletir o ponto real de ramificação na árvore
+          if (forkPoint) {
+            baseHash = forkPoint;
+            baseDate = await getCommitDate(forkPoint);
+          }
+
+          // Buscar TODOS os commits pertencentes ESPECIFICAMENTE a esta branch desde a divergência
+          let logCmd: string[] = [];
+          if (forkPoint) {
+            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${forkPoint}..${branch}`];
+          } else if (parentBranch && parentBranch !== defaultBranch) {
+            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${parentBranch}..${branch}`];
+          } else {
+            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${branch}`, "--not", `${defaultBranch}`];
+          }
+
+          try {
+            const bCommitsRes = await executeGit(logCmd, repoDir);
+            if (bCommitsRes.success && bCommitsRes.stdout.trim()) {
+              branchCommits = bCommitsRes.stdout
+                .trim()
+                .split("\n")
+                .filter(Boolean)
+                .map((line) => {
+                  const parts = line.split("|");
+                  return {
+                    hash: parts[0],
+                    shortHash: parts[1],
+                    author: parts[2],
+                    date: parts[3],
+                    message: parts.slice(4).join("|") || "Commit",
+                  };
+                });
+            }
+          } catch {}
+
+          // Fallback adicional caso logCmd não retorne nada mas a branch tenha commits próprios
+          if (branchCommits.length === 0) {
             try {
-              const bCommitsRes = await executeGit(
-                [
-                  "log",
-                  `-${Math.min(ahead, 15)}`,
-                  "--format=%H|%h|%an|%cI|%s",
-                  `${compareBase}..${branch}`,
-                ],
+              const fallbackRes = await executeGit(
+                ["log", "-30", "--format=%H|%h|%an|%cI|%s", branch],
                 repoDir,
               );
-              if (bCommitsRes.success && bCommitsRes.stdout.trim()) {
-                branchCommits = bCommitsRes.stdout
+              if (fallbackRes.success && fallbackRes.stdout.trim()) {
+                const recentAll = fallbackRes.stdout
                   .trim()
                   .split("\n")
                   .filter(Boolean)
@@ -784,12 +850,22 @@ export class GitService {
                       message: parts.slice(4).join("|") || "Commit",
                     };
                   });
+                const excludedHashes = new Set<string>(mainCommits.map((mc) => mc.hash));
+                if (forkPoint) excludedHashes.add(forkPoint);
+                const onlyBranch = recentAll.filter((c) => !excludedHashes.has(c.hash));
+                if (onlyBranch.length > 0) {
+                  branchCommits = onlyBranch;
+                }
               }
             } catch {}
           }
 
           if (branchCommits.length === 0 && lastCommit) {
             branchCommits = [lastCommit];
+          }
+
+          if (branchCommits.length > 0) {
+            ahead = branchCommits.length;
           }
         }
 
@@ -815,8 +891,37 @@ export class GitService {
           }
         }
 
+        // Resolução do Nome Semântico Humano (displayName)
+        let displayName = branch;
+        if (isDefault) {
+          displayName = "Versão Oficial";
+        } else if (pr?.title) {
+          // Limpa prefixos técnicos de propostas (Conventional Commits e merges)
+          displayName = pr.title
+            .replace(/^(\[?(PR|pr|pull request|pull|pr#|pr-)[\s#:]*\d+\]?[:\s-]*)/i, "")
+            .replace(/^(merge pull request #\d+ from [^\n]+|merge branch [^\n]+)/i, "")
+            .replace(/^(feat|fix|docs|chore|refactor|test|style)(\([^)]+\))?:\s*/i, "")
+            .trim() || pr.title;
+          displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+        } else if (branchConfigTitles.has(branch)) {
+          displayName = branchConfigTitles.get(branch)!;
+        } else if (/^prop-\d+-/i.test(branch)) {
+          // Fallback para propostas antigas sem título: prop-1-ajuste-contrato -> Ajuste contrato
+          const rawSlug = branch.replace(/^prop-\d+-/i, "");
+          const clean = rawSlug.replace(/[-_]+/g, " ").trim();
+          displayName = clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : branch;
+        } else if (/^galho-/i.test(branch)) {
+          const rawSlug = branch.replace(/^galho-/i, "");
+          displayName = `Versão ${rawSlug}`;
+        } else if (branch.includes("-") || branch.includes("_")) {
+          const clean = branch.replace(/[-_]+/g, " ").trim();
+          displayName = clean.charAt(0).toUpperCase() + clean.slice(1);
+        }
+
         return {
           name: branch,
+          displayName,
+          parentDisplayName: undefined as string | undefined, // Preenchido no pós-processamento com todos os nós
           isCurrent,
           isDefault,
           type,
@@ -851,6 +956,21 @@ export class GitService {
     );
 
     const nodes = rawNodes.filter((n): n is NonNullable<typeof n> => Boolean(n));
+
+    // Preenche o parentDisplayName semântico para cada nó
+    const nodeMap = new Map<string, string>();
+    nodes.forEach((n) => nodeMap.set(n.name, n.displayName || n.name));
+
+    for (const node of nodes) {
+      if (node.isDefault) {
+        node.parentDisplayName = undefined;
+      } else if (node.parentBranch) {
+        node.parentDisplayName =
+          node.parentBranch === defaultBranch
+            ? "Versão Oficial"
+            : nodeMap.get(node.parentBranch) || node.parentBranch;
+      }
+    }
 
     // Garantir que a árvore de parentBranch não contenha ciclos (DAG estrito convergindo para defaultBranch)
     for (const node of nodes) {

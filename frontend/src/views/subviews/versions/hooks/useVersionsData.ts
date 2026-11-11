@@ -455,12 +455,12 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
         if (res.data.is_ai_generated) {
           setFeedback({
             type: "success",
-            message: "Resumo inteligente e título Conventional Commits gerados via IA com sucesso!",
+            message: "Nome semântico e descrição sugeridos com sucesso!",
           });
         } else {
           setFeedback({
             type: "success",
-            message: "Resumo estruturado gerado via Git Diff. Configure um modelo de IA nas configurações para obter resumos semânticos avançados.",
+            message: "Resumo das alterações gerado com sucesso. Configure um modelo de IA nas configurações para obter sugestões semânticas ainda mais inteligentes.",
           });
         }
       }

@@ -12,21 +12,22 @@ export const HeaderVersionPill: React.FC<HeaderVersionPillProps> = ({ onClick })
   const defaultBranch = activeRepo?.default_branch || "main";
   const isMain = currentBranch === defaultBranch;
 
-  // Verifica se há proposta aberta vinculada à versão ativa
+  // Nome semântico da versão ativa
   const activeNode = versionGraph?.nodes?.find((n) => n.name === currentBranch);
   const activeProposal = activeNode?.proposal;
 
-  let label = isMain ? "Principal" : `Versão: ${currentBranch}`;
-  if (activeProposal) {
-    label = `Proposta #${activeProposal.id}`;
-  }
+  const semanticName = isMain
+    ? "Versão Oficial"
+    : activeNode?.displayName || activeProposal?.title || currentBranch;
+  const label =
+    semanticName.length > 30 ? `${semanticName.slice(0, 29)}…` : semanticName;
 
   return (
     <button
       id="header-version-pill"
       type="button"
       onClick={onClick}
-      title={`Versão ativa: ${currentBranch}. Clique para abrir o mapa de versões.`}
+      title={`Versão ativa: ${semanticName}${currentBranch !== semanticName ? ` (${currentBranch})` : ""}. Clique para abrir o mapa de versões.`}
       style={{
         display: "inline-flex",
         alignItems: "center",

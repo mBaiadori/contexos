@@ -9,6 +9,10 @@ import { AuthView } from './views/AuthView';
 import { AdminAuthView } from './views/AdminAuthView';
 import { DashboardView } from './views/DashboardView';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { useUpdaterStore } from './stores/updaterStore';
+
+// Inicializa o monitoramento global de atualizações para o ambiente Desktop
+useUpdaterStore.getState().init();
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();

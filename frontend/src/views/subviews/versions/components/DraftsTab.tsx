@@ -543,15 +543,15 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
                 }
                 title={
                   isAIConfigured
-                    ? "Analisar diffs e gerar título Conventional Commits e descrição com IA"
-                    : "Gerar resumo estruturado das alterações via Git Diff (IA não configurada)"
+                    ? "Analisar alterações e sugerir nome e descrição em linguagem natural com IA"
+                    : "Gerar resumo estruturado das alterações"
                 }
               >
                 {isGeneratingAI
                   ? "Gerando resumo..."
                   : isAIConfigured
-                  ? "Gerar com IA"
-                  : "Gerar Resumo (Diff)"}
+                  ? "Sugerir com IA"
+                  : "Gerar Resumo"}
               </Button>
             </div>
           </Row>
@@ -589,13 +589,13 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
           )}
 
           <FormField
-            label="Título da Proposta"
+            label="Nome da Proposta de Versão"
             required
-            helperText="Resumo objetivo das alterações para o registro de versão"
+            helperText="Este nome identificará suas alterações na esteira de revisão e na Árvore de Versões"
           >
             <Input
               id="draft-pr-title"
-              placeholder="Ex: docs: atualização de especificações e termos de governança"
+              placeholder="Ex: Atualização das regras de governança e termos"
               value={prTitle}
               onChange={(e) => setPrTitle(e.target.value)}
               disabled={isCreatingPR}

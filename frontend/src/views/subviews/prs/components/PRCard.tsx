@@ -3,7 +3,7 @@ import { FolderGit2 } from "lucide-react";
 import { Card, Button, Badge } from "../../../../components/ui";
 import type { PR } from "../../../../types";
 import { isSystemPath, isPathHidden } from "../../../../utils/hidden-files";
-import { formatPRDate, renderMarkdownDescription } from "../utils/prFormatters";
+import { formatPRDate, renderMarkdownDescription, cleanSemanticTitle } from "../utils/prFormatters";
 import { PRFileList } from "./PRFileList";
 import type {
   MergeabilityInfo,
@@ -212,6 +212,9 @@ export const PRCard: React.FC<PRCardProps> = ({
                 flexWrap: "wrap",
               }}
             >
+              <Badge variant="primary" size="sm">
+                {isDirectCommit || isMerged ? `Versão #${revisionId}` : `Proposta #${pr.id}`}
+              </Badge>
               <span
                 style={{
                   fontSize: "15px",
@@ -220,7 +223,7 @@ export const PRCard: React.FC<PRCardProps> = ({
                   letterSpacing: "-0.01em",
                 }}
               >
-                Revisão #{revisionId}: {pr.title}
+                {cleanSemanticTitle(pr.title)}
               </span>
               {pr.repo_name && (
                 <Badge
@@ -547,12 +550,11 @@ export const PRCard: React.FC<PRCardProps> = ({
                       sync
                     </span>
                     <span>
-                      Esta proposta está{" "}
+                      Esta proposta possui{" "}
                       <strong>
                         {mergeabilityMap[pr.id].behind_by}
                       </strong>{" "}
-                      commit(s) atrás da branch oficial (
-                      <code>{pr.target_branch || "main"}</code>).
+                      atualização(ões) de diferença em relação à Versão Oficial.
                     </span>
                   </div>
                   <Button
@@ -872,8 +874,7 @@ export const PRCard: React.FC<PRCardProps> = ({
               }}
             >
               <span>
-                Proposta #{pr.id} &rarr; Destino:{" "}
-                <code>{pr.target_branch === "main" ? "Versão Oficial" : pr.target_branch || "Versão Oficial"}</code>
+                {isMerged || isDirectCommit ? "Versão Oficial integrada" : `Proposta #${pr.id} → Destino: Versão Oficial`}
               </span>
             </div>
 

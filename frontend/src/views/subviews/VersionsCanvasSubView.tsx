@@ -76,6 +76,15 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
     loadGraph();
   }, [loadGraph]);
 
+  // Auto-dismiss do alerta após 4.5 segundos
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => {
+      setFeedback(null);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [feedback]);
+
   const nodes = versionGraph?.nodes || [];
 
   // Define seleção inicial
@@ -475,7 +484,14 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
           zIndex: 5,
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
           <h2
             style={{
               margin: 0,
@@ -487,17 +503,42 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
             Versões
           </h2>
           <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-            {activeRepo?.name || "Repositório"} · Árvore de ramificações
+            {activeRepo?.name || "Repositório"}
           </span>
+
+          {/* Tag de status da branch ativa no workspace */}
+          {versionGraph?.currentBranch === "HEAD" ? (
+            <Badge variant="warning" size="sm">
+              ⚠️ HEAD Desacoplado
+            </Badge>
+          ) : versionGraph?.currentBranch ===
+            (versionGraph?.defaultBranch || "main") ? (
+            <Badge variant="outline" size="sm">
+              ● Principal
+            </Badge>
+          ) : versionGraph?.currentBranch ? (
+            <Badge variant="primary" size="sm">
+              ●{" "}
+              {nodes.find((n) => n.name === versionGraph.currentBranch)
+                ?.displayName || versionGraph.currentBranch}
+            </Badge>
+          ) : null}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+        >
           <Input
             type="text"
-            placeholder="Buscar galho..."
+            placeholder="Buscar versão..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: "180px", height: "32px", fontSize: "12px" }}
+            style={{ width: "160px", height: "32px", fontSize: "12px" }}
           />
 
           <Button
@@ -622,7 +663,11 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                     fontWeight: 600,
                   }}
                 >
-                  {selectedCommit ? "Marco" : "Versão Selecionada"}
+                  {selectedCommit
+                    ? "Marco da Linha do Tempo"
+                    : selectedNode?.isDefault
+                      ? "Linha Principal"
+                      : "Versão Selecionada"}
                 </span>
                 <h3
                   style={{
@@ -635,9 +680,25 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                   {selectedCommit
                     ? cleanCommitTitle(selectedCommit.message)
                     : selectedNode?.isDefault
-                      ? "Início (Base)"
-                      : selectedNode?.name}
+                      ? "Linha Principal"
+                      : selectedNode?.displayName || selectedNode?.name}
                 </h3>
+                {selectedNode && !selectedCommit && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--text-secondary)",
+                      fontWeight: 400,
+                    }}
+                  >
+                    {selectedNode.isDefault
+                      ? `Branch Git: ${versionGraph?.defaultBranch || "main"}`
+                      : selectedNode.displayName &&
+                          selectedNode.displayName !== selectedNode.name
+                        ? `ID Técnico: ${selectedNode.name}`
+                        : null}
+                  </span>
+                )}
               </div>
 
               <button
@@ -660,580 +721,635 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
               </button>
             </div>
 
-            {/* SE FOR UM COMMIT DA LINHA PRINCIPAL SELECIONADO */}
-            {selectedCommit ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <Badge variant="primary" size="sm">
-                    Marco
-                  </Badge>
-                </div>
+            {/* SE FOR UM COMMIT SELECIONADO */}
+            {selectedCommit
+              ? (() => {
+                  const isLatestMainCommit = Boolean(
+                    versionGraph?.mainCommits &&
+                    versionGraph.mainCommits.length > 0 &&
+                    versionGraph.mainCommits[0].hash === selectedCommit.hash,
+                  );
 
-                <div
-                  style={{
-                    padding: "12px",
-                    borderRadius: "6px",
-                    background: "var(--bg-main)",
-                    fontSize: "13px",
-                    color: "var(--text-primary)",
-                    lineHeight: "1.4",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      marginBottom: "4px",
-                      color: "var(--text-heading)",
-                    }}
-                  >
-                    Título:
-                  </div>
-                  <div>{cleanCommitTitle(selectedCommit.message)}</div>
-                </div>
-
-                <div
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: "6px",
-                    background: "var(--bg-main)",
-                    fontSize: "12px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                  }}
-                >
-                  <div>
-                    <span style={{ color: "var(--text-secondary)" }}>
-                      Data:{" "}
-                    </span>
-                    <strong>
-                      {selectedCommit.date
-                        ? new Date(selectedCommit.date).toLocaleString(
-                            "pt-BR",
-                            {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )
-                        : "Data não disponível"}
-                    </strong>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--text-secondary)" }}>
-                      Autor:{" "}
-                    </span>
-                    <strong>{selectedCommit.author}</strong>
-                  </div>
-                </div>
-
-                {/* BLOCO DESTACADO: RAMIFICAR A PARTIR DESTE MARCO */}
-                <div
-                  style={{
-                    padding: "12px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(37, 99, 235, 0.25)",
-                    background: "rgba(37, 99, 235, 0.04)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                    marginTop: "6px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "baseline",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        color: "var(--text-heading)",
-                      }}
-                    >
-                      Ramificar a partir deste marco
-                    </span>
-                  </div>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "11px",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    Crie uma nova versão independente iniciando exatamente neste
-                    ponto da história.
-                  </p>
-
-                  {!isCreatingNew ? (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => {
-                        setIsCreatingNew(true);
-                        setNewVersionName(
-                          `galho-${selectedCommit.hash.slice(0, 7)}`,
-                        );
-                      }}
-                      style={{ width: "100%", fontWeight: 600 }}
-                    >
-                      + Criar Versão a Partir Deste Marco
-                    </Button>
-                  ) : (
-                    <form
-                      onSubmit={handleCreateNewVersionFromCommit}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "8px",
-                        marginTop: "4px",
-                      }}
-                    >
-                      <Input
-                        type="text"
-                        placeholder="Nome da nova versão..."
-                        value={newVersionName}
-                        onChange={(e) => setNewVersionName(e.target.value)}
-                        style={{
-                          fontSize: "12px",
-                          height: "30px",
-                          width: "100%",
-                        }}
-                        autoFocus
-                      />
-                      <div style={{ display: "flex", gap: "6px" }}>
-                        <Button
-                          type="submit"
-                          variant="primary"
-                          size="sm"
-                          disabled={!newVersionName.trim() || isSwitching}
-                          style={{ flex: 1 }}
-                        >
-                          {isSwitching ? "Criando..." : "Criar galho"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setIsCreatingNew(false);
-                            setNewVersionName("");
-                          }}
-                        >
-                          Cancelar
-                        </Button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-
-                {/* BOTÕES DE AÇÃO DO MARCO */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                    marginTop: "4px",
-                  }}
-                >
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={isSwitching}
-                    onClick={() => handleSwitchToCommit(selectedCommit)}
-                    style={{ width: "100%", fontWeight: 600 }}
-                  >
-                    {isSwitching
-                      ? "Alternando..."
-                      : `Alternar para este marco (${selectedCommit.shortHash || selectedCommit.hash.slice(0, 7)})`}
-                  </Button>
-
-                  {/* ATALHO SEGURO: VOLTAR PARA A PRINCIPAL */}
-                  {versionGraph?.defaultBranch && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={isSwitching}
-                      onClick={() => {
-                        const defaultNode = nodes.find((n) => n.isDefault);
-                        if (defaultNode) handleSwitchRequest(defaultNode);
-                        else
-                          handleSwitchRequest({
-                            name: versionGraph.defaultBranch,
-                            isDefault: true,
-                          } as VersionNode);
-                      }}
-                      style={{ width: "100%", fontWeight: 600 }}
-                    >
-                      ← Voltar para a Linha Principal (
-                      {versionGraph.defaultBranch})
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              selectedNode && (
-                <>
-                  {/* Badges de Situação */}
-                  <div
-                    style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}
-                  >
-                    {selectedNode.isCurrent && (
-                      <Badge variant="primary" size="sm">
-                        Ativa
-                      </Badge>
-                    )}
-                    {selectedNode.isDefault && (
-                      <Badge variant="outline" size="sm">
-                        Base do Projeto
-                      </Badge>
-                    )}
-                    {selectedNode.isMerged && (
-                      <Badge variant="success" size="sm">
-                        Mergeada na Base
-                      </Badge>
-                    )}
-                    {!selectedNode.isDefault &&
-                      !selectedNode.isMerged &&
-                      selectedNode.type === "proposal" && (
-                        <Badge variant="warning" size="sm">
-                          Em Revisão
-                        </Badge>
-                      )}
-                    {!selectedNode.isDefault &&
-                      !selectedNode.isMerged &&
-                      selectedNode.type === "draft" && (
-                        <Badge variant="outline" size="sm">
-                          Rascunho Local
-                        </Badge>
-                      )}
-                  </div>
-
-                  {/* Origem e Destino do Galho */}
-                  <div
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: "6px",
-                      background: "var(--bg-main)",
-                      fontSize: "12px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <div>
-                      <span style={{ color: "var(--text-secondary)" }}>
-                        Origem:{" "}
-                      </span>
-                      <strong>
-                        {selectedNode.parentBranch
-                          ? `"${selectedNode.parentBranch}"`
-                          : "Principal"}
-                      </strong>
-                    </div>
-                    <div>
-                      <span style={{ color: "var(--text-secondary)" }}>
-                        Destino:{" "}
-                      </span>
-                      <strong>
-                        {selectedNode.isDefault
-                          ? "Versão em vigor"
-                          : selectedNode.isMerged
-                            ? "Unida de volta à Principal"
-                            : "Galho ativo e independente"}
-                      </strong>
-                    </div>
-                    {selectedNode.isMerged && (
-                      <div>
-                        <span style={{ color: "var(--text-secondary)" }}>
-                          Data do merge:{" "}
-                        </span>
-                        <strong style={{ color: "#16a34a" }}>
-                          {selectedNode.mergedDate
-                            ? new Date(selectedNode.mergedDate).toLocaleString(
-                                "pt-BR",
-                                {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                },
-                              )
-                            : "Incorporada à Principal"}
-                        </strong>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* BOTÃO EXPLÍCITO: SALVAR EDIÇÕES NO DISCO ATUAL */}
-                  {selectedNode.isCurrent && (
+                  return (
                     <div
                       style={{
-                        padding: "12px",
-                        borderRadius: "6px",
-                        border: "1px solid var(--border-color)",
-                        background: "var(--bg-main)",
                         display: "flex",
                         flexDirection: "column",
-                        gap: "8px",
+                        gap: "14px",
                       }}
                     >
                       <div
                         style={{
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "var(--text-heading)",
+                          display: "flex",
+                          gap: "6px",
+                          alignItems: "center",
                         }}
                       >
-                        Modificações no Disco Atual
+                        <Badge variant="primary" size="sm">
+                          Marco Histórico
+                        </Badge>
+                        {isLatestMainCommit && (
+                          <Badge variant="success" size="sm">
+                            Ponta da Linha Principal
+                          </Badge>
+                        )}
                       </div>
 
-                      {selectedNode.uncommittedFiles &&
-                      selectedNode.uncommittedFiles.length > 0 ? (
-                        <form
-                          onSubmit={handleSaveLocalCommit}
+                      {/* BLOCO DE AÇÃO PRINCIPAL / RECOMENDADA */}
+                      {isLatestMainCommit ? (
+                        <div
+                          style={{
+                            padding: "12px",
+                            borderRadius: "8px",
+                            border: "1px solid #bfdbfe",
+                            background: "#eff6ff",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <span style={{ fontSize: "14px" }}>📌</span>
+                            <strong
+                              style={{ fontSize: "12px", color: "#1e40af" }}
+                            >
+                              Último marco da Linha Principal
+                            </strong>
+                          </div>
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "11px",
+                              color: "#1e3a8a",
+                              lineHeight: "1.4",
+                            }}
+                          >
+                            Você selecionou o ponto mais recente da Linha
+                            Principal. Alterne diretamente para a branch para
+                            continuar trabalhando com o histórico conectado.
+                          </p>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={isSwitching}
+                            onClick={() => {
+                              const defaultNode = nodes.find(
+                                (n) => n.isDefault,
+                              );
+                              if (defaultNode) handleSwitchRequest(defaultNode);
+                              else if (versionGraph?.defaultBranch) {
+                                handleSwitchRequest({
+                                  name: versionGraph.defaultBranch,
+                                  isDefault: true,
+                                } as VersionNode);
+                              }
+                            }}
+                            style={{
+                              width: "100%",
+                              fontWeight: 700,
+                              background: "#2563eb",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <span>⤺</span>
+                            <span>Alternar para a Linha Principal</span>
+                          </Button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSwitchToCommit(selectedCommit)}
+                            disabled={isSwitching}
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              color: "#64748b",
+                              fontSize: "11px",
+                              cursor: "pointer",
+                              textDecoration: "underline",
+                              padding: "2px",
+                              textAlign: "center",
+                            }}
+                          >
+                            Ou alternar apenas para este marco isolado (HEAD
+                            desacoplado)
+                          </button>
+                        </div>
+                      ) : (
+                        <div
                           style={{
                             display: "flex",
                             flexDirection: "column",
                             gap: "8px",
                           }}
                         >
-                          <span style={{ fontSize: "11px", color: "#d97706" }}>
-                            {selectedNode.uncommittedFiles.length} arquivo(s)
-                            modificado(s) não salvos:
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={isSwitching}
+                            onClick={() => handleSwitchToCommit(selectedCommit)}
+                            style={{ width: "100%", fontWeight: 600 }}
+                          >
+                            {isSwitching
+                              ? "Alternando..."
+                              : `Alternar para este marco (${selectedCommit.shortHash || selectedCommit.hash.slice(0, 7)})`}
+                          </Button>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-secondary)",
+                              lineHeight: "1.3",
+                            }}
+                          >
+                            ℹ️ Alternar para um marco isolado permite
+                            inspecionar o histórico com HEAD desacoplado.
+                          </span>
+
+                          {/* ATALHO SEGURO: VOLTAR PARA A PRINCIPAL */}
+                          {versionGraph?.defaultBranch && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isSwitching}
+                              onClick={() => {
+                                const defaultNode = nodes.find(
+                                  (n) => n.isDefault,
+                                );
+                                if (defaultNode)
+                                  handleSwitchRequest(defaultNode);
+                                else if (versionGraph.defaultBranch) {
+                                  handleSwitchRequest({
+                                    name: versionGraph.defaultBranch,
+                                    isDefault: true,
+                                  } as VersionNode);
+                                }
+                              }}
+                              style={{
+                                width: "100%",
+                                fontWeight: 600,
+                                borderColor: "#bfdbfe",
+                                color: "#2563eb",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "6px",
+                              }}
+                            >
+                              <span>⤺</span>
+                              <span>Voltar para a Linha Principal</span>
+                            </Button>
+                          )}
+
+                          {/* Botão de retorno à visualização completa da versão */}
+                          {selectedNode && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedCommit(null)}
+                              style={{
+                                width: "100%",
+                                fontSize: "11px",
+                                color: "var(--text-secondary)",
+                              }}
+                            >
+                              ← Ver todos os marcos de{" "}
+                              {selectedNode.displayName || selectedNode.name}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* DETALHES DO MARCO */}
+                      <div
+                        style={{
+                          padding: "12px",
+                          borderRadius: "8px",
+                          background: "var(--bg-main)",
+                          border: "1px solid var(--border-color)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "10px",
+                        }}
+                      >
+                        <div>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-secondary)",
+                              fontWeight: 600,
+                              display: "block",
+                              marginBottom: "4px",
+                            }}
+                          >
+                            Mensagem:
                           </span>
                           <div
                             style={{
-                              maxHeight: "70px",
-                              overflowY: "auto",
-                              fontSize: "11px",
-                              fontFamily: "monospace",
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              color: "var(--text-heading)",
+                              lineHeight: "1.4",
                             }}
                           >
-                            {selectedNode.uncommittedFiles.map((f, i) => (
-                              <div
-                                key={i}
-                                style={{
-                                  padding: "1px 0",
-                                  color: "var(--text-secondary)",
-                                }}
-                              >
-                                • {f.path}
-                              </div>
-                            ))}
+                            {cleanCommitTitle(selectedCommit.message)}
                           </div>
+                        </div>
 
-                          <Input
-                            type="text"
-                            placeholder="Mensagem do marco (ex: ajustes de texto)"
-                            value={commitMessage}
-                            onChange={(e) => setCommitMessage(e.target.value)}
-                            style={{ height: "30px", fontSize: "12px" }}
-                          />
-
-                          <Button
-                            type="submit"
-                            variant="primary"
-                            size="sm"
-                            disabled={!commitMessage.trim() || isCommitting}
-                          >
-                            {isCommitting
-                              ? "Salvando..."
-                              : "Salvar Marco no Disco"}
-                          </Button>
-                        </form>
-                      ) : (
-                        <span
+                        <div
                           style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "8px",
                             fontSize: "11px",
-                            color: "var(--text-secondary)",
                           }}
                         >
-                          Disco limpo. Nenhuma alteração pendente.
-                        </span>
-                      )}
-                    </div>
-                  )}
+                          <div>
+                            <span style={{ color: "var(--text-secondary)" }}>
+                              Autor:{" "}
+                            </span>
+                            <strong style={{ color: "var(--text-primary)" }}>
+                              {selectedCommit.author}
+                            </strong>
+                          </div>
+                          <div>
+                            <span style={{ color: "var(--text-secondary)" }}>
+                              Hash:{" "}
+                            </span>
+                            <code
+                              style={{
+                                fontSize: "11px",
+                                background: "rgba(0,0,0,0.05)",
+                                padding: "1px 4px",
+                                borderRadius: "3px",
+                              }}
+                            >
+                              {selectedCommit.shortHash ||
+                                selectedCommit.hash.slice(0, 7)}
+                            </code>
+                          </div>
+                        </div>
 
-                  {/* LISTA DE MARCOS / COMMITS DA VERSÃO ("Clica commits no detalhe") */}
-                  {selectedNode.commits && selectedNode.commits.length > 0 && (
-                    <div
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: "6px",
-                        background: "var(--bg-main)",
-                        border: "1px solid var(--border-color)",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "8px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            color: "var(--text-heading)",
-                          }}
-                        >
-                          Marcos desta Versão ({selectedNode.commits.length})
-                        </span>
+                        <div>
+                          <span style={{ color: "var(--text-secondary)" }}>
+                            Data:{" "}
+                          </span>
+                          <strong
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-primary)",
+                            }}
+                          >
+                            {selectedCommit.date
+                              ? new Date(selectedCommit.date).toLocaleString(
+                                  "pt-BR",
+                                  {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )
+                              : "Data não disponível"}
+                          </strong>
+                        </div>
                       </div>
+
+                      {/* BLOCO DESTACADO: RAMIFICAR A PARTIR DESTE MARCO */}
                       <div
                         style={{
+                          padding: "12px",
+                          borderRadius: "8px",
+                          border: "1px solid rgba(37, 99, 235, 0.25)",
+                          background: "rgba(37, 99, 235, 0.04)",
                           display: "flex",
                           flexDirection: "column",
-                          gap: "6px",
-                          maxHeight: "160px",
-                          overflowY: "auto",
+                          gap: "8px",
                         }}
                       >
-                        {selectedNode.commits.map((c) => (
-                          <div
-                            key={c.hash}
-                            onClick={() => handleSelectCommit(c)}
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "baseline",
+                          }}
+                        >
+                          <span
                             style={{
-                              padding: "6px 8px",
-                              borderRadius: "4px",
-                              background: "var(--bg-surface)",
-                              border: "1px solid var(--border-color)",
-                              cursor: "pointer",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              color: "var(--text-heading)",
+                            }}
+                          >
+                            Ramificar a partir deste marco
+                          </span>
+                        </div>
+
+                        {!isCreatingNew ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setIsCreatingNew(true);
+                              setNewVersionName(
+                                `versao-${selectedCommit.hash.slice(0, 7)}`,
+                              );
+                            }}
+                            style={{ width: "100%", fontWeight: 600 }}
+                          >
+                            + Criar Versão a Partir Deste Marco
+                          </Button>
+                        ) : (
+                          <form
+                            onSubmit={handleCreateNewVersionFromCommit}
+                            style={{
                               display: "flex",
                               flexDirection: "column",
-                              gap: "2px",
-                              transition: "all 0.15s ease",
+                              gap: "8px",
+                              marginTop: "4px",
                             }}
-                            onMouseEnter={(e) =>
-                              (e.currentTarget.style.borderColor = "#2563eb")
-                            }
-                            onMouseLeave={(e) =>
-                              (e.currentTarget.style.borderColor =
-                                "var(--border-color)")
-                            }
                           >
-                            <div
+                            <Input
+                              type="text"
+                              placeholder="Nome da nova versão..."
+                              value={newVersionName}
+                              onChange={(e) =>
+                                setNewVersionName(e.target.value)
+                              }
+                              style={{
+                                fontSize: "12px",
+                                height: "30px",
+                                width: "100%",
+                              }}
+                              autoFocus
+                            />
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <Button
+                                type="submit"
+                                variant="primary"
+                                size="sm"
+                                disabled={!newVersionName.trim() || isSwitching}
+                                style={{ flex: 1 }}
+                              >
+                                {isSwitching ? "Criando..." : "Criar versão"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setIsCreatingNew(false);
+                                  setNewVersionName("");
+                                }}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+
+                      {/* LISTA COMPLETA DOS MARCOS DA MESMA VERSÃO PARA NAVEGAÇÃO DIRETA */}
+                      {selectedNode?.commits &&
+                        selectedNode.commits.length > 1 && (
+                          <div
+                            style={{
+                              padding: "10px 12px",
+                              borderRadius: "6px",
+                              background: "var(--bg-main)",
+                              border: "1px solid var(--border-color)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                            }}
+                          >
+                            <span
                               style={{
                                 fontSize: "11px",
                                 fontWeight: 600,
                                 color: "var(--text-heading)",
                               }}
                             >
-                              {cleanCommitTitle(c.message)}
-                            </div>
+                              Outros marcos desta versão (
+                              {selectedNode.commits.length})
+                            </span>
                             <div
                               style={{
-                                fontSize: "10px",
-                                color: "var(--text-secondary)",
                                 display: "flex",
-                                justifyContent: "space-between",
+                                flexDirection: "column",
+                                gap: "4px",
+                                maxHeight: "140px",
+                                overflowY: "auto",
                               }}
                             >
-                              <span>{c.author}</span>
-                              <span>{c.shortHash}</span>
+                              {selectedNode.commits.map((c) => {
+                                const isCurrentSelected =
+                                  c.hash === selectedCommit.hash;
+                                return (
+                                  <div
+                                    key={c.hash}
+                                    onClick={() => setSelectedCommit(c)}
+                                    style={{
+                                      padding: "5px 8px",
+                                      borderRadius: "4px",
+                                      background: isCurrentSelected
+                                        ? "#eff6ff"
+                                        : "var(--bg-surface)",
+                                      border: isCurrentSelected
+                                        ? "1px solid #2563eb"
+                                        : "1px solid var(--border-color)",
+                                      cursor: "pointer",
+                                      fontSize: "11px",
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        fontWeight: isCurrentSelected
+                                          ? 600
+                                          : 400,
+                                        color: isCurrentSelected
+                                          ? "#1e40af"
+                                          : "var(--text-primary)",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        maxWidth: "180px",
+                                      }}
+                                    >
+                                      {cleanCommitTitle(c.message)}
+                                    </span>
+                                    <span
+                                      style={{
+                                        color: "var(--text-secondary)",
+                                        fontSize: "10px",
+                                      }}
+                                    >
+                                      {c.shortHash}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        )}
                     </div>
-                  )}
-
-                  {/* ÚLTIMO MARCO */}
-                  {selectedNode.lastCommit &&
-                    (!selectedNode.commits ||
-                      selectedNode.commits.length === 0) && (
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        <strong>Último marco:</strong>{" "}
-                        {cleanCommitTitle(selectedNode.lastCommit.message)} (
-                        {selectedNode.lastCommit.author})
-                      </div>
-                    )}
-
-                  {/* AÇÕES DA VERSÃO */}
+                  );
+                })()
+              : selectedNode && (
                   <div
                     style={{
                       display: "flex",
                       flexDirection: "column",
-                      gap: "10px",
-                      marginTop: "auto",
+                      gap: "14px",
                     }}
                   >
-                    {!selectedNode.isCurrent ? (
-                      <Button
-                        variant="primary"
-                        size="md"
-                        disabled={isSwitching}
-                        onClick={() => handleSwitchRequest(selectedNode)}
-                      >
-                        {isSwitching
-                          ? "Alternando..."
-                          : "Alternar para esta versão"}
-                      </Button>
-                    ) : (
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: "var(--text-secondary)",
-                          textAlign: "center",
-                        }}
-                      >
-                        Versão ativa no momento.
-                      </div>
-                    )}
+                    {/* Badges de Situação */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "6px",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                      }}
+                    >
+                      {selectedNode.isCurrent && (
+                        <Badge variant="primary" size="sm">
+                          ● Ativa no Workspace
+                        </Badge>
+                      )}
+                      {selectedNode.isDefault && (
+                        <Badge variant="outline" size="sm">
+                          Versão Oficial
+                        </Badge>
+                      )}
+                      {selectedNode.isMerged && (
+                        <Badge variant="success" size="sm">
+                          Integrada à Versão Oficial
+                        </Badge>
+                      )}
+                      {!selectedNode.isDefault &&
+                        !selectedNode.isMerged &&
+                        selectedNode.type === "proposal" && (
+                          <Badge variant="warning" size="sm">
+                            Proposta em Revisão
+                          </Badge>
+                        )}
+                      {!selectedNode.isDefault &&
+                        !selectedNode.isMerged &&
+                        selectedNode.type === "draft" && (
+                          <Badge variant="outline" size="sm">
+                            Rascunho Local
+                          </Badge>
+                        )}
+                    </div>
 
-                    {/* ATALHO SEGURO: VOLTAR PARA A PRINCIPAL */}
-                    {versionGraph?.defaultBranch &&
-                      selectedNode.name !== versionGraph.defaultBranch && (
+                    {/* AÇÕES PRINCIPAIS (NO TOPO DO PAINEL) */}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                      }}
+                    >
+                      {!selectedNode.isCurrent ? (
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant="primary"
+                          size="md"
                           disabled={isSwitching}
-                          onClick={() => {
-                            const defaultNode = nodes.find((n) => n.isDefault);
-                            if (defaultNode) handleSwitchRequest(defaultNode);
-                            else
-                              handleSwitchRequest({
-                                name: versionGraph.defaultBranch,
-                                isDefault: true,
-                              } as VersionNode);
+                          onClick={() => handleSwitchRequest(selectedNode)}
+                          style={{
+                            width: "100%",
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
                           }}
-                          style={{ width: "100%", fontWeight: 600 }}
                         >
-                          ← Voltar para a Linha Principal (
-                          {versionGraph.defaultBranch})
+                          <span>
+                            Alternar para{" "}
+                            {selectedNode.isDefault
+                              ? "a Linha Principal"
+                              : selectedNode.displayName || selectedNode.name}
+                          </span>
                         </Button>
+                      ) : (
+                        <div
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: "6px",
+                            background: "rgba(16, 185, 129, 0.08)",
+                            border: "1px solid rgba(16, 185, 129, 0.25)",
+                            color: "#059669",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <span style={{ fontSize: "14px" }}>●</span>
+                          <span>
+                            Esta versão está ativa no seu workspace agora.
+                          </span>
+                        </div>
                       )}
 
-                    {/* RAMIFICAR A PARTIR DESTA VERSÃO (DESTACADO) */}
+                      {/* ATALHO SEGURO: VOLTAR PARA A PRINCIPAL */}
+                      {versionGraph?.defaultBranch &&
+                        selectedNode.name !== versionGraph.defaultBranch && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isSwitching}
+                            onClick={() => {
+                              const defaultNode = nodes.find(
+                                (n) => n.isDefault,
+                              );
+                              if (defaultNode) handleSwitchRequest(defaultNode);
+                              else
+                                handleSwitchRequest({
+                                  name: versionGraph.defaultBranch,
+                                  isDefault: true,
+                                } as VersionNode);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontWeight: 600,
+                              borderColor: "#bfdbfe",
+                              color: "#2563eb",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <span>⤺</span>
+                            <span>Voltar para a Linha Principal</span>
+                          </Button>
+                        )}
+                    </div>
+
+                    {/* Informações da Versão */}
                     <div
                       style={{
                         padding: "12px",
                         borderRadius: "8px",
-                        border: "1px solid rgba(37, 99, 235, 0.25)",
-                        background: "rgba(37, 99, 235, 0.04)",
+                        background: "var(--bg-main)",
+                        border: "1px solid var(--border-color)",
+                        fontSize: "12px",
                         display: "flex",
                         flexDirection: "column",
                         gap: "8px",
@@ -1243,125 +1359,455 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
-                          alignItems: "baseline",
                         }}
                       >
-                        <span
+                        <span style={{ color: "var(--text-secondary)" }}>
+                          Base de Origem:{" "}
+                        </span>
+                        <strong>
+                          {selectedNode.isDefault
+                            ? "Raiz do repositório"
+                            : selectedNode.parentDisplayName ||
+                              selectedNode.parentBranch ||
+                              `Versão Oficial (${versionGraph?.defaultBranch || "main"})`}
+                        </strong>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span style={{ color: "var(--text-secondary)" }}>
+                          Situação:{" "}
+                        </span>
+                        <strong>
+                          {selectedNode.isDefault
+                            ? "Versão Oficial do projeto"
+                            : selectedNode.isMerged
+                              ? "Integrada à Versão Oficial"
+                              : selectedNode.type === "proposal"
+                                ? "Proposta em revisão"
+                                : "Rascunho local independente"}
+                        </strong>
+                      </div>
+                      {selectedNode.isMerged && (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <span style={{ color: "var(--text-secondary)" }}>
+                            Data de integração:{" "}
+                          </span>
+                          <strong style={{ color: "#16a34a" }}>
+                            {selectedNode.mergedDate
+                              ? new Date(
+                                  selectedNode.mergedDate,
+                                ).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "Integrada à Versão Oficial"}
+                          </strong>
+                        </div>
+                      )}
+                      {selectedNode.lastCommit && (
+                        <div
+                          style={{
+                            borderTop: "1px solid var(--border-color)",
+                            paddingTop: "8px",
+                            marginTop: "2px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: "var(--text-secondary)",
+                              display: "block",
+                              marginBottom: "2px",
+                            }}
+                          >
+                            Último marco:
+                          </span>
+                          <div
+                            style={{
+                              fontWeight: 600,
+                              color: "var(--text-heading)",
+                              lineHeight: "1.3",
+                            }}
+                          >
+                            {cleanCommitTitle(selectedNode.lastCommit.message)}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-secondary)",
+                              marginTop: "2px",
+                            }}
+                          >
+                            por {selectedNode.lastCommit.author}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* BOTÃO EXPLÍCITO: SALVAR EDIÇÕES NO DISCO ATUAL */}
+                    {selectedNode.isCurrent && (
+                      <div
+                        style={{
+                          padding: "12px",
+                          borderRadius: "6px",
+                          border: "1px solid var(--border-color)",
+                          background: "var(--bg-main)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                        }}
+                      >
+                        <div
                           style={{
                             fontSize: "12px",
-                            fontWeight: 700,
+                            fontWeight: 600,
                             color: "var(--text-heading)",
                           }}
                         >
-                          Ramificar esta versão
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          Origem:{" "}
-                          <strong>
-                            {selectedNode.isDefault
-                              ? "Principal"
-                              : selectedNode.name}
-                          </strong>
-                        </span>
-                      </div>
+                          Modificações no Disco Atual
+                        </div>
 
-                      {!isCreatingNew ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setIsCreatingNew(true);
-                            setNewVersionName(
-                              `${selectedNode.isDefault ? "nova-versao" : `${selectedNode.name}-derivada`}`,
-                            );
-                          }}
-                          style={{
-                            width: "100%",
-                            fontWeight: 600,
-                            borderColor: "#2563eb",
-                            color: "#2563eb",
-                          }}
-                        >
-                          + Criar Galho a Partir Desta
-                        </Button>
-                      ) : (
-                        <form
-                          onSubmit={handleCreateNewVersion}
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "8px",
-                            marginTop: "4px",
-                          }}
-                        >
-                          <Input
-                            type="text"
-                            placeholder="Nome do novo galho..."
-                            value={newVersionName}
-                            onChange={(e) => setNewVersionName(e.target.value)}
+                        {selectedNode.uncommittedFiles &&
+                        selectedNode.uncommittedFiles.length > 0 ? (
+                          <form
+                            onSubmit={handleSaveLocalCommit}
                             style={{
-                              fontSize: "12px",
-                              height: "30px",
-                              width: "100%",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "8px",
                             }}
-                            autoFocus
-                          />
-                          <div style={{ display: "flex", gap: "6px" }}>
+                          >
+                            <span
+                              style={{ fontSize: "11px", color: "#d97706" }}
+                            >
+                              {selectedNode.uncommittedFiles.length} arquivo(s)
+                              modificado(s) não salvos:
+                            </span>
+                            <div
+                              style={{
+                                maxHeight: "70px",
+                                overflowY: "auto",
+                                fontSize: "11px",
+                                fontFamily: "monospace",
+                              }}
+                            >
+                              {selectedNode.uncommittedFiles.map((f, i) => (
+                                <div
+                                  key={i}
+                                  style={{
+                                    padding: "1px 0",
+                                    color: "var(--text-secondary)",
+                                  }}
+                                >
+                                  • {f.path}
+                                </div>
+                              ))}
+                            </div>
+
+                            <Input
+                              type="text"
+                              placeholder="Mensagem do marco (ex: ajustes de texto)"
+                              value={commitMessage}
+                              onChange={(e) => setCommitMessage(e.target.value)}
+                              style={{ height: "30px", fontSize: "12px" }}
+                            />
+
                             <Button
                               type="submit"
                               variant="primary"
                               size="sm"
-                              disabled={!newVersionName.trim() || isSwitching}
-                              style={{ flex: 1 }}
+                              disabled={!commitMessage.trim() || isCommitting}
                             >
-                              {isSwitching ? "Criando..." : "Criar galho"}
+                              {isCommitting
+                                ? "Salvando..."
+                                : "Salvar Marco no Disco"}
                             </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setIsCreatingNew(false);
-                                setNewVersionName("");
+                          </form>
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-secondary)",
+                            }}
+                          >
+                            Disco limpo. Nenhuma alteração pendente.
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* LISTA DE MARCOS / COMMITS DA VERSÃO ("Clica commits no detalhe") */}
+                    {selectedNode.commits &&
+                      selectedNode.commits.length > 0 && (
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: "6px",
+                            background: "var(--bg-main)",
+                            border: "1px solid var(--border-color)",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                color: "var(--text-heading)",
                               }}
                             >
-                              Cancelar
-                            </Button>
+                              Marcos desta Versão ({selectedNode.commits.length}
+                              )
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                color: "#2563eb",
+                                fontWeight: 500,
+                              }}
+                            >
+                              Clique para inspecionar / ramificar
+                            </span>
                           </div>
-                        </form>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px",
+                              maxHeight: "220px",
+                              overflowY: "auto",
+                            }}
+                          >
+                            {selectedNode.commits.map((c) => (
+                              <div
+                                key={c.hash}
+                                onClick={() => handleSelectCommit(c)}
+                                style={{
+                                  padding: "6px 8px",
+                                  borderRadius: "4px",
+                                  background: "var(--bg-surface)",
+                                  border: "1px solid var(--border-color)",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "2px",
+                                  transition: "all 0.15s ease",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.borderColor =
+                                    "#2563eb")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.borderColor =
+                                    "var(--border-color)")
+                                }
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    color: "var(--text-heading)",
+                                  }}
+                                >
+                                  {cleanCommitTitle(c.message)}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "10px",
+                                    color: "var(--text-secondary)",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                  }}
+                                >
+                                  <span>{c.author}</span>
+                                  <span>{c.shortHash}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* ÚLTIMO MARCO */}
+                    {selectedNode.lastCommit &&
+                      (!selectedNode.commits ||
+                        selectedNode.commits.length === 0) && (
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          <strong>Último marco:</strong>{" "}
+                          {cleanCommitTitle(selectedNode.lastCommit.message)} (
+                          {selectedNode.lastCommit.author})
+                        </div>
+                      )}
+
+                    {/* AÇÕES DA VERSÃO */}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                        marginTop: "auto",
+                      }}
+                    >
+                      {/* RAMIFICAR A PARTIR DESTA VERSÃO (DESTACADO) */}
+                      <div
+                        style={{
+                          padding: "12px",
+                          borderRadius: "8px",
+                          border: "1px solid rgba(37, 99, 235, 0.25)",
+                          background: "rgba(37, 99, 235, 0.04)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "baseline",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              color: "var(--text-heading)",
+                            }}
+                          >
+                            Ramificar esta versão
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              color: "var(--text-secondary)",
+                            }}
+                          >
+                            Origem:{" "}
+                            <strong>
+                              {selectedNode.isDefault
+                                ? "Principal"
+                                : selectedNode.name}
+                            </strong>
+                          </span>
+                        </div>
+
+                        {!isCreatingNew ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setIsCreatingNew(true);
+                              setNewVersionName(
+                                `${selectedNode.isDefault ? "nova-versao" : `${selectedNode.name}-derivada`}`,
+                              );
+                            }}
+                            style={{
+                              width: "100%",
+                              fontWeight: 600,
+                              borderColor: "#2563eb",
+                              color: "#2563eb",
+                            }}
+                          >
+                            + Criar Versão a Partir Desta
+                          </Button>
+                        ) : (
+                          <form
+                            onSubmit={handleCreateNewVersion}
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "8px",
+                              marginTop: "4px",
+                            }}
+                          >
+                            <Input
+                              type="text"
+                              placeholder="Nome da nova versão..."
+                              value={newVersionName}
+                              onChange={(e) =>
+                                setNewVersionName(e.target.value)
+                              }
+                              style={{
+                                fontSize: "12px",
+                                height: "30px",
+                                width: "100%",
+                              }}
+                              autoFocus
+                            />
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <Button
+                                type="submit"
+                                variant="primary"
+                                size="sm"
+                                disabled={!newVersionName.trim() || isSwitching}
+                                style={{ flex: 1 }}
+                              >
+                                {isSwitching ? "Criando..." : "Criar versão"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setIsCreatingNew(false);
+                                  setNewVersionName("");
+                                }}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+
+                      {selectedNode.proposal && onNavigateToProposal && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            onNavigateToProposal(selectedNode.proposal!.id)
+                          }
+                        >
+                          Ver Proposta Completa
+                        </Button>
+                      )}
+
+                      {!selectedNode.isDefault && onOpenDiffModal && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onOpenDiffModal(selectedNode.name)}
+                        >
+                          Comparar com a Versão Oficial
+                        </Button>
                       )}
                     </div>
-
-                    {selectedNode.proposal && onNavigateToProposal && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          onNavigateToProposal(selectedNode.proposal!.id)
-                        }
-                      >
-                        Ver Proposta Completa
-                      </Button>
-                    )}
-
-                    {!selectedNode.isDefault && onOpenDiffModal && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onOpenDiffModal(selectedNode.name)}
-                      >
-                        Comparar com a Principal
-                      </Button>
-                    )}
                   </div>
-                </>
-              )
-            )}
+                )}
           </div>
         )}
       </div>
@@ -1377,9 +1823,14 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
         targetBranch={
           targetCommitToSwitch
             ? `marco ${targetCommitToSwitch.shortHash || targetCommitToSwitch.hash.slice(0, 7)}`
-            : targetNodeToSwitch?.name || ""
+            : targetNodeToSwitch?.displayName || targetNodeToSwitch?.name || ""
         }
-        currentBranch={versionGraph?.currentBranch || "main"}
+        currentBranch={
+          nodes.find((n) => n.name === versionGraph?.currentBranch)
+            ?.displayName ||
+          versionGraph?.currentBranch ||
+          "Versão Oficial"
+        }
         uncommittedFiles={uncommittedFiles}
         onConfirmCommit={handleConfirmCommitAndSwitch}
         onConfirmStash={handleConfirmStash}

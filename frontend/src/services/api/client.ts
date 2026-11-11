@@ -21,6 +21,7 @@ interface DesktopBridge {
   encrypt?: (plainText: string) => Promise<string>;
   decrypt?: (encryptedBase64: string) => Promise<string>;
   checkForUpdates?: () => Promise<{ status: string; updateInfo?: unknown; error?: string }>;
+  getUpdateStatus?: () => Promise<UpdaterStatusEvent | null>;
   quitAndInstallUpdate?: () => Promise<void>;
   openExternal?: (url: string) => Promise<void>;
   onUpdaterStatus?: (callback: (data: UpdaterStatusEvent) => void) => () => void;

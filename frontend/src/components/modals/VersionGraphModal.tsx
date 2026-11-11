@@ -213,7 +213,7 @@ export const VersionGraphModal: React.FC<VersionGraphModalProps> = ({
         onClose={onClose}
         size="lg"
         title="Versões do Repositório"
-        subtitle={`Gerencie a versão Principal, rascunhos e propostas em análise para o projeto ${activeRepo?.name || ""}.`}
+        subtitle={`Gerencie a Versão Oficial, rascunhos e propostas em análise para o projeto ${activeRepo?.name || ""}.`}
         footer={
           <div style={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
             <Button variant="outline" size="sm" onClick={onClose}>
@@ -327,8 +327,12 @@ export const VersionGraphModal: React.FC<VersionGraphModalProps> = ({
       <SafeSwitchModal
         isOpen={safeModalOpen}
         onClose={() => setSafeModalOpen(false)}
-        targetBranch={targetNodeToSwitch?.name || ""}
-        currentBranch={versionGraph?.currentBranch || "main"}
+        targetBranch={targetNodeToSwitch?.displayName || targetNodeToSwitch?.name || ""}
+        currentBranch={
+          nodes.find((n) => n.name === versionGraph?.currentBranch)?.displayName ||
+          versionGraph?.currentBranch ||
+          "Versão Oficial"
+        }
         uncommittedFiles={uncommittedFiles}
         onConfirmStash={handleConfirmStash}
         onConfirmDiscard={handleConfirmDiscard}
