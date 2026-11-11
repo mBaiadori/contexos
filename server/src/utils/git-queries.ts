@@ -201,9 +201,10 @@ export async function getGitLog(
 
 export async function getGitBranches(
   repoDir: string,
-): Promise<{ current: string; branches: string[] }> {
+): Promise<{ current: string; branches: string[]; localBranches?: string[] }> {
   const isRepo = await isGitRepo(repoDir);
-  if (!isRepo) return { current: "main", branches: ["main"] };
+  if (!isRepo)
+    return { current: "main", branches: ["main"], localBranches: ["main"] };
 
   // Identifica a branch atual de forma explícita
   let current = "main";
@@ -216,16 +217,24 @@ export async function getGitBranches(
 
   // Lista todas as branches (locais e remotas do GitHub)
   const res = await executeGit(["branch", "-a"], repoDir);
-  if (!res.success) return { current, branches: [current] };
+  if (!res.success)
+    return { current, branches: [current], localBranches: [current] };
 
   const lines = res.stdout.split("\n").filter(Boolean);
   const branchSet = new Set<string>();
-  if (current) branchSet.add(current);
+  const localSet = new Set<string>();
+  if (current) {
+    branchSet.add(current);
+    localSet.add(current);
+  }
 
   for (const rawLine of lines) {
+    const isCurrent = rawLine.startsWith("*");
     const cleanLine = rawLine.replace("*", "").trim();
     if (!cleanLine || cleanLine.includes("->")) continue; // Ignora ponteiros HEAD simbólicos
 
+    const isRemote =
+      cleanLine.startsWith("remotes/") || cleanLine.startsWith("origin/");
     let name = cleanLine;
     if (name.startsWith("remotes/origin/")) {
       name = name.replace("remotes/origin/", "");
@@ -240,11 +249,19 @@ export async function getGitBranches(
 
     if (name && name !== "HEAD") {
       branchSet.add(name);
+      if (!isRemote || isCurrent) {
+        localSet.add(name);
+      }
     }
   }
 
   const branches = Array.from(branchSet);
-  return { current, branches: branches.length > 0 ? branches : ["main"] };
+  const localBranches = Array.from(localSet);
+  return {
+    current,
+    branches: branches.length > 0 ? branches : ["main"],
+    localBranches: localBranches.length > 0 ? localBranches : ["main"],
+  };
 }
 
 export interface WhatsNewItem {

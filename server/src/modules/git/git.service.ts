@@ -444,14 +444,25 @@ export class GitService {
       }
     } catch {}
 
-    // Inclui branches de PRs abertos ou ativos na lista de branches a serem mapeadas
-    const allKnownBranches = new Set(branchesData.branches || [currentBranch]);
+    // Filtro inteligente de relevância:
+    // 1. Branch principal (default) e branch ativa no momento (workspace)
+    // 2. Todas as branches locais (rascunhos e ramificações que o usuário criou/trabalhou)
+    // 3. Branches vinculadas a PRs ABERTOS ou EM REVISÃO no GitHub
+    // Evita carregar dezenas de branches remotas antigas já mergeadas que poluiriam o grafo
+    const relevantBranches = new Set<string>();
+    relevantBranches.add(defaultBranch);
+    if (currentBranch) relevantBranches.add(currentBranch);
+
+    (branchesData.localBranches || []).forEach((b) => relevantBranches.add(b));
+
     repoPRs.forEach((p) => {
-      if (p.branch && p.status !== "DELETED") {
-        allKnownBranches.add(p.branch);
+      const st = (p.status || "").toUpperCase();
+      if (p.branch && (st === "OPEN" || st === "IN_REVIEW" || st === "DRAFT")) {
+        relevantBranches.add(p.branch);
       }
     });
-    const branchNames = Array.from(allKnownBranches);
+
+    const branchNames = Array.from(relevantBranches);
 
     // Obter histórico de commits da branch Principal para a timeline completa
     let mainCommits: Array<{
@@ -641,6 +652,28 @@ export class GitService {
       }
     };
 
+    // Cache de resolução de referências (local vs remote origin/*)
+    const refResolutionCache = new Map<string, string>();
+    const resolveRef = async (name: string): Promise<string> => {
+      if (!name || name === defaultBranch) return name;
+      if (refResolutionCache.has(name)) return refResolutionCache.get(name)!;
+      try {
+        const localChk = await executeGit(["rev-parse", "--verify", `refs/heads/${name}`], repoDir);
+        if (localChk.success) {
+          refResolutionCache.set(name, name);
+          return name;
+        }
+        const remoteChk = await executeGit(["rev-parse", "--verify", `refs/remotes/origin/${name}`], repoDir);
+        if (remoteChk.success) {
+          const remoteRef = `origin/${name}`;
+          refResolutionCache.set(name, remoteRef);
+          return remoteRef;
+        }
+      } catch {}
+      refResolutionCache.set(name, name);
+      return name;
+    };
+
     // 4. Processamento Concorrente com Promise.all (elimina o gargalo sequencial)
     const rawNodes = await Promise.all(
       branchNames.map(async (rawName) => {
@@ -653,11 +686,12 @@ export class GitService {
 
         const isCurrent = branch === currentBranch;
         const isDefault = branch === defaultBranch;
+        const gitRef = await resolveRef(branch);
 
         let baseHash = "";
         let baseDate = "";
         if (!isDefault) {
-          baseHash = await getMergeBase(defaultBranch, branch);
+          baseHash = await getMergeBase(defaultBranch, gitRef);
           if (baseHash) {
             baseDate = await getCommitDate(baseHash);
           }
@@ -677,7 +711,7 @@ export class GitService {
         if (!lastCommit) {
           try {
             const logRes = await executeGit(
-              ["log", "-1", "--format=%H|%h|%an|%cI|%s", branch],
+              ["log", "-1", "--format=%H|%h|%an|%cI|%s", gitRef],
               repoDir,
             );
             if (logRes.success && logRes.stdout.trim()) {
@@ -753,7 +787,8 @@ export class GitService {
               .slice(0, 5);
 
             for (const other of candidateSample) {
-              const mbHash = await getMergeBase(other, branch);
+              const otherRef = await resolveRef(other);
+              const mbHash = await getMergeBase(otherRef, gitRef);
               if (mbHash && mbHash !== baseHash) {
                 const dStr = await getCommitDate(mbHash);
                 const ts = dStr ? new Date(dStr).getTime() : 0;
@@ -784,13 +819,14 @@ export class GitService {
             parentBranch && parentBranch !== defaultBranch
               ? parentBranch
               : defaultBranch;
+          const compareBaseRef = await resolveRef(compareBase);
           try {
             const countRes = await executeGit(
               [
                 "rev-list",
                 "--left-right",
                 "--count",
-                `${compareBase}...${branch}`,
+                `${compareBaseRef}...${gitRef}`,
               ],
               repoDir,
             );
@@ -804,10 +840,11 @@ export class GitService {
           // Obter o ponto exato de divergência entre a branch e a sua branch-mãe (ou defaultBranch)
           let forkPoint = "";
           if (parentBranch && parentBranch !== defaultBranch) {
-            forkPoint = await getMergeBase(parentBranch, branch);
+            const parentBranchRef = await resolveRef(parentBranch);
+            forkPoint = await getMergeBase(parentBranchRef, gitRef);
           }
           if (!forkPoint) {
-            forkPoint = baseHash || (await getMergeBase(defaultBranch, branch));
+            forkPoint = baseHash || (await getMergeBase(defaultBranch, gitRef));
           }
 
           // Atualiza baseHash e baseDate para refletir o ponto real de ramificação na árvore
@@ -819,11 +856,12 @@ export class GitService {
           // Buscar TODOS os commits pertencentes ESPECIFICAMENTE a esta branch desde a divergência
           let logCmd: string[] = [];
           if (forkPoint) {
-            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${forkPoint}..${branch}`];
+            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${forkPoint}..${gitRef}`];
           } else if (parentBranch && parentBranch !== defaultBranch) {
-            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${parentBranch}..${branch}`];
+            const parentBranchRef = await resolveRef(parentBranch);
+            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${parentBranchRef}..${gitRef}`];
           } else {
-            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${branch}`, "--not", `${defaultBranch}`];
+            logCmd = ["log", "-50", "--format=%H|%h|%an|%cI|%s", `${gitRef}`, "--not", `${defaultBranch}`];
           }
 
           try {
@@ -850,7 +888,7 @@ export class GitService {
           if (branchCommits.length === 0) {
             try {
               const fallbackRes = await executeGit(
-                ["log", "-30", "--format=%H|%h|%an|%cI|%s", branch],
+                ["log", "-30", "--format=%H|%h|%an|%cI|%s", gitRef],
                 repoDir,
               );
               if (fallbackRes.success && fallbackRes.stdout.trim()) {
