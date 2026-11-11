@@ -409,7 +409,6 @@ export class GitService {
 
     const branchesData = await getGitBranches(repoDir);
     const currentBranch = branchesData.current || defaultBranch;
-    const branchNames = branchesData.branches || [currentBranch];
 
     let currentStatusFiles: GitFileStatus[] = [];
     try {
@@ -438,7 +437,21 @@ export class GitService {
     let repoPRs: RepoPRItem[] = [];
     try {
       repoPRs = prsService.loadRepoPRs(repoName) || [];
+      // Se não houver PRs carregados em cache (ex: repositório recém-vinculado), sincroniza da API do GitHub
+      if (repoPRs.length === 0) {
+        await prsService.getPRs(repoName);
+        repoPRs = prsService.loadRepoPRs(repoName) || [];
+      }
     } catch {}
+
+    // Inclui branches de PRs abertos ou ativos na lista de branches a serem mapeadas
+    const allKnownBranches = new Set(branchesData.branches || [currentBranch]);
+    repoPRs.forEach((p) => {
+      if (p.branch && p.status !== "DELETED") {
+        allKnownBranches.add(p.branch);
+      }
+    });
+    const branchNames = Array.from(allKnownBranches);
 
     // Obter histórico de commits da branch Principal para a timeline completa
     let mainCommits: Array<{

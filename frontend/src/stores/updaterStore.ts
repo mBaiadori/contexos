@@ -90,11 +90,13 @@ export const useUpdaterStore = create<UpdaterStore>((set, get) => ({
     set({ isChecking: true });
     try {
       const res = await bridge.checkForUpdates();
-      if (res && (res as any).updateInfo) {
+      if (res && res.updateInfo) {
+        const info = res.updateInfo;
         set((prev) => ({
           updateInfo: {
             ...(prev.updateInfo || {}),
-            ...((res as any).updateInfo as UpdaterStatusEvent),
+            ...info,
+            status: info.status,
           },
         }));
       }
