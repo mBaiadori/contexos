@@ -801,8 +801,10 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
       allY.length > 0 ? Math.min(...allY) : trunkBaseY - 100;
     const SAFE_TOP = 40;
 
+    let effectiveTrunkBaseY = trunkBaseY;
     if (minCalculatedY < SAFE_TOP) {
       const deltaY = SAFE_TOP - minCalculatedY;
+      effectiveTrunkBaseY += deltaY;
       trunkCommits.forEach((c) => (c.y += deltaY));
       branches.forEach((b) => {
         b.cardY += deltaY;
@@ -824,8 +826,16 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
       });
     }
 
+    // Garante que effectiveTrunkBaseY fique sempre abaixo de todos os commits do tronco com folga
+    if (trunkCommits.length > 0) {
+      const oldestCommitY = trunkCommits[0].y;
+      if (effectiveTrunkBaseY <= oldestCommitY + 35) {
+        effectiveTrunkBaseY = oldestCommitY + 50;
+      }
+    }
+
     // Calcula a altura total efetiva com base em todos os cards e labels de commit
-    let maxY = trunkBaseY;
+    let maxY = effectiveTrunkBaseY;
     branches.forEach((b) => {
       let bBottom = b.cardY + b.cardHeight;
       if (b.forkCommitLabels && b.forkCommitLabels.length > 0) {
@@ -845,7 +855,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
 
     return {
       trunkX: TRUNK_X,
-      trunkBaseY,
+      trunkBaseY: effectiveTrunkBaseY,
       trunkTopY: effectiveTrunkTopY,
       totalHeight: effectiveTotalHeight,
       defaultNode,
@@ -1435,38 +1445,50 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                 {/* Hitbox ampla para clique fácil */}
                 <circle cx="0" cy="0" r="16" fill="transparent" />
 
-                {/* Pulso e destaque especial se for o commit ATIVO */}
-                {isCommitActive && (() => {
-                  // Se as branches abrem à direita (1), o badge abre à esquerda (-1)
-                  // Se as branches abrem à esquerda (-1), o badge abre à direita (1)
+                {/* Badge permanente no último commit da Linha Principal */}
+                {isLatestTrunkCommit && (() => {
+                  const isMainActive = Boolean(layout.defaultNode?.isCurrent);
                   const badgeSide: -1 | 1 = c.branchesSide === 1 ? -1 : 1;
                   const badgeW = 76;
                   const badgeX = badgeSide === -1 ? -badgeW - 14 : 14;
 
                   return (
-                    <g style={{ pointerEvents: "none" }}>
-                      <circle
-                        cx="0"
-                        cy="0"
-                        r={COMMIT_RADIUS + 7}
-                        fill="none"
-                        stroke="#2563eb"
-                        strokeWidth="2.5"
-                        opacity="0.85"
-                      >
-                        <animate
-                          attributeName="r"
-                          values={`${COMMIT_RADIUS + 5};${COMMIT_RADIUS + 13};${COMMIT_RADIUS + 5}`}
-                          dur="2.2s"
-                          repeatCount="indefinite"
-                        />
-                        <animate
-                          attributeName="opacity"
-                          values="0.9;0.15;0.9"
-                          dur="2.2s"
-                          repeatCount="indefinite"
-                        />
-                      </circle>
+                    <g
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (layout.defaultNode) {
+                          onSelectNode(layout.defaultNode);
+                        } else {
+                          onSelectCommit?.(c);
+                        }
+                      }}
+                      style={{ cursor: "pointer" }}
+                    >
+                      {/* Pulso e destaque se a branch principal estiver ativa */}
+                      {isMainActive && (
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r={COMMIT_RADIUS + 7}
+                          fill="none"
+                          stroke="#2563eb"
+                          strokeWidth="2.5"
+                          opacity="0.85"
+                        >
+                          <animate
+                            attributeName="r"
+                            values={`${COMMIT_RADIUS + 5};${COMMIT_RADIUS + 13};${COMMIT_RADIUS + 5}`}
+                            dur="2.2s"
+                            repeatCount="indefinite"
+                          />
+                          <animate
+                            attributeName="opacity"
+                            values="0.9;0.15;0.9"
+                            dur="2.2s"
+                            repeatCount="indefinite"
+                          />
+                        </circle>
+                      )}
 
                       {/* Badge destacada Principal - posicionada sem sobreposição */}
                       <g transform={`translate(${badgeX}, -11)`}>
@@ -1476,7 +1498,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                           width={badgeW}
                           height="22"
                           rx="11"
-                          fill="#2563eb"
+                          fill={isMainActive ? "#2563eb" : "#1e40af"}
                           style={{
                             filter: "drop-shadow(0 2px 6px rgba(37,99,235,0.45))",
                           }}
@@ -1535,36 +1557,6 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                   stroke="#ffffff"
                   strokeWidth={isCommitActive ? "2" : "1.6"}
                 />
-
-                {/* Tooltip flutuante no hover */}
-                {isHovered && (
-                  <g
-                    transform="translate(10, -10)"
-                    style={{ pointerEvents: "none", zIndex: 100 }}
-                  >
-                    <rect
-                      x="0"
-                      y="0"
-                      width={Math.min(cleanMsg.length * 6.2 + 16, 260)}
-                      height="20"
-                      rx="4"
-                      fill="#1e293b"
-                      opacity="0.95"
-                    />
-                    <text
-                      x="8"
-                      y="13"
-                      fill="#f8fafc"
-                      fontSize="9"
-                      fontWeight="500"
-                      fontFamily="system-ui, -apple-system, sans-serif"
-                    >
-                      {cleanMsg.length > 38
-                        ? `${cleanMsg.slice(0, 38)}...`
-                        : cleanMsg}
-                    </text>
-                  </g>
-                )}
 
                 <title>{`${cleanMsg} (${c.author})`}</title>
               </g>
@@ -2030,6 +2022,52 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
               </g>
             );
           })}
+
+          {/* OVERLAY DO TOOLTIP DE COMMIT (renderizado no topo absoluto do SVG, acima de todos os cards e nós) */}
+          {(() => {
+            if (!hoveredCommitHash) return null;
+            const hoveredCommit = layout.trunkCommits.find(
+              (c) => c.hash === hoveredCommitHash,
+            );
+            if (!hoveredCommit) return null;
+
+            const cleanMsg = cleanCommitTitle(hoveredCommit.message);
+            const tooltipW = Math.min(cleanMsg.length * 6.5 + 24, 340);
+            const tooltipH = 26;
+            // Se as branches abrem à direita (1), o tooltip abre à esquerda
+            const isRightSide = hoveredCommit.branchesSide === -1;
+            const tooltipX = isRightSide ? 14 : -tooltipW - 14;
+
+            return (
+              <g
+                transform={`translate(${layout.trunkX + tooltipX}, ${hoveredCommit.y - tooltipH / 2})`}
+                style={{ pointerEvents: "none" }}
+              >
+                <rect
+                  x="0"
+                  y="0"
+                  width={tooltipW}
+                  height={tooltipH}
+                  rx="5"
+                  fill="#0f172a"
+                  style={{
+                    filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.45))",
+                  }}
+                />
+                <text
+                  x="12"
+                  y={tooltipH / 2 + 0.5}
+                  dominantBaseline="central"
+                  fill="#ffffff"
+                  fontSize="10.5"
+                  fontWeight="600"
+                  fontFamily="system-ui, -apple-system, sans-serif"
+                >
+                  {cleanMsg.length > 42 ? `${cleanMsg.slice(0, 42)}…` : cleanMsg}
+                </text>
+              </g>
+            );
+          })()}
         </g>
       </svg>
     </div>

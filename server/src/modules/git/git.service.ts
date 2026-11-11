@@ -402,6 +402,11 @@ export class GitService {
       };
     }
 
+    // Tenta sincronizar referências remotas do GitHub rapidamente se houver remote configurado
+    try {
+      await executeGit(["fetch", "--prune"], repoDir);
+    } catch {}
+
     const branchesData = await getGitBranches(repoDir);
     const currentBranch = branchesData.current || defaultBranch;
     const branchNames = branchesData.branches || [currentBranch];
@@ -940,7 +945,7 @@ export class GitService {
               }
             : undefined,
           lastCommit,
-          commits: branchCommits,
+          commits: isDefault ? mainCommits : branchCommits,
           ahead,
           behind,
           isMerged,
@@ -967,7 +972,7 @@ export class GitService {
       } else if (node.parentBranch) {
         node.parentDisplayName =
           node.parentBranch === defaultBranch
-            ? "Versão Oficial"
+            ? "Principal"
             : nodeMap.get(node.parentBranch) || node.parentBranch;
       }
     }

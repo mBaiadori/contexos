@@ -205,32 +205,46 @@ export async function getGitBranches(
   const isRepo = await isGitRepo(repoDir);
   if (!isRepo) return { current: "main", branches: ["main"] };
 
-  const res = await executeGit(["branch", "--list"], repoDir);
-  if (!res.success) return { current: "main", branches: ["main"] };
+  // Identifica a branch atual de forma explícita
+  let current = "main";
+  try {
+    const curRes = await executeGit(["branch", "--show-current"], repoDir);
+    if (curRes.success && curRes.stdout.trim()) {
+      current = curRes.stdout.trim();
+    }
+  } catch {}
+
+  // Lista todas as branches (locais e remotas do GitHub)
+  const res = await executeGit(["branch", "-a"], repoDir);
+  if (!res.success) return { current, branches: [current] };
 
   const lines = res.stdout.split("\n").filter(Boolean);
-  let current = "main";
-  const branches: string[] = [];
+  const branchSet = new Set<string>();
+  if (current) branchSet.add(current);
 
-  for (const line of lines) {
-    const isCurrent = line.startsWith("*");
-    const name = line.replace("*", "").trim();
-    if (isCurrent) current = name;
-    branches.push(name);
+  for (const rawLine of lines) {
+    const cleanLine = rawLine.replace("*", "").trim();
+    if (!cleanLine || cleanLine.includes("->")) continue; // Ignora ponteiros HEAD simbólicos
+
+    let name = cleanLine;
+    if (name.startsWith("remotes/origin/")) {
+      name = name.replace("remotes/origin/", "");
+    } else if (name.startsWith("remotes/")) {
+      const parts = name.split("/");
+      parts.shift(); // remove "remotes"
+      parts.shift(); // remove remote name
+      name = parts.join("/");
+    } else if (name.startsWith("origin/")) {
+      name = name.replace("origin/", "");
+    }
+
+    if (name && name !== "HEAD") {
+      branchSet.add(name);
+    }
   }
 
-  if (branches.length === 0) {
-    try {
-      const symRes = await executeGit(["symbolic-ref", "--short", "HEAD"], repoDir);
-      if (symRes.success && symRes.stdout.trim()) {
-        const initial = symRes.stdout.trim();
-        return { current: initial, branches: [initial] };
-      }
-    } catch {}
-    return { current: "main", branches: ["main"] };
-  }
-
-  return { current, branches };
+  const branches = Array.from(branchSet);
+  return { current, branches: branches.length > 0 ? branches : ["main"] };
 }
 
 export interface WhatsNewItem {

@@ -1,19 +1,19 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useWorkspace } from "../../context/WorkspaceContext";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { DraftsTrashModal } from "../../components/modals/DraftsTrashModal";
+import { SafeSwitchModal } from "../../components/modals/SafeSwitchModal";
 import {
-  PageContainer,
+  AlertBanner,
+  Badge,
   Button,
   Input,
-  Badge,
-  AlertBanner,
+  PageContainer,
 } from "../../components/ui";
-import { SafeSwitchModal } from "../../components/modals/SafeSwitchModal";
-import { DraftsTrashModal } from "../../components/modals/DraftsTrashModal";
+import { useWorkspace } from "../../context/WorkspaceContext";
+import type { GitCommitInfo, GitFileStatus, VersionNode } from "../../types";
 import {
   VersionTreeCanvas,
   cleanCommitTitle,
 } from "./versions/VersionTreeCanvas";
-import type { VersionNode, GitFileStatus, GitCommitInfo } from "../../types";
 
 export interface VersionsCanvasSubViewProps {
   onNavigateToProposal?: (proposalId: number | string) => void;
@@ -473,14 +473,14 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
       {/* Top Bar Minimalista */}
       <div
         style={{
-          padding: "12px 20px",
+          padding: "10px 20px",
           borderBottom: "1px solid var(--border-color)",
           background: "var(--bg-surface)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          flexWrap: "wrap",
-          gap: "10px",
+          gap: "16px",
+          minHeight: "54px",
           zIndex: 5,
         }}
       >
@@ -489,7 +489,7 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
             display: "flex",
             alignItems: "center",
             gap: "10px",
-            flexWrap: "wrap",
+            flexShrink: 0,
           }}
         >
           <h2
@@ -530,7 +530,7 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
             display: "flex",
             alignItems: "center",
             gap: "8px",
-            flexWrap: "wrap",
+            flexShrink: 0,
           }}
         >
           <Input
@@ -748,11 +748,6 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                         <Badge variant="primary" size="sm">
                           Marco Histórico
                         </Badge>
-                        {isLatestMainCommit && (
-                          <Badge variant="success" size="sm">
-                            Ponta da Linha Principal
-                          </Badge>
-                        )}
                       </div>
 
                       {/* BLOCO DE AÇÃO PRINCIPAL / RECOMENDADA */}
@@ -872,41 +867,6 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                             ℹ️ Alternar para um marco isolado permite
                             inspecionar o histórico com HEAD desacoplado.
                           </span>
-
-                          {/* ATALHO SEGURO: VOLTAR PARA A PRINCIPAL */}
-                          {versionGraph?.defaultBranch && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={isSwitching}
-                              onClick={() => {
-                                const defaultNode = nodes.find(
-                                  (n) => n.isDefault,
-                                );
-                                if (defaultNode)
-                                  handleSwitchRequest(defaultNode);
-                                else if (versionGraph.defaultBranch) {
-                                  handleSwitchRequest({
-                                    name: versionGraph.defaultBranch,
-                                    isDefault: true,
-                                  } as VersionNode);
-                                }
-                              }}
-                              style={{
-                                width: "100%",
-                                fontWeight: 600,
-                                borderColor: "#bfdbfe",
-                                color: "#2563eb",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: "6px",
-                              }}
-                            >
-                              <span>⤺</span>
-                              <span>Voltar para a Linha Principal</span>
-                            </Button>
-                          )}
 
                           {/* Botão de retorno à visualização completa da versão */}
                           {selectedNode && (
@@ -1224,11 +1184,6 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                         alignItems: "center",
                       }}
                     >
-                      {selectedNode.isCurrent && (
-                        <Badge variant="primary" size="sm">
-                          ● Ativa no Workspace
-                        </Badge>
-                      )}
                       {selectedNode.isDefault && (
                         <Badge variant="outline" size="sm">
                           Versão Oficial
@@ -1252,93 +1207,6 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                           <Badge variant="outline" size="sm">
                             Rascunho Local
                           </Badge>
-                        )}
-                    </div>
-
-                    {/* AÇÕES PRINCIPAIS (NO TOPO DO PAINEL) */}
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "8px",
-                      }}
-                    >
-                      {!selectedNode.isCurrent ? (
-                        <Button
-                          variant="primary"
-                          size="md"
-                          disabled={isSwitching}
-                          onClick={() => handleSwitchRequest(selectedNode)}
-                          style={{
-                            width: "100%",
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "6px",
-                          }}
-                        >
-                          <span>
-                            Alternar para{" "}
-                            {selectedNode.isDefault
-                              ? "a Linha Principal"
-                              : selectedNode.displayName || selectedNode.name}
-                          </span>
-                        </Button>
-                      ) : (
-                        <div
-                          style={{
-                            padding: "8px 12px",
-                            borderRadius: "6px",
-                            background: "rgba(16, 185, 129, 0.08)",
-                            border: "1px solid rgba(16, 185, 129, 0.25)",
-                            color: "#059669",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                        >
-                          <span style={{ fontSize: "14px" }}>●</span>
-                          <span>
-                            Esta versão está ativa no seu workspace agora.
-                          </span>
-                        </div>
-                      )}
-
-                      {/* ATALHO SEGURO: VOLTAR PARA A PRINCIPAL */}
-                      {versionGraph?.defaultBranch &&
-                        selectedNode.name !== versionGraph.defaultBranch && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isSwitching}
-                            onClick={() => {
-                              const defaultNode = nodes.find(
-                                (n) => n.isDefault,
-                              );
-                              if (defaultNode) handleSwitchRequest(defaultNode);
-                              else
-                                handleSwitchRequest({
-                                  name: versionGraph.defaultBranch,
-                                  isDefault: true,
-                                } as VersionNode);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontWeight: 600,
-                              borderColor: "#bfdbfe",
-                              color: "#2563eb",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: "6px",
-                            }}
-                          >
-                            <span>⤺</span>
-                            <span>Voltar para a Linha Principal</span>
-                          </Button>
                         )}
                     </div>
 
@@ -1368,8 +1236,11 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                           {selectedNode.isDefault
                             ? "Raiz do repositório"
                             : selectedNode.parentDisplayName ||
-                              selectedNode.parentBranch ||
-                              `Versão Oficial (${versionGraph?.defaultBranch || "main"})`}
+                              (selectedNode.parentBranch ===
+                              versionGraph?.defaultBranch
+                                ? "Principal"
+                                : selectedNode.parentBranch) ||
+                              "Principal"}
                         </strong>
                       </div>
                       <div
@@ -1547,9 +1418,22 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                       </div>
                     )}
 
-                    {/* LISTA DE MARCOS / COMMITS DA VERSÃO ("Clica commits no detalhe") */}
-                    {selectedNode.commits &&
-                      selectedNode.commits.length > 0 && (
+                    {/* LISTA DE MARCOS / COMMITS DA VERSÃO */}
+                    {(() => {
+                      const commitsToList =
+                        selectedNode.commits && selectedNode.commits.length > 0
+                          ? selectedNode.commits
+                          : selectedNode.isDefault &&
+                              versionGraph?.mainCommits &&
+                              versionGraph.mainCommits.length > 0
+                            ? versionGraph.mainCommits
+                            : selectedNode.lastCommit
+                              ? [selectedNode.lastCommit]
+                              : [];
+
+                      if (commitsToList.length === 0) return null;
+
+                      return (
                         <div
                           style={{
                             padding: "10px 12px",
@@ -1575,17 +1459,7 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                                 color: "var(--text-heading)",
                               }}
                             >
-                              Marcos desta Versão ({selectedNode.commits.length}
-                              )
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "10px",
-                                color: "#2563eb",
-                                fontWeight: 500,
-                              }}
-                            >
-                              Clique para inspecionar / ramificar
+                              Marcos desta Versão ({commitsToList.length})
                             </span>
                           </div>
                           <div
@@ -1593,11 +1467,11 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                               display: "flex",
                               flexDirection: "column",
                               gap: "6px",
-                              maxHeight: "220px",
+                              maxHeight: "260px",
                               overflowY: "auto",
                             }}
                           >
-                            {selectedNode.commits.map((c) => (
+                            {commitsToList.map((c) => (
                               <div
                                 key={c.hash}
                                 onClick={() => handleSelectCommit(c)}
@@ -1639,13 +1513,16 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                                   }}
                                 >
                                   <span>{c.author}</span>
-                                  <span>{c.shortHash}</span>
+                                  <span>
+                                    {c.shortHash || c.hash.slice(0, 7)}
+                                  </span>
                                 </div>
                               </div>
                             ))}
                           </div>
                         </div>
-                      )}
+                      );
+                    })()}
 
                     {/* ÚLTIMO MARCO */}
                     {selectedNode.lastCommit &&
