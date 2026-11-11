@@ -44,7 +44,7 @@ async function start() {
     const port = await findAvailablePort(DESIRED_PORT);
     app = await buildApp();
     await app.listen({ port, host: HOST });
-    console.log(`🚀 Context OS Fastify Server rodando em http://localhost:${port}`);
+    console.log(`🚀 Contexos Fastify Server rodando em http://localhost:${port}`);
   } catch (err) {
     console.error('Erro ao iniciar o servidor Fastify:', err);
     process.exit(1);

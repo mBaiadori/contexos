@@ -2,12 +2,12 @@
 set -e
 
 # ==============================================================================
-# Context OS - Instalador Oficial para Linux
+# Contexos - Instalador Oficial para Linux
 # Baixa e instala a versão mais recente em ~/.local/bin
 # ==============================================================================
 
 REPO="mBaiadori/project-boilerplate"
-APP_NAME="Context OS"
+APP_NAME="Contexos"
 BIN_DIR="$HOME/.local/bin"
 DESKTOP_DIR="$HOME/.local/share/applications"
 
@@ -40,7 +40,7 @@ if [ -n "$DOWNLOAD_URL" ]; then
   # Cria lançador de desktop (.desktop)
   cat <<EOF > "$DESKTOP_DIR/context-os.desktop"
 [Desktop Entry]
-Name=Context OS
+Name=Contexos
 Exec=$DEST_FILE %U
 Terminal=false
 Type=Application

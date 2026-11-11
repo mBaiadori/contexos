@@ -1097,7 +1097,7 @@ export class ReposService {
       },
       reviewers: cfg.user?.login ? [`@${cfg.user.login}`] : [],
       ai_assistant_prompt:
-        "Você é o assistente inteligente de documentação e engenharia do Context OS.",
+        "Você é o assistente inteligente de documentação e engenharia do Contexos.",
     };
 
     fs.writeFileSync(
@@ -1136,7 +1136,7 @@ export class ReposService {
       }
       const ownerLogin =
         cfg.active_repo?.full_name?.split("/")[0] || cfg.user?.login || "admin";
-      const codeownersContent = `# Context OS - Governança & Root of Trust
+      const codeownersContent = `# Contexos - Governança & Root of Trust
 # Arquivos críticos de controle de acesso exigem aprovação do proprietário
 .project.config.json @${ownerLogin}
 .gitignore @${ownerLogin}
@@ -1431,7 +1431,7 @@ export class ReposService {
       }
     }
 
-    // 4. Atualizar config.json do Context OS se era o active_repo
+    // 4. Atualizar config.json do Contexos se era o active_repo
     if (cfg.active_repo?.name === current_name) {
       cfg.active_repo = {
         ...cfg.active_repo,

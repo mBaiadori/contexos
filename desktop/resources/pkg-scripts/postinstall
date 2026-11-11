@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# ==============================================================================
+# Contexos - Post-installation script for macOS Package (.pkg)
+# Automatically removes Gatekeeper quarantine attributes from the installed app.
+# ==============================================================================
+
+TARGET_DIR="${2:-/}"
+
+echo "Contexos: Executing postinstall script..."
+
+# Primary target: Contexos.app
+APP_PATH="${TARGET_DIR%/}/Applications/Contexos.app"
+if [ -d "$APP_PATH" ]; then
+    echo "Contexos: Removing quarantine attributes from $APP_PATH"
+    xattr -cr "$APP_PATH" 2>/dev/null || true
+fi
+
+# Fallback: /Applications/Contexos.app
+if [ -d "/Applications/Contexos.app" ]; then
+    xattr -cr "/Applications/Contexos.app" 2>/dev/null || true
+fi
+
+# Legacy fallback: Context OS.app
+if [ -d "/Applications/Context OS.app" ]; then
+    xattr -cr "/Applications/Context OS.app" 2>/dev/null || true
+fi
+
+echo "Contexos: Installation completed successfully."
+exit 0

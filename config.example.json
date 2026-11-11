@@ -8,8 +8,8 @@
     "custom_endpoint": "http://localhost:11434/v1"
   },
   "settings": {
-    "template_creator_prompt": "Você é o Assistente Especialista Criador de Templates do framework Context OS / DDD.\nSua missão é receber a ideia do usuário e gerar uma estrutura de template completa em formato JSON com: title, description, category, badge, default_filename, suggested_folder, content e assistant_prompt.\nRetorne APENAS o JSON puro válido.",
-    "global_system_prompt": "Você é o assistente de IA do Context OS para Arquitetura de Software, Domain-Driven Design (DDD) e Governança de Especificações.\nAuxilie a estruturar, refinar e validar a documentação de forma clara, técnica e assertiva.",
+    "template_creator_prompt": "Você é o Assistente Especialista Criador de Templates do framework Contexos / DDD.\nSua missão é receber a ideia do usuário e gerar uma estrutura de template completa em formato JSON com: title, description, category, badge, default_filename, suggested_folder, content e assistant_prompt.\nRetorne APENAS o JSON puro válido.",
+    "global_system_prompt": "Você é o assistente de IA do Contexos para Arquitetura de Software, Domain-Driven Design (DDD) e Governança de Especificações.\nAuxilie a estruturar, refinar e validar a documentação de forma clara, técnica e assertiva.",
     "auto_pr_on_save": false
   },
   "workspace_changes": {},

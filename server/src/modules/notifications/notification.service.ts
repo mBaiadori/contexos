@@ -98,10 +98,10 @@ export class NotificationService {
 
           const res = await emailProvider.send({
             to: recipient.email,
-            subject: `[Context OS • ${payload.repo}] ${payload.title}`,
+            subject: `[Contexos • ${payload.repo}] ${payload.title}`,
             html,
             text,
-            fromName: emailConfig.sender_name || 'Context OS Governança',
+            fromName: emailConfig.sender_name || 'Contexos Governança',
             fromAddress: emailConfig.sender_address || 'notifications@contextos.dev',
             provider: emailConfig.provider || 'resend',
             apiKey: emailApiKey,
@@ -215,7 +215,7 @@ export class NotificationService {
     const testPayload: NotificationPayload = {
       event: 'quorum_requested',
       repo: effectiveRepo,
-      title: '🧪 Notificação de Teste do Context OS',
+      title: '🧪 Notificação de Teste do Contexos',
       message: 'Esta é uma mensagem de verificação para validar a configuração de alertas de governança do seu projeto.',
       actionUrl: 'https://github.com',
       severity: 'info',
@@ -239,7 +239,7 @@ export class NotificationService {
         email: {
           enabled: true,
           provider: 'resend',
-          sender_name: 'Context OS Governança',
+          sender_name: 'Contexos Governança',
           sender_address: 'notifications@contextos.dev',
         },
       };
@@ -248,10 +248,10 @@ export class NotificationService {
     const emailApiKey = vaultService.getSecret(VAULT_KEYS.NOTIFICATION_EMAIL_KEY);
     const emailRes = await emailProvider.send({
       to: targetEmail || 'admin@exemplo.com',
-      subject: `[Teste • ${effectiveRepo}] 🧪 Notificação de Teste do Context OS`,
+      subject: `[Teste • ${effectiveRepo}] 🧪 Notificação de Teste do Contexos`,
       html: renderEmailHtml(testPayload),
       text: renderEmailText(testPayload),
-      fromName: 'Context OS Governança',
+      fromName: 'Contexos Governança',
       fromAddress: 'notifications@contextos.dev',
       apiKey: emailApiKey || undefined,
     });

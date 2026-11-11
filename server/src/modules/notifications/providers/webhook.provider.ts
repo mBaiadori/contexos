@@ -34,7 +34,7 @@ export class WebhookProvider {
         : 0x2563eb;
 
       bodyData = {
-        username: 'Context OS Governança',
+        username: 'Contexos Governança',
         avatar_url: 'https://raw.githubusercontent.com/mBaiadori/project-boilerplate/main/desktop/resources/icon.png',
         embeds: [
           {
@@ -48,7 +48,7 @@ export class WebhookProvider {
               { name: 'Evento', value: payload.event, inline: true },
             ],
             footer: {
-              text: 'Context OS Governança',
+              text: 'Contexos Governança',
             },
             timestamp: new Date().toISOString(),
           },
@@ -56,13 +56,13 @@ export class WebhookProvider {
       };
     } else if (isSlack) {
       bodyData = {
-        text: `*[Context OS Governança • ${payload.repo}]* ${payload.title}\n${payload.message}`,
+        text: `*[Contexos Governança • ${payload.repo}]* ${payload.title}\n${payload.message}`,
         blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*${payload.title}*\n${payload.message}${payload.actionUrl ? `\n<${payload.actionUrl}|Abrir no Context OS>` : ''}`,
+              text: `*${payload.title}*\n${payload.message}${payload.actionUrl ? `\n<${payload.actionUrl}|Abrir no Contexos>` : ''}`,
             },
           },
         ],
@@ -70,7 +70,7 @@ export class WebhookProvider {
     } else {
       // Endpoint JSON genérico
       bodyData = {
-        app: 'ContextOS',
+        app: 'Contexos',
         timestamp: new Date().toISOString(),
         payload,
       };

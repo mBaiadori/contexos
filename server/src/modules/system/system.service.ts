@@ -129,7 +129,7 @@ class SystemService {
       active: isActive,
       key: key ? `${key.slice(0, 4)}...${key.slice(-4)}` : undefined,
       plan: license.plan || (isActive ? 'Pro License' : 'Trial / Community'),
-      licensed_to: license.licensed_to || 'Usuário Context OS',
+      licensed_to: license.licensed_to || 'Usuário Contexos',
       expires_at: license.expires_at || undefined,
       offline_grace_remaining_days: 14,
       is_offline_valid: true,
@@ -216,7 +216,7 @@ class SystemService {
         active: true,
         key: data.license_key.trim(),
         plan: 'Pro License',
-        licensed_to: 'Usuário Context OS',
+        licensed_to: 'Usuário Contexos',
         activated_at: new Date().toISOString(),
       };
     }
@@ -234,16 +234,16 @@ class SystemService {
 
     (cfg.settings as any).onboarding_completed = true;
 
-    let targetRepoName = cfg.active_repo?.name || 'context-os-demo';
+    let targetRepoName = cfg.active_repo?.name || 'contexos-demo';
 
     if (data.create_demo_workspace || !cfg.active_repo?.name) {
-      targetRepoName = data.workspace_name?.trim() || 'context-os-demo';
+      targetRepoName = data.workspace_name?.trim() || 'contexos-demo';
       await this.createDemoWorkspace(targetRepoName);
       cfg.active_repo = {
         name: targetRepoName,
         owner: 'local_dev',
         is_local: true,
-        description: 'Workspace de Demonstração Interativo do Context OS',
+        description: 'Workspace de Demonstração Interativo do Contexos',
       };
     }
 
@@ -254,7 +254,7 @@ class SystemService {
   /**
    * Cria um Workspace Demo completo e rico com regras, specs e estrutura recomendada
    */
-  async createDemoWorkspace(repoName: string = 'context-os-demo'): Promise<{ success: boolean; path: string }> {
+  async createDemoWorkspace(repoName: string = 'contexos-demo'): Promise<{ success: boolean; path: string }> {
     const safeName = repoName.replace(/[^a-zA-Z0-9_-]/g, '_');
     const repoPath = resolveRepoDir(safeName, 'local');
 
@@ -268,9 +268,9 @@ class SystemService {
     // Cria documento introdutório de boas-vindas com instruções
     const welcomeDocPath = path.join(repoPath, 'project', 'WELCOME.md');
     if (!fs.existsSync(welcomeDocPath)) {
-      const welcomeContent = `# 🚀 Bem-vindo ao Context OS!
+      const welcomeContent = `# 🚀 Bem-vindo ao Contexos!
 
-Este é o seu **Workspace de Demonstração Interativo**. O Context OS foi construído para conectar especificações ricas, governança de código e inteligência artificial contextual.
+Este é o seu **Workspace de Demonstração Interativo**. O Contexos foi construído para conectar especificações ricas, governança de código e inteligência artificial contextual.
 
 ---
 

@@ -159,7 +159,7 @@ jobs:
           if (-not $installer) {
             throw "Instalador .exe não foi encontrado em desktop/release/"
           }
-          $installDir = "$env:LOCALAPPDATA\Programs\Context OS"
+          $installDir = "$env:LOCALAPPDATA\Programs\Contexos"
           Write-Host "Executando instalador silencioso: $($installer.FullName)..."
           
           # Executa o instalador NSIS em modo estritamente silencioso
@@ -167,7 +167,7 @@ jobs:
           
           # Aguarda término da instalação com verificação periódica
           $timeout = 120
-          $appExe = Join-Path $installDir "Context OS.exe"
+          $appExe = Join-Path $installDir "Contexos.exe"
           $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
           
           while ($timeout -gt 0) {
@@ -187,9 +187,9 @@ jobs:
           }
           
           if (-not (Test-Path $appExe)) {
-            throw "Executável Context OS.exe não encontrado em $appExe!"
+            throw "Executável Contexos.exe não encontrado em $appExe!"
           }
-          Write-Host "✅ Context OS.exe instalado com sucesso!"
+          Write-Host "✅ Contexos.exe instalado com sucesso!"
           
           if (-not (Test-Path $gitExe)) {
             throw "MinGit embutido não encontrado em $gitExe!"

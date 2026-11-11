@@ -161,7 +161,7 @@ async function startEmbeddedServer(): Promise<number> {
 }
 
 /**
- * Criação da janela principal do Context OS
+ * Criação da janela principal do Contexos
  */
 function createMainWindow(port: number) {
   const preloadPath = fs.existsSync(path.join(__dirname, '../preload/index.cjs'))
@@ -179,7 +179,7 @@ function createMainWindow(port: number) {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
-    title: 'Context OS',
+    title: 'Contexos',
     icon: windowIcon,
     backgroundColor: '#0f172a',
     titleBarStyle: 'default',

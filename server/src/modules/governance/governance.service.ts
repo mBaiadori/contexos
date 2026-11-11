@@ -1900,10 +1900,10 @@ export class GovernanceService {
     const workflowsDir = path.join(repoDir, ".github", "workflows");
     const workflowPath = path.join(workflowsDir, "governance-check.yml");
 
-    const workflowYaml = `# Context OS — Automated Governance & Security Gatekeeper
+    const workflowYaml = `# Contexos — Automated Governance & Security Gatekeeper
 # Este workflow aplica verificações contínuas de governança (Secret Scanning, Quorum Rules e CODEOWNERS) em Pull Requests e Pushes.
 
-name: Context OS Governance Gatekeeper
+name: Contexos Governance Gatekeeper
 
 on:
   pull_request:
@@ -1944,7 +1944,7 @@ jobs:
             echo "✅ Nenhum segredo ou token em texto claro detectado."
           fi
 
-      - name: Validar Configuração do Context OS (.project.config.json)
+      - name: Validar Configuração do Contexos (.project.config.json)
         run: |
           echo "=== 📋 Validando .project.config.json ==="
           if [ -f ".project.config.json" ]; then

@@ -1428,7 +1428,7 @@ DIRETRIZES OBRIGATÓRIAS:
       `\n\n### 🎯 Objetivos de Governança:\n` +
       `- Manter a documentação viva e canônica sincronizada com a arquitetura.\n` +
       `- Rastrear as evoluções através do fluxo formal de revisão e Pull Request.\n\n` +
-      `*Gerado automaticamente pelo motor de governança do Context OS.*`;
+      `*Gerado automaticamente pelo motor de governança do Contexos.*`;
 
     return {
       success: true,
@@ -1713,7 +1713,7 @@ DIRETRIZES OBRIGATÓRIAS:
               {
                 title: payload.title,
                 body:
-                  payload.description || `Atualização de governança Context OS`,
+                  payload.description || `Atualização de governança Contexos`,
                 head: branchName,
                 base: defaultBranch,
               },
@@ -2045,7 +2045,7 @@ DIRETRIZES OBRIGATÓRIAS:
             event: "APPROVE",
             body:
               approverComment ||
-              `✓ Aprovado via Context OS Governance Platform por ${approver} (${approverRole || "Revisor"})`,
+              `✓ Aprovado via Contexos Governance Platform por ${approver} (${approverRole || "Revisor"})`,
           },
         );
       } catch (ghReviewErr) {
@@ -2528,7 +2528,7 @@ DIRETRIZES OBRIGATÓRIAS:
 
     const trailers =
       auditLines.length > 0
-        ? `\n\n${auditLines.join("\n")}\nReviewed-in: Context OS Governance Platform`
+        ? `\n\n${auditLines.join("\n")}\nReviewed-in: Contexos Governance Platform`
         : "";
     const commitMsg = `Merge PR #${targetPR.id}: ${targetPR.title}${trailers}`;
 

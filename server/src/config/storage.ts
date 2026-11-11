@@ -958,7 +958,7 @@ export async function ensureDefaultRepoFiles(
         fs.mkdirSync(githubDir, { recursive: true });
       }
       const ownerLogin = (cfg.active_repo?.full_name?.split("/")[0]) || cfg.user?.login || "admin";
-      const codeownersContent = `# Context OS - Governança & Root of Trust
+      const codeownersContent = `# Contexos - Governança & Root of Trust
 # Arquivos críticos de controle de acesso exigem aprovação do proprietário
 .project.config.json @${ownerLogin}
 .gitignore @${ownerLogin}

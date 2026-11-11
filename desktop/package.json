@@ -1,10 +1,10 @@
 {
-  "name": "context-os-desktop",
+  "name": "contexos-desktop",
   "version": "1.0.11",
-  "description": "Context OS - Spec-Driven Governance & Autonomous AI Platform",
+  "description": "Contexos - Spec-Driven Governance & Autonomous AI Platform",
   "type": "module",
   "main": "dist/main/index.js",
-  "author": "Context OS Team",
+  "author": "Contexos Team",
   "license": "Commercial",
   "scripts": {
     "dev": "tsx src/main/index.ts",

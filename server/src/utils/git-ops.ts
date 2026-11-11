@@ -81,7 +81,7 @@ export async function cloneGitRepo(
   await executeGit(["remote", "set-url", "origin", publicOrigin], repoDir);
 
   if (user?.name || user?.login) {
-    const authorName = (user.name || user.login || "Context OS") as string;
+    const authorName = (user.name || user.login || "Contexos") as string;
     const authorEmail = (user.email || `${user.login || "context-os"}@users.noreply.github.com`) as string;
     await executeGit(["config", "user.name", authorName], repoDir);
     await executeGit(["config", "user.email", authorEmail], repoDir);

@@ -29,7 +29,7 @@ export class EmailProvider {
       return { success: false, error: 'Endereço de e-mail de destinatário inválido' };
     }
 
-    const effectiveSender = `${fromName || 'Context OS Governança'} <${fromAddress || 'notifications@contextos.dev'}>`;
+    const effectiveSender = `${fromName || 'Contexos Governança'} <${fromAddress || 'notifications@contextos.dev'}>`;
 
     // Modo Simulado: quando não há chave de API cadastrada no Vault ou em testes
     if (!apiKey || apiKey.trim() === '' || apiKey.startsWith('simulated_') || apiKey.includes('test_') || process.env.NODE_ENV === 'test') {
@@ -51,7 +51,7 @@ export class EmailProvider {
           },
           body: JSON.stringify({
             personalizations: [{ to: [{ email: to }] }],
-            from: { email: fromAddress || 'notifications@contextos.dev', name: fromName || 'Context OS Governança' },
+            from: { email: fromAddress || 'notifications@contextos.dev', name: fromName || 'Contexos Governança' },
             subject,
             content: [
               ...(text ? [{ type: 'text/plain', value: text }] : []),

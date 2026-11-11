@@ -2,12 +2,12 @@
 set -e
 
 # ==============================================================================
-# Context OS - Instalador Oficial para macOS
+# Contexos - Instalador Oficial para macOS
 # Baixa e instala a versão mais recente em /Applications sem alertas do Gatekeeper
 # ==============================================================================
 
 REPO="mBaiadori/project-boilerplate"
-APP_NAME="Context OS"
+APP_NAME="Contexos"
 TARGET_DIR="/Applications"
 APP_DEST="$TARGET_DIR/$APP_NAME.app"
 
@@ -68,5 +68,5 @@ codesign --force --deep --sign - "$APP_DEST" 2>/dev/null || true
 xattr -cr "$APP_DEST"
 
 echo ""
-echo "🎉 Context OS ($LATEST_TAG) instalado com 100% de sucesso!"
+echo "🎉 Contexos ($LATEST_TAG) instalado com 100% de sucesso!"
 echo "👉 Abra pelo Spotlight (Cmd + Barra de Espaço) ou em /Applications/$APP_NAME.app"

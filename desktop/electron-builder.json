@@ -1,7 +1,7 @@
 {
   "appId": "com.contextos.desktop",
-  "productName": "Context OS",
-  "copyright": "Copyright © 2026 Context OS Team",
+  "productName": "Contexos",
+  "copyright": "Copyright © 2026 Contexos Team",
   "directories": {
     "output": "release",
     "buildResources": "resources"
@@ -32,6 +32,10 @@
     "category": "public.app-category.developer-tools",
     "target": [
       {
+        "target": "pkg",
+        "arch": ["arm64", "x64"]
+      },
+      {
         "target": "dmg",
         "arch": ["arm64", "x64"]
       },
@@ -43,6 +47,12 @@
     "hardenedRuntime": false,
     "gatekeeperAssess": false,
     "identity": null
+  },
+  "pkg": {
+    "scripts": "pkg-scripts",
+    "installLocation": "/Applications",
+    "allowCurrentUserHome": true,
+    "allowRootDirectory": true
   },
   "win": {
     "icon": "resources/icon.ico",

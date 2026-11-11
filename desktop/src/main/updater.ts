@@ -23,7 +23,7 @@ async function checkGitHubReleaseForMac(getMainWindow: () => BrowserWindow | nul
 
     const response = await fetch('https://api.github.com/repos/mBaiadori/project-boilerplate/releases/latest', {
       headers: {
-        'User-Agent': 'Context-OS-Desktop-Updater',
+        'User-Agent': 'Contexos-Desktop-Updater',
         Accept: 'application/vnd.github.v3+json',
       },
     });
@@ -45,11 +45,17 @@ async function checkGitHubReleaseForMac(getMainWindow: () => BrowserWindow | nul
     if (isNewerVersion(latestVersion, currentVersion)) {
       console.log(`[AutoUpdater Mac] Nova versão encontrada: ${latestVersion} (atual: ${currentVersion})`);
       const arch = process.arch;
+      // Prioriza o pacote .pkg nativo para macOS (evita quarentena e tela de danificado)
+      const pkgAsset =
+        release.assets?.find((a) => a.name?.includes(arch) && a.name?.endsWith('.pkg')) ||
+        release.assets?.find((a) => a.name?.endsWith('.pkg'));
+
       const dmgAsset =
         release.assets?.find((a) => a.name?.includes(arch) && a.name?.endsWith('.dmg')) ||
         release.assets?.find((a) => a.name?.endsWith('.dmg'));
 
-      const downloadUrl = dmgAsset?.browser_download_url || release.html_url || '';
+      const asset = pkgAsset || dmgAsset;
+      const downloadUrl = asset?.browser_download_url || release.html_url || '';
 
       getMainWindow()?.webContents.send('updater:status', {
         status: 'available-manual',

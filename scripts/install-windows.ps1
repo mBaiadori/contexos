@@ -1,11 +1,11 @@
 ﻿# ==============================================================================
-# Context OS - Instalador Oficial para Windows (PowerShell)
+# Contexos - Instalador Oficial para Windows (PowerShell)
 # Baixa e instala a versão mais recente silenciosamente
 # ==============================================================================
 $ErrorActionPreference = "Stop"
 
 $repo = "mBaiadori/project-boilerplate"
-$appName = "Context OS"
+$appName = "Contexos"
 
 Write-Host "🚀 Iniciando instalação do $appName no Windows..." -ForegroundColor Cyan
 

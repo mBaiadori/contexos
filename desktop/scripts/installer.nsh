@@ -1,5 +1,5 @@
 ; ======================================================================
-; Context OS - Script de Customizacao do Instalador NSIS (Windows)
+; Contexos - Script de Customizacao do Instalador NSIS (Windows)
 ; Fornece visualizacao clara das etapas da instalacao passo a passo
 ; ======================================================================
 
@@ -12,10 +12,10 @@
 !macro customFiles_x64
   SetDetailsPrint both
   DetailPrint "======================================================================"
-  DetailPrint "  CONTEXT OS - INSTALADOR OFICIAL"
+  DetailPrint "  CONTEXOS - INSTALADOR OFICIAL"
   DetailPrint "======================================================================"
   DetailPrint "  [OK] Etapa 1/5: Ambiente e integridade do sistema verificados."
-  DetailPrint "  [OK] Etapa 2/5: Binarios da plataforma Context OS descompactados."
+  DetailPrint "  [OK] Etapa 2/5: Binarios da plataforma Contexos descompactados."
   DetailPrint "----------------------------------------------------------------------"
   DetailPrint "  [>>] Etapa 3/5: Configurando motor Git embutido e dependencias essenciais..."
 !macroend
@@ -27,6 +27,6 @@
   DetailPrint "----------------------------------------------------------------------"
   DetailPrint "  [OK] Etapa 5/5: Instalacao finalizada com 100% de sucesso!"
   DetailPrint "======================================================================"
-  DetailPrint "  Context OS pronto para execucao."
+  DetailPrint "  Contexos pronto para execucao."
   DetailPrint "======================================================================"
 !macroend

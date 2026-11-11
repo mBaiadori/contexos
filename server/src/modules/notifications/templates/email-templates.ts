@@ -60,7 +60,7 @@ export function renderEmailHtml(payload: NotificationPayload): string {
               <table role="presentation" width="100%">
                 <tr>
                   <td>
-                    <span style="font-weight: 700; font-size: 16px; letter-spacing: -0.02em; color: #FFFFFF;">Context OS</span>
+                    <span style="font-weight: 700; font-size: 16px; letter-spacing: -0.02em; color: #FFFFFF;">Contexos</span>
                     <span style="color: #94A3B8; font-size: 14px; margin-left: 8px;">Governança</span>
                   </td>
                   <td align="right">
@@ -101,7 +101,7 @@ export function renderEmailHtml(payload: NotificationPayload): string {
           <tr>
             <td style="padding: 20px 32px; background-color: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: center;">
               Você recebeu esta notificação porque possui papel ativo de governança no projeto <strong>${payload.repo}</strong>.<br>
-              Context OS • Sistema de Governança de Software & Living Docs
+              Contexos • Sistema de Governança de Software & Living Docs
             </td>
           </tr>
 
@@ -122,7 +122,7 @@ export function renderEmailText(payload: NotificationPayload): string {
   const action = payload.actionUrl ? `\nAcessar: ${payload.actionUrl}\n` : '';
   const authorInfo = payload.author ? `Por: @${payload.author}\n` : '';
 
-  return `[Context OS • Governança - ${payload.repo}]
+  return `[Contexos • Governança - ${payload.repo}]
 ${label.toUpperCase()}${prInfo}
 
 ${payload.title}
@@ -130,5 +130,5 @@ ${payload.message}
 
 ${authorInfo}${action}
 ---
-Você recebeu esta mensagem como revisor de governança no Context OS.`;
+Você recebeu esta mensagem como revisor de governança no Contexos.`;
 }
