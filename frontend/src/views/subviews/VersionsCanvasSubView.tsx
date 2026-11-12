@@ -117,6 +117,14 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
   };
 
   const handleSelectCommit = (commit: GitCommitInfo) => {
+    if (versionGraph?.defaultBranch) {
+      const isMainCommit = versionGraph.mainCommits?.some(
+        (mc) => mc.hash === commit.hash,
+      );
+      if (isMainCommit) {
+        setSelectedNodeName(versionGraph.defaultBranch);
+      }
+    }
     setSelectedCommit(commit);
     setIsDrawerOpen(true);
   };
@@ -1209,6 +1217,80 @@ export const VersionsCanvasSubView: React.FC<VersionsCanvasSubViewProps> = ({
                           </Badge>
                         )}
                     </div>
+
+                    {/* BLOCO DE AÇÃO: ALTERNAR PARA ESTA VERSÃO (SE NÃO FOR A ATUAL) */}
+                    {selectedNode.isDefault && !selectedNode.isCurrent && (
+                      <div
+                        style={{
+                          padding: "12px",
+                          borderRadius: "8px",
+                          border: "1px solid #bfdbfe",
+                          background: "#eff6ff",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <span style={{ fontSize: "14px" }}>📌</span>
+                          <strong
+                            style={{ fontSize: "12px", color: "#1e40af" }}
+                          >
+                            Linha Principal (Oficial)
+                          </strong>
+                        </div>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "11px",
+                            color: "#1e3a8a",
+                            lineHeight: "1.4",
+                          }}
+                        >
+                          Você está visualizando a Linha Principal. Alterne para ela para voltar à versão oficial de trabalho.
+                        </p>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={isSwitching}
+                          onClick={() => handleSwitchRequest(selectedNode)}
+                          style={{
+                            width: "100%",
+                            fontWeight: 700,
+                            background: "#2563eb",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <span>⤺</span>
+                          <span>Alternar para a Linha Principal</span>
+                        </Button>
+                      </div>
+                    )}
+
+                    {!selectedNode.isDefault && !selectedNode.isCurrent && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={isSwitching}
+                        onClick={() => handleSwitchRequest(selectedNode)}
+                        style={{
+                          width: "100%",
+                          fontWeight: 600,
+                          background: "#2563eb",
+                        }}
+                      >
+                        Alternar para esta versão ({selectedNode.displayName || selectedNode.name})
+                      </Button>
+                    )}
 
                     {/* Informações da Versão */}
                     <div

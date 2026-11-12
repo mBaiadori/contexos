@@ -1347,8 +1347,17 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
         {layout.defaultNode && !layout.defaultNode.isCurrent && (
           <button
             type="button"
-            onClick={() => onSwitchNode?.(layout.defaultNode!)}
-            title={`Alternar para a Linha Principal (${layout.defaultNode.name})`}
+            onClick={() => {
+              if (layout.defaultNode) {
+                onSelectNode(layout.defaultNode);
+                if (layout.trunkCommits.length > 0) {
+                  onSelectCommit?.(
+                    layout.trunkCommits[layout.trunkCommits.length - 1],
+                  );
+                }
+              }
+            }}
+            title={`Abrir Linha Principal (${layout.defaultNode.name})`}
             style={{
               display: "flex",
               alignItems: "center",
@@ -1456,13 +1465,13 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                     <g
                       onClick={(e) => {
                         e.stopPropagation();
+                        setSelectedCommitHash(c.hash);
                         if (layout.defaultNode) {
                           onSelectNode(layout.defaultNode);
-                        } else {
-                          onSelectCommit?.(c);
                         }
+                        onSelectCommit?.(c);
                       }}
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: "pointer", pointerEvents: "all" }}
                     >
                       {/* Pulso e destaque se a branch principal estiver ativa */}
                       {isMainActive && (
@@ -1474,6 +1483,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                           stroke="#2563eb"
                           strokeWidth="2.5"
                           opacity="0.85"
+                          style={{ pointerEvents: "none" }}
                         >
                           <animate
                             attributeName="r"
@@ -1491,7 +1501,18 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                       )}
 
                       {/* Badge destacada Principal - posicionada sem sobreposição */}
-                      <g transform={`translate(${badgeX}, -11)`}>
+                      <g
+                        transform={`translate(${badgeX}, -11)`}
+                        style={{ cursor: "pointer", pointerEvents: "all" }}
+                      >
+                        {/* Hitbox expandida para garantir clique fácil em qualquer pixel ao redor da tag */}
+                        <rect
+                          x="-8"
+                          y="-4"
+                          width={badgeW + 16}
+                          height="30"
+                          fill="transparent"
+                        />
                         <rect
                           x="0"
                           y="0"
@@ -1503,7 +1524,13 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                             filter: "drop-shadow(0 2px 6px rgba(37,99,235,0.45))",
                           }}
                         />
-                        <circle cx={badgeSide === -1 ? 12 : 11} cy="11" r="3" fill="#ffffff" />
+                        <circle
+                          cx={badgeSide === -1 ? 12 : 11}
+                          cy="11"
+                          r="3"
+                          fill="#ffffff"
+                          style={{ pointerEvents: "none" }}
+                        />
                         <text
                           x={badgeSide === -1 ? 22 : 21}
                           y="11.5"
@@ -1512,6 +1539,7 @@ export const VersionTreeCanvas: React.FC<VersionTreeCanvasProps> = ({
                           fontSize="10"
                           fontWeight="700"
                           fontFamily="system-ui, -apple-system, sans-serif"
+                          style={{ pointerEvents: "none", userSelect: "none" }}
                         >
                           Principal
                         </text>
