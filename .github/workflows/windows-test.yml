@@ -54,16 +54,33 @@ jobs:
           if (-not $installer) {
             throw "Erro: Instalador .exe não foi encontrado em desktop/release/"
           }
-          $installDir = "$env:LOCALAPPDATA\Programs\Contexos"
+          $defaultUserDir = "$env:LOCALAPPDATA\Programs\Contexos"
           Write-Host "Executando instalador oficial: $($installer.FullName)..."
-          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -PassThru
           
+          # Executa o instalador NSIS em modo estritamente silencioso
+          # No Windows, executando como Administrador (runneradmin), passamos /currentuser e /D para garantir destino esperado
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S /currentuser /D=$defaultUserDir" -PassThru
+          
+          # Resolução resiliente dos caminhos candidatos de instalação (per-user e per-machine)
+          $candidateDirs = @(
+            $defaultUserDir,
+            "$env:ProgramFiles\Contexos",
+            "${env:ProgramFiles(x86)}\Contexos"
+          )
+
+          $foundDir = $null
           $timeout = 120
-          $appExe = Join-Path $installDir "Contexos.exe"
-          $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
 
           while ($timeout -gt 0) {
-            if ((Test-Path $appExe) -and (Test-Path $gitExe)) {
+            foreach ($dir in $candidateDirs) {
+              $appCandidate = Join-Path $dir "Contexos.exe"
+              $gitCandidate = Join-Path $dir "resources\git\cmd\git.exe"
+              if ((Test-Path $appCandidate) -and (Test-Path $gitCandidate)) {
+                $foundDir = $dir
+                break
+              }
+            }
+            if ($foundDir) {
               Start-Sleep -Seconds 5
               break
             }
@@ -71,21 +88,20 @@ jobs:
             $timeout -= 2
           }
 
-          Write-Host "Verificando diretório de instalação: $installDir"
-          if (-not (Test-Path $installDir)) {
+          if (-not $foundDir) {
             Write-Host "Conteúdo de $env:LOCALAPPDATA\Programs:"
             Get-ChildItem -Path "$env:LOCALAPPDATA\Programs" -ErrorAction SilentlyContinue | Select-Object Name
-            throw "Falha: O diretório de instalação '$installDir' não foi criado pelo NSIS!"
+            Write-Host "Conteúdo de $env:ProgramFiles:"
+            Get-ChildItem -Path "$env:ProgramFiles" -ErrorAction SilentlyContinue | Select-Object Name
+            throw "Falha: O diretório de instalação do Contexos não foi encontrado em nenhum local esperado!"
           }
 
-          if (-not (Test-Path $appExe)) {
-            throw "Falha: 'Contexos.exe' não encontrado na pasta de instalação!"
-          }
+          $installDir = $foundDir
+          $appExe = Join-Path $installDir "Contexos.exe"
+          $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
+
+          Write-Host "Verificando diretório de instalação: $installDir"
           Write-Host "✅ Executável principal verificado: $appExe"
-
-          if (-not (Test-Path $gitExe)) {
-            throw "Falha: O MinGit embutido não foi empacotado em $gitExe!"
-          }
           Write-Host "✅ MinGit embutido verificado: $gitExe"
 
           $version = & $gitExe --version
