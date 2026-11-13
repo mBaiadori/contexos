@@ -236,10 +236,11 @@ export async function gitRoutes(app: FastifyInstance) {
         repo,
       });
       return res;
-    } catch (err: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao mesclar branch";
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao mesclar branch" });
+        .send({ error: message });
     }
   });
 

@@ -418,7 +418,7 @@ export class GitService {
 
     const isTargetActive = !repoNameParam || cfg.active_repo?.name === repoNameParam;
     const repoObj =
-      cfg.repos?.find((r: any) => r.name === repoName) ||
+      cfg.repos?.find((r) => r?.name === repoName) ||
       (isTargetActive ? cfg.active_repo : undefined);
     const configuredDefault = repoObj?.default_branch || (isTargetActive ? cfg.active_repo?.default_branch : undefined);
 
