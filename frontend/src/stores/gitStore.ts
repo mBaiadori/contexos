@@ -37,12 +37,21 @@ interface GitState {
   markWhatsNewAsSeen: () => void;
   commitGit: (message: string, files?: string[]) => Promise<{ success: boolean; message: string; commitHash?: string }>;
   syncGit: (branch?: string) => Promise<{ success: boolean; message: string }>;
-  createOrSwitchBranch: (branch: string, baseBranch?: string) => Promise<{ success: boolean; message: string }>;
+  createOrSwitchBranch: (
+    branch: string,
+    baseBranch?: string,
+    displayTitle?: string,
+  ) => Promise<{ success: boolean; message: string }>;
   refreshVersionGraph: (targetRepoName?: string) => Promise<VersionGraphData | null>;
   safeSwitch: (payload: { branch?: string; commitHash?: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard' }) => Promise<SafeSwitchResult>;
   popStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   dropStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   clearStash: () => Promise<{ success: boolean; message: string }>;
+  mergeBranch: (payload: {
+    sourceBranch: string;
+    targetBranch?: string;
+    message?: string;
+  }) => Promise<{ success: boolean; message: string; commitHash?: string; hasConflicts?: boolean; conflictFiles?: string[] }>;
 }
 
 const remoteUpdatesByRepo: Record<string, boolean> = {};
@@ -272,9 +281,18 @@ export const useGitStore = create<GitState>((set, get) => ({
     return res.data;
   },
 
-  createOrSwitchBranch: async (branch: string, baseBranch?: string) => {
+  createOrSwitchBranch: async (
+    branch: string,
+    baseBranch?: string,
+    displayTitle?: string,
+  ) => {
     const repo = useRepoStore.getState().activeRepo;
-    const res = await API.createOrSwitchBranch(branch, repo?.name, baseBranch);
+    const res = await API.createOrSwitchBranch(
+      branch,
+      repo?.name,
+      baseBranch,
+      displayTitle,
+    );
     if (res.ok) {
       await get().refreshGitStatus();
       await get().refreshGitLog(15);
@@ -352,5 +370,22 @@ export const useGitStore = create<GitState>((set, get) => ({
       await get().refreshVersionGraph();
     }
     return res.data || { success: false, message: 'Falha ao limpar stashes' };
+  },
+
+  mergeBranch: async (payload: {
+    sourceBranch: string;
+    targetBranch?: string;
+    message?: string;
+  }) => {
+    const repo = useRepoStore.getState().activeRepo;
+    const res = await API.mergeBranch({ ...payload, repo: repo?.name });
+    if (res.ok && res.data?.success) {
+      await get().refreshGitStatus();
+      await get().refreshGitLog(15);
+      await get().refreshWhatsNew();
+      await get().refreshVersionGraph();
+      if (repo) await useRepoStore.getState().loadTree(repo.name);
+    }
+    return res.data || { success: false, message: 'Falha ao executar o merge' };
   },
 }));

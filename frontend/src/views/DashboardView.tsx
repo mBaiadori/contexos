@@ -12,7 +12,6 @@ import { ScaffoldModal } from "../components/modals/ScaffoldModal";
 import { AISettingsModal } from "../components/modals/AISettingsModal";
 import { OnboardingModal } from "../components/modals/OnboardingModal";
 import { SelectOrgModal } from "../components/modals/SelectOrgModal";
-import { VersionGraphModal } from "../components/modals/VersionGraphModal";
 import { AlertBanner } from "../components/ui/AlertBanner";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAI } from "../context/AIContext";
@@ -82,7 +81,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isSelectOrgModalOpen, setIsSelectOrgModalOpen] = useState(false);
-  const [isVersionGraphOpen, setIsVersionGraphOpen] = useState(false);
 
   const {
     activeFile,
@@ -459,8 +457,19 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
 
             {activeSubView === "versions" && (
               <VersionsCanvasSubView
-                onNavigateToProposal={(_prId) => handleSelectView("prs")}
-                onOpenDiffModal={(_targetBranch) => handleOpenDiffModal()}
+                onNavigateToProposal={(prId) => {
+                  const base = buildRepoBaseUrl("prs");
+                  navigate(
+                    prId ? `${base}?pr=${encodeURIComponent(prId)}` : base,
+                  );
+                }}
+                onOpenDiffModal={(targetBranch) => {
+                  if (targetBranch) {
+                    setIsDiffModalOpen(true);
+                  } else {
+                    handleNavigateToEdits("drafts");
+                  }
+                }}
               />
             )}
 
@@ -629,17 +638,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       <SelectOrgModal
         isOpen={isSelectOrgModalOpen}
         onClose={() => setIsSelectOrgModalOpen(false)}
-      />
-
-      <VersionGraphModal
-        isOpen={isVersionGraphOpen}
-        onClose={() => setIsVersionGraphOpen(false)}
-        onNavigateToProposal={(_proposalId) => {
-          handleSelectView("prs");
-        }}
-        onOpenDiffModal={(_targetBranch) => {
-          handleOpenDiffModal();
-        }}
       />
     </div>
   );

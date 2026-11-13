@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../../context/AuthContext";
 import { useWorkspace } from "../../../../context/WorkspaceContext";
 import { API } from "../../../../services/api";
@@ -49,11 +49,16 @@ export function usePRsData() {
     closed: 0,
   });
 
-  const [activeStatus, setActiveStatus] = useState<PRStatusFilter>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  const prParam = searchParams.get("pr");
 
-  const [expandedPRs, setExpandedPRs] = useState<Record<number | string, boolean>>({});
+  const [activeStatus, setActiveStatus] = useState<PRStatusFilter>("all");
+  const [searchQuery, setSearchQuery] = useState(() => prParam || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => prParam || "");
+
+  const [expandedPRs, setExpandedPRs] = useState<Record<number | string, boolean>>(
+    () => (prParam ? { [prParam]: true } : {}),
+  );
   const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
   const [fileDiffsCache, setFileDiffsCache] = useState<Record<string, string>>({});
   const [fileDiffsData, setFileDiffsData] = useState<Record<string, PRFileDiffData>>({});

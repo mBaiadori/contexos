@@ -100,6 +100,81 @@ test("Git Version Graph & Safe Switch Suite", async (t) => {
       assert.strictEqual(switchStash.branch, "main");
       assert.strictEqual(switchStash.stashed, true);
     });
+
+    // 6. Criação de nova branch a partir de main sem novos commits (ahead === 0)
+    await t.test("Branch limpa recém-criada tem ahead === 0 e commits vazios", async () => {
+      const res = await gitService.switchOrCreateBranch(
+        "versao-limpa",
+        repoName,
+        undefined,
+        "main",
+        "Título Amigável da Versão Limpa",
+      );
+      assert.strictEqual(res.success, true);
+
+      const graph = await gitService.getVersionGraph(repoName);
+      const cleanNode = graph.nodes.find((n) => n.name === "versao-limpa") as any;
+      assert.ok(cleanNode, "Nó da nova branch deve existir no grafo");
+      assert.strictEqual(cleanNode.ahead, 0, "Branch sem commits próprios deve ter ahead === 0");
+      assert.strictEqual(cleanNode.commits?.length || 0, 0, "Lista de commits próprios deve estar vazia");
+      assert.strictEqual(cleanNode.displayName, "Título Amigável da Versão Limpa");
+    });
+
+    // 7. Tentativa de criar branch que já existe quando baseBranch é fornecido
+    await t.test("Bloqueia recriação acidental de branch existente ao fornecer baseBranch", async () => {
+      const dupRes = await gitService.switchOrCreateBranch(
+        "versao-limpa",
+        repoName,
+        undefined,
+        "main",
+      );
+      assert.strictEqual(dupRes.success, false);
+      assert.match(dupRes.message, /já existe/i);
+    });
+
+    // 8. Detached HEAD detection & checkout commit
+    await t.test("Identifica detached HEAD corretamente quando faz checkout de commit", async () => {
+      const graphBefore = await gitService.getVersionGraph(repoName);
+      const initialCommit = graphBefore.mainCommits?.find((c) => c.message.includes("Commit inicial"));
+      assert.ok(initialCommit);
+
+      const switchCommitRes = await gitService.safeSwitch({
+        commitHash: initialCommit.hash,
+        repo: repoName,
+        action: "switch",
+      });
+      assert.strictEqual(switchCommitRes.success, true);
+
+      const graphDetached = await gitService.getVersionGraph(repoName);
+      assert.strictEqual(graphDetached.isDetached, true);
+      assert.strictEqual(graphDetached.currentBranch, "HEAD");
+      assert.strictEqual(graphDetached.headHash, initialCommit.hash);
+
+      // Volta para a main
+      const switchBack = await gitService.safeSwitch({
+        branch: "main",
+        repo: repoName,
+        action: "switch",
+      });
+      assert.strictEqual(switchBack.success, true);
+      const graphBack = await gitService.getVersionGraph(repoName);
+      assert.strictEqual(graphBack.isDetached, false);
+      assert.strictEqual(graphBack.currentBranch, "main");
+    });
+
+    // 9. Merge branch
+    await t.test("Merge de branch integra alterações e marca como merged no grafo", async () => {
+      const mergeRes = await gitService.mergeBranch({
+        sourceBranch: "versao-rascunho",
+        repo: repoName,
+      });
+      assert.strictEqual(mergeRes.success, true);
+
+      const graph = await gitService.getVersionGraph(repoName);
+      const draftNode = graph.nodes.find((n) => n.name === "versao-rascunho") as any;
+      assert.ok(draftNode);
+      assert.strictEqual(draftNode.isMerged, true);
+    });
   } finally {
     (gitService as any).getRepoDir = originalGetRepoDir;
     fs.rmSync(tmpDir, { recursive: true, force: true });

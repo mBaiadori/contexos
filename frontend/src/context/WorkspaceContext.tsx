@@ -111,6 +111,7 @@ export interface WorkspaceContextType {
   createOrSwitchBranch: (
     branch: string,
     baseBranch?: string,
+    displayTitle?: string,
   ) => Promise<{ success: boolean; message: string }>;
   versionGraph: VersionGraphData | null;
   isVersionGraphLoading: boolean;
@@ -119,6 +120,11 @@ export interface WorkspaceContextType {
   popStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   dropStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   clearStash: () => Promise<{ success: boolean; message: string }>;
+  mergeBranch: (payload: {
+    sourceBranch: string;
+    targetBranch?: string;
+    message?: string;
+  }) => Promise<{ success: boolean; message: string; commitHash?: string; hasConflicts?: boolean; conflictFiles?: string[] }>;
   moveFileOrFolder: (
     sourcePath: string,
     targetPath: string,

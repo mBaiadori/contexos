@@ -24,6 +24,7 @@ import { translationsService } from "../translations/translations.service.js";
 import { governanceService } from "../governance/governance.service.js";
 import { canAccessDocument } from "../../utils/crypto.js";
 import { isPathInside, resolveSafeRepoPath } from "../../utils/repo-ref.js";
+import { draftsTrashService } from "../git/drafts-trash.service.js";
 
 export interface TreeNode {
   name: string;
@@ -1073,6 +1074,82 @@ export class WorkspaceService {
       ? paths.map((p) => p.trim().replace(/^\/+/, "")).filter(Boolean)
       : null;
     const targetSet = cleanPaths ? new Set(cleanPaths) : null;
+
+    // Preservar alterações na lixeira permanente antes de descartar
+    try {
+      let fromBranch = "Principal";
+      const filesToArchive: Array<{ path: string; status?: string }> = [];
+      let patch = "";
+
+      if (await isGitRepo(repoDir)) {
+        const curBranchRes = await executeGit(["branch", "--show-current"], repoDir);
+        if (curBranchRes.success && curBranchRes.stdout.trim()) {
+          fromBranch = curBranchRes.stdout.trim();
+        }
+
+        const diffArgs = ["diff", "HEAD"];
+        if (cleanPaths && cleanPaths.length > 0) {
+          diffArgs.push("--", ...cleanPaths.map((p) => assertGitPath(p)));
+        }
+        const diffRes = await executeGit(diffArgs, repoDir);
+        patch = diffRes.stdout || "";
+
+        const statusRes = await getGitStatus(repoDir);
+        const candidateFiles = (statusRes.files || []).filter(
+          (f) => !targetSet || targetSet.has(f.path.trim().replace(/^\/+/, ""))
+        );
+
+        for (const uf of candidateFiles) {
+          filesToArchive.push({ path: uf.path, status: uf.status });
+          if (uf.status === "A" || uf.status === "U" || uf.status === "??") {
+            const filePath = path.join(repoDir, uf.path);
+            if (fs.existsSync(filePath) && !fs.statSync(filePath).isDirectory()) {
+              const content = fs.readFileSync(filePath, "utf-8");
+              patch +=
+                `\n--- /dev/null\n+++ b/${uf.path}\n@@ -0,0 +1,${content.split("\n").length} @@\n` +
+                content
+                  .split("\n")
+                  .map((l) => `+${l}`)
+                  .join("\n");
+            }
+          }
+        }
+      }
+
+      for (const ch of rawChanges) {
+        const cp = ch.path.trim().replace(/^\/+/, "");
+        if (!targetSet || targetSet.has(cp)) {
+          if (!filesToArchive.some((f) => f.path === cp)) {
+            filesToArchive.push({ path: cp, status: ch.type });
+          }
+          if (!patch.includes(cp) && (ch.old_content !== undefined || ch.new_content !== undefined)) {
+            const oldLines = (ch.old_content || "").split("\n");
+            const newLines = (ch.new_content || "").split("\n");
+            patch += `\n--- a/${cp}\n+++ b/${cp}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n`;
+            for (const l of oldLines) patch += `-${l}\n`;
+            for (const l of newLines) patch += `+${l}\n`;
+          }
+        }
+      }
+
+      if (patch.trim() && filesToArchive.length > 0) {
+        await draftsTrashService.moveToTrash(
+          {
+            fromBranch,
+            source: "workspace",
+            message: cleanPaths
+              ? `Alterações descartadas em ${cleanPaths.length === 1 ? cleanPaths[0] : `${cleanPaths.length} arquivos`}`
+              : "Todas as alterações descartadas no workspace",
+            files: filesToArchive,
+            patch,
+          },
+          repoName
+        );
+      }
+    } catch (trashErr) {
+      console.warn("[WorkspaceService] Falha ao arquivar rascunho descartado na lixeira:", trashErr);
+    }
+
     const remainingChanges = [];
 
     for (const change of rawChanges) {

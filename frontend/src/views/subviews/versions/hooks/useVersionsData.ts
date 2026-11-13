@@ -314,7 +314,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   const toggleAllWhatsNewFiles = (filteredFiles: Array<{ path: string }>) => {
     const areAllExpanded =
       filteredFiles.length > 0 &&
-      filteredFiles.every((f) => !expandedWhatsNewFiles[f.path]);
+      filteredFiles.every((f) => !!expandedWhatsNewFiles[f.path]);
     const nextState = !areAllExpanded;
     const nextMap: Record<string, boolean> = {};
     filteredFiles.forEach((f) => {
@@ -327,7 +327,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   const toggleAllDraftFiles = () => {
     const areAllExpanded =
       allDraftFiles.length > 0 &&
-      allDraftFiles.every((f) => !expandedDraftFiles[`${f.repoName}:${f.path}`]);
+      allDraftFiles.every((f) => !!expandedDraftFiles[`${f.repoName}:${f.path}`]);
     const nextState = !areAllExpanded;
     const nextMap: Record<string, boolean> = {};
     allDraftFiles.forEach((f) => {
@@ -341,7 +341,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   const toggleAllSystemFiles = () => {
     const areAllExpanded =
       allSystemDraftFiles.length > 0 &&
-      allSystemDraftFiles.every((f) => !expandedSystemFiles[`${f.repoName}:${f.path}`]);
+      allSystemDraftFiles.every((f) => !!expandedSystemFiles[`${f.repoName}:${f.path}`]);
     const nextState = !areAllExpanded;
     const nextMap: Record<string, boolean> = {};
     allSystemDraftFiles.forEach((f) => {
@@ -609,6 +609,9 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     isSyncing,
     handleSync,
     loadAllEdits,
+    refreshGitStatus,
+    refreshPendingChanges,
+    refreshWhatsNew,
     openProposalModalWithRepo,
     // WhatsNew
     whatsNewFilter,

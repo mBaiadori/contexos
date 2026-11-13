@@ -630,13 +630,44 @@ export interface VersionNode {
   uncommittedFiles?: GitFileStatus[];
 }
 
+export interface GitGraphCommitBranch {
+  name: string;
+  displayName: string;
+  isDefault: boolean;
+  isCurrent: boolean;
+  isMerged: boolean;
+}
+
+export interface GitGraphCommit {
+  hash: string;
+  shortHash: string;
+  parents: string[];
+  author: string;
+  date: string;
+  message: string;
+  isHead?: boolean;
+  isMainTip?: boolean;
+  isMainLineage?: boolean;
+  branches?: GitGraphCommitBranch[];
+}
+
 export interface VersionGraphData {
   repo: string;
   defaultBranch: string;
   currentBranch: string;
+  headHash?: string;
+  isDetached?: boolean;
+  uncommittedFiles?: GitFileStatus[];
   stashes?: Array<{ id: string; message: string; date: string }>;
+  commits?: GitGraphCommit[];
   mainCommits?: GitCommitInfo[];
   nodes: VersionNode[];
+}
+
+export interface SelectedNodeTarget {
+  type: "branch" | "commit";
+  branchName?: string;
+  commitHash?: string;
 }
 
 export interface SafeSwitchResult {

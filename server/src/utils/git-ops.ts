@@ -23,12 +23,16 @@ export async function cloneGitRepo(
   onProgress?: (p: GitProgressEvent) => void,
 ): Promise<{ success: boolean; message: string }> {
   if (await isGitRepo(repoDir)) {
-    return { success: true, message: "Repositório já está clonado localmente." };
+    return {
+      success: true,
+      message: "Repositório já está clonado localmente.",
+    };
   }
 
-  const cleanRemoteUrl = remoteUrl.startsWith("https://") && !remoteUrl.endsWith(".git")
-    ? `${remoteUrl}.git`
-    : remoteUrl;
+  const cleanRemoteUrl =
+    remoteUrl.startsWith("https://") && !remoteUrl.endsWith(".git")
+      ? `${remoteUrl}.git`
+      : remoteUrl;
 
   // Diretório residual (sem .git) só é descartado se contiver apenas arquivos gerados automaticamente
   const generated = [
@@ -46,7 +50,8 @@ export async function cloneGitRepo(
     if (!stray.every((n) => generated.includes(n))) {
       return {
         success: false,
-        message: "A pasta de destino já existe e contém arquivos locais sem repositório Git.",
+        message:
+          "A pasta de destino já existe e contém arquivos locais sem repositório Git.",
       };
     }
   }
@@ -82,7 +87,8 @@ export async function cloneGitRepo(
 
   if (user?.name || user?.login) {
     const authorName = (user.name || user.login || "Contexos") as string;
-    const authorEmail = (user.email || `${user.login || "context-os"}@users.noreply.github.com`) as string;
+    const authorEmail = (user.email ||
+      `${user.login || "context-os"}@users.noreply.github.com`) as string;
     await executeGit(["config", "user.name", authorName], repoDir);
     await executeGit(["config", "user.email", authorEmail], repoDir);
   }
@@ -102,11 +108,17 @@ export async function pullGitRepo(
   onProgress?: (p: GitProgressEvent) => void,
 ): Promise<{ success: boolean; message: string }> {
   if (!(await isGitRepo(repoDir))) {
-    return { success: false, message: "Repositório não está clonado localmente." };
+    return {
+      success: false,
+      message: "Repositório não está clonado localmente.",
+    };
   }
 
   const defaultBranch = await getDefaultBranch(repoDir);
-  const branchRes = await executeGit(["rev-parse", "--abbrev-ref", "HEAD"], repoDir);
+  const branchRes = await executeGit(
+    ["rev-parse", "--abbrev-ref", "HEAD"],
+    repoDir,
+  );
   const activeBranch = branch || branchRes.stdout?.trim() || defaultBranch;
 
   const fetchRes = await executeGitCommandWithProgress(
@@ -117,7 +129,10 @@ export async function pullGitRepo(
   );
 
   if (!fetchRes.success) {
-    return { success: false, message: fetchRes.stderr || "Erro ao buscar atualizações remotas." };
+    return {
+      success: false,
+      message: fetchRes.stderr || "Erro ao buscar atualizações remotas.",
+    };
   }
 
   const pullRes = await executeGitCommandWithProgress(
@@ -130,7 +145,8 @@ export async function pullGitRepo(
   if (!pullRes.success) {
     return {
       success: false,
-      message: "Não foi possível avançar com fast-forward. Existem alterações locais ou histórico divergente.",
+      message:
+        "Não foi possível avançar com fast-forward. Existem alterações locais ou histórico divergente.",
     };
   }
 
@@ -207,6 +223,7 @@ export async function createAndCheckoutBranch(
   repoDir: string,
   branchName: string,
   baseBranch?: string,
+  displayTitle?: string,
 ): Promise<{ success: boolean; message: string }> {
   const isRepo = await isGitRepo(repoDir);
   if (!isRepo)
@@ -214,43 +231,200 @@ export async function createAndCheckoutBranch(
 
   const safeName = assertBranchName(branchName.trim().replace(/\s+/g, "-"));
 
-  // Check if branch exists
-  const checkRes = await executeGit(["checkout", safeName], repoDir);
-  if (checkRes.success) {
-    return { success: true, message: `Trocou para a branch '${safeName}'.` };
+  // Destrava arquivos transitórios de controle interno (.spec-memory/workspace_changes.json)
+  // que possam colidir durante o checkout se já tiverem sido commitados em alguma branch
+  const wsChangesPath = path.join(repoDir, ".spec-memory", "workspace_changes.json");
+  let wsChangesBackup: string | null = null;
+  if (fs.existsSync(wsChangesPath)) {
+    try {
+      wsChangesBackup = fs.readFileSync(wsChangesPath, "utf-8");
+      fs.unlinkSync(wsChangesPath);
+    } catch {}
   }
 
-  // Identifica a branch de origem antes da criação
-  let currentBranchBefore = "";
   try {
-    const curRes = await executeGit(["branch", "--show-current"], repoDir);
-    if (curRes.success) {
-      currentBranchBefore = curRes.stdout.trim();
+    // Verifica se a branch já existe localmente
+    const branchExistsRes = await executeGit(
+      ["rev-parse", "--verify", `refs/heads/${safeName}`],
+      repoDir,
+    );
+
+    if (branchExistsRes.success) {
+      if (baseBranch) {
+        return {
+          success: false,
+          message: `A versão '${safeName}' já existe. Escolha outro nome.`,
+        };
+      }
+      const checkRes = await executeGit(["checkout", safeName], repoDir);
+      if (!checkRes.success) {
+        return {
+          success: false,
+          message:
+            checkRes.stderr || `Erro ao alternar para a branch '${safeName}'.`,
+        };
+      }
+      return { success: true, message: `Trocou para a branch '${safeName}'.` };
     }
-  } catch {}
 
-  const effectiveParent = baseBranch ? assertBranchName(baseBranch) : (currentBranchBefore || "main");
-
-  const args = baseBranch
-    ? ["checkout", "-b", safeName, assertBranchName(baseBranch)]
-    : ["checkout", "-b", safeName];
-
-  const createRes = await executeGit(args, repoDir);
-  if (createRes.success) {
-    // Persiste no .git/config a origem de onde a branch foi bifurcada
+    // Identifica a branch de origem antes da criação
+    let currentBranchBefore = "";
     try {
-      await executeGit(["config", `branch.${safeName}.parent`, effectiveParent], repoDir);
+      const curRes = await executeGit(["branch", "--show-current"], repoDir);
+      if (curRes.success) {
+        currentBranchBefore = curRes.stdout.trim();
+      }
     } catch {}
 
+    const safeStartPoint = baseBranch
+      ? /^[0-9a-f]{7,40}$/i.test(baseBranch.trim())
+        ? assertCommitish(baseBranch.trim(), "Commit base")
+        : assertBranchName(baseBranch.trim(), "Branch base")
+      : undefined;
+
+    const effectiveParent =
+      safeStartPoint && !/^[0-9a-f]{7,40}$/i.test(safeStartPoint)
+        ? safeStartPoint
+        : currentBranchBefore || (await getDefaultBranch(repoDir));
+
+    const args = safeStartPoint
+      ? ["checkout", "-b", safeName, safeStartPoint]
+      : ["checkout", "-b", safeName];
+
+    const createRes = await executeGit(args, repoDir);
+    if (createRes.success) {
+      // Persiste no .git/config a origem de onde a branch foi bifurcada e título se fornecido
+      try {
+        await executeGit(
+          ["config", `branch.${safeName}.parent`, effectiveParent],
+          repoDir,
+        );
+        if (displayTitle?.trim()) {
+          await executeGit(
+            ["config", `branch.${safeName}.title`, displayTitle.trim()],
+            repoDir,
+          );
+        }
+      } catch {}
+
+      return {
+        success: true,
+        message: `Branch '${safeName}' criada com sucesso a partir de '${safeStartPoint || effectiveParent}'.`,
+      };
+    }
+
     return {
-      success: true,
-      message: `Branch '${safeName}' criada com sucesso a partir de '${effectiveParent}'.`,
+      success: false,
+      message: createRes.stderr || "Erro ao criar branch.",
+    };
+  } finally {
+    if (wsChangesBackup && !fs.existsSync(wsChangesPath)) {
+      try {
+        fs.writeFileSync(wsChangesPath, wsChangesBackup, "utf-8");
+      } catch {}
+    }
+  }
+}
+
+export async function mergeGitBranch(
+  repoDir: string,
+  sourceBranch: string,
+  targetBranch?: string,
+  customMessage?: string,
+): Promise<{
+  success: boolean;
+  message: string;
+  commitHash?: string;
+  hasConflicts?: boolean;
+  conflictFiles?: string[];
+}> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) {
+    return { success: false, message: "Diretório não é um repositório Git." };
+  }
+
+  const safeSource = assertBranchName(sourceBranch.trim(), "Branch de origem");
+  const status = await getGitStatus(repoDir);
+  if (status.files && status.files.length > 0) {
+    return {
+      success: false,
+      message:
+        "Existem alterações não salvas no workspace. Salve um commit, guarde no stash ou descarte antes de fazer o merge.",
     };
   }
 
+  let currentBranch = status.branch;
+  if (targetBranch && targetBranch.trim() && targetBranch.trim() !== currentBranch) {
+    const safeTarget = assertBranchName(targetBranch.trim(), "Branch de destino");
+    const coRes = await executeGit(["checkout", safeTarget], repoDir);
+    if (!coRes.success) {
+      return {
+        success: false,
+        message: coRes.stderr || `Não foi possível alternar para '${safeTarget}' antes do merge.`,
+      };
+    }
+    currentBranch = safeTarget;
+  }
+
+  if (!currentBranch || currentBranch === "HEAD") {
+    return {
+      success: false,
+      message:
+        "Você está em um commit avulso (HEAD desacoplado). Alterne para uma branch antes de fazer o merge.",
+    };
+  }
+
+  if (currentBranch === safeSource) {
+    return {
+      success: false,
+      message: "A branch de origem e a branch de destino são a mesma.",
+    };
+  }
+
+  const mergeMsg =
+    customMessage?.trim() || `Merge branch '${safeSource}' into ${currentBranch}`;
+
+  const mergeRes = await executeGit(
+    ["merge", "--no-ff", safeSource, "-m", mergeMsg],
+    repoDir,
+  );
+
+  if (!mergeRes.success) {
+    // Coleta arquivos em conflito antes de abortar para manter o repositório íntegro
+    let conflictFiles: string[] = [];
+    try {
+      const diffUnmerged = await executeGit(
+        ["diff", "--name-only", "--diff-filter=U"],
+        repoDir,
+      );
+      if (diffUnmerged.success && diffUnmerged.stdout.trim()) {
+        conflictFiles = diffUnmerged.stdout
+          .trim()
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    } catch {}
+
+    await executeGit(["merge", "--abort"], repoDir).catch(() => {});
+
+    const conflictSuffix =
+      conflictFiles.length > 0
+        ? ` Arquivos em conflito: ${conflictFiles.join(", ")}.`
+        : "";
+    return {
+      success: false,
+      hasConflicts: true,
+      conflictFiles,
+      message: `Conflito ao mesclar '${safeSource}' em '${currentBranch}'. O merge foi cancelado automaticamente para preservar o workspace.${conflictSuffix}`,
+    };
+  }
+
+  const headRes = await executeGit(["rev-parse", "HEAD"], repoDir);
   return {
-    success: false,
-    message: createRes.stderr || "Erro ao criar branch.",
+    success: true,
+    commitHash: headRes.stdout.trim(),
+    message: `Branch '${safeSource}' mesclada em '${currentBranch}' com sucesso.`,
   };
 }
 
@@ -282,7 +456,13 @@ export async function syncGit(
 
   // 2. Pull
   let pullRes = await executeGit(
-    ["pull", safeRemote, safeBranch, "--allow-unrelated-histories", "--no-edit"],
+    [
+      "pull",
+      safeRemote,
+      safeBranch,
+      "--allow-unrelated-histories",
+      "--no-edit",
+    ],
     repoDir,
   );
   if (!pullRes.success) {
@@ -363,7 +543,8 @@ export async function rollbackToCommit(
     if (!status.isClean) {
       return {
         success: false,
-        message: "Existem alterações não commitadas no repositório. Faça commit ou use force para sobrescrever.",
+        message:
+          "Existem alterações não commitadas no repositório. Faça commit ou use force para sobrescrever.",
       };
     }
   }
@@ -420,7 +601,10 @@ export async function rollbackToCommit(
     };
   }
 
-  const newHashRes = await executeGit(["rev-parse", "--short", "HEAD"], repoDir);
+  const newHashRes = await executeGit(
+    ["rev-parse", "--short", "HEAD"],
+    repoDir,
+  );
   return {
     success: true,
     message: `Revertido com sucesso para a revisão ${shortTarget}.`,

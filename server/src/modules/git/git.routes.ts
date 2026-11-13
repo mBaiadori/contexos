@@ -45,8 +45,10 @@ export async function gitRoutes(app: FastifyInstance) {
   // 3.1 Get Version Graph (Nodes, Proposals, Status)
   app.get("/api/git/version-graph", async (req, reply) => {
     try {
-      const { repo } = req.query as { repo?: string };
-      const data = await gitService.getVersionGraph(repo);
+      const { repo, fetchRemote } = req.query as { repo?: string; fetchRemote?: string };
+      const data = await gitService.getVersionGraph(repo, undefined, {
+        fetchRemote: fetchRemote === "true" || fetchRemote === "1",
+      });
       return data;
     } catch (err: any) {
       return reply
@@ -193,22 +195,51 @@ export async function gitRoutes(app: FastifyInstance) {
   // 4. Create or Switch Branch
   app.post("/api/git/branch", async (req, reply) => {
     try {
-      const { branch, repo, baseBranch } = req.body as {
+      const { branch, repo, baseBranch, displayTitle } = req.body as {
         branch: string;
         repo?: string;
         baseBranch?: string;
+        displayTitle?: string;
       };
       if (!branch) {
         return reply
           .status(400)
           .send({ error: "Nome da branch é obrigatório" });
       }
-      const res = await gitService.switchOrCreateBranch(branch, repo, undefined, baseBranch);
+      const res = await gitService.switchOrCreateBranch(branch, repo, undefined, baseBranch, displayTitle);
       return res;
     } catch (err: any) {
       return reply
         .status(500)
         .send({ error: err.message || "Erro ao trocar de branch" });
+    }
+  });
+
+  // 4.1 Merge Branch
+  app.post("/api/git/merge", async (req, reply) => {
+    try {
+      const { sourceBranch, targetBranch, message, repo } = req.body as {
+        sourceBranch: string;
+        targetBranch?: string;
+        message?: string;
+        repo?: string;
+      };
+      if (!sourceBranch) {
+        return reply
+          .status(400)
+          .send({ error: "Branch de origem (sourceBranch) é obrigatória" });
+      }
+      const res = await gitService.mergeBranch({
+        sourceBranch,
+        targetBranch,
+        message,
+        repo,
+      });
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao mesclar branch" });
     }
   });
 

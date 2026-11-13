@@ -206,12 +206,19 @@ export async function getGitBranches(
   if (!isRepo)
     return { current: "main", branches: ["main"], localBranches: ["main"] };
 
-  // Identifica a branch atual de forma explícita
+  // Identifica a branch atual de forma explícita (ou "HEAD" quando em detached HEAD)
   let current = "main";
   try {
     const curRes = await executeGit(["branch", "--show-current"], repoDir);
     if (curRes.success && curRes.stdout.trim()) {
       current = curRes.stdout.trim();
+    } else {
+      const headRes = await executeGit(["rev-parse", "--abbrev-ref", "HEAD"], repoDir);
+      if (headRes.success && headRes.stdout.trim() === "HEAD") {
+        current = "HEAD";
+      } else {
+        current = await getDefaultBranch(repoDir);
+      }
     }
   } catch {}
 
@@ -223,7 +230,7 @@ export async function getGitBranches(
   const lines = res.stdout.split("\n").filter(Boolean);
   const branchSet = new Set<string>();
   const localSet = new Set<string>();
-  if (current) {
+  if (current && current !== "HEAD") {
     branchSet.add(current);
     localSet.add(current);
   }
@@ -231,7 +238,14 @@ export async function getGitBranches(
   for (const rawLine of lines) {
     const isCurrent = rawLine.startsWith("*");
     const cleanLine = rawLine.replace("*", "").trim();
-    if (!cleanLine || cleanLine.includes("->")) continue; // Ignora ponteiros HEAD simbólicos
+    if (
+      !cleanLine ||
+      cleanLine.includes("->") ||
+      cleanLine.startsWith("(") ||
+      cleanLine.includes("HEAD detached")
+    ) {
+      continue; // Ignora ponteiros HEAD simbólicos ou linhas de detached HEAD
+    }
 
     const isRemote =
       cleanLine.startsWith("remotes/") || cleanLine.startsWith("origin/");

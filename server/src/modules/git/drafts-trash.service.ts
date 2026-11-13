@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { executeGit } from "../../utils/git.js";
 import { loadConfig } from "../../config/storage.js";
-import { parseRepoRef, resolveRepoDirPath, RepoRef } from "../../utils/repo-ref.js";
+import { resolveRepoDir } from "../../config/constants.js";
 import { workspaceService } from "../workspace/workspace.service.js";
 
 export interface DiscardedDraftItem {
@@ -60,14 +60,12 @@ export class DraftsTrashService {
     const effectiveOwner =
       ownerParam ||
       (cfg.active_repo?.name === activeRepoName
-        ? cfg.active_repo?.owner?.login
+        ? (typeof cfg.active_repo?.owner === "string"
+            ? cfg.active_repo.owner
+            : cfg.active_repo?.owner?.login)
         : undefined);
 
-    const ref: RepoRef = {
-      owner: effectiveOwner || "",
-      repo: activeRepoName,
-    };
-    return resolveRepoDirPath(ref);
+    return resolveRepoDir(activeRepoName, effectiveOwner);
   }
 
   async listTrash(repoName?: string, ownerParam?: string): Promise<DiscardedDraftItem[]> {

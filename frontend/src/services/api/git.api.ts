@@ -78,11 +78,30 @@ export const gitApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async createOrSwitchBranch(branch: string, repo?: string, baseBranch?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  async createOrSwitchBranch(
+    branch: string,
+    repo?: string,
+    baseBranch?: string,
+    displayTitle?: string,
+  ): Promise<ApiResponse<{ success: boolean; message: string }>> {
     const res = await fetch('/api/git/branch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch, repo, baseBranch })
+      body: JSON.stringify({ branch, repo, baseBranch, displayTitle })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async mergeBranch(payload: {
+    sourceBranch: string;
+    targetBranch?: string;
+    message?: string;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; message: string; commitHash?: string; hasConflicts?: boolean; conflictFiles?: string[] }>> {
+    const res = await fetch('/api/git/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
     return { ok: res.ok, data: await res.json() };
   },
