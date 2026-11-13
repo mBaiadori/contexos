@@ -119,7 +119,31 @@ export async function pullGitRepo(
     ["rev-parse", "--abbrev-ref", "HEAD"],
     repoDir,
   );
-  const activeBranch = branch || branchRes.stdout?.trim() || defaultBranch;
+  const rawBranch = branchRes.success && branchRes.stdout?.trim() ? branchRes.stdout.trim() : "";
+  const activeBranch = branch || (rawBranch && rawBranch !== "HEAD" ? rawBranch : "") || defaultBranch || "main";
+
+  // Verifica se o repositório remoto possui a branch antes de tentar fetch/pull
+  const remoteRefCheck = await executeGit(
+    ["ls-remote", "--heads", "origin", activeBranch],
+    repoDir,
+    token,
+  );
+  const remoteBranchExists =
+    remoteRefCheck.success && Boolean(remoteRefCheck.stdout.trim());
+
+  if (!remoteBranchExists) {
+    const headCheck = await executeGit(["rev-parse", "--verify", "HEAD"], repoDir);
+    if (!headCheck.success) {
+      return {
+        success: true,
+        message: `Repositório remoto em branco. Crie seu primeiro arquivo para inicializar a branch '${activeBranch}'.`,
+      };
+    }
+    return {
+      success: true,
+      message: `Branch '${activeBranch}' ainda não existe no remoto. Realize um push para criá-la no GitHub.`,
+    };
+  }
 
   const fetchRes = await executeGitCommandWithProgress(
     ["fetch", "--progress", "origin", activeBranch],
@@ -446,37 +470,61 @@ export async function syncGit(
   const safeRemote = assertRemoteName(remote);
   const safeBranch = assertBranchName(branch);
 
+  // Garante a nomenclatura correta da branch local
+  await executeGit(["branch", "-M", safeBranch], repoDir).catch(() => {});
+
   const prevHeadRes = await executeGit(["rev-parse", "HEAD"], repoDir);
   const previousHead = prevHeadRes.success
     ? prevHeadRes.stdout.trim()
     : undefined;
+  const hasLocalCommits = prevHeadRes.success;
 
-  // 1. Fetch remote
-  await executeGit(["fetch", safeRemote], repoDir);
-
-  // 2. Pull
-  let pullRes = await executeGit(
-    [
-      "pull",
-      safeRemote,
-      safeBranch,
-      "--allow-unrelated-histories",
-      "--no-edit",
-    ],
+  // Verifica se o remoto já possui a branch
+  const remoteRefCheck = await executeGit(
+    ["ls-remote", "--heads", safeRemote, safeBranch],
     repoDir,
   );
-  if (!pullRes.success) {
+  const remoteBranchExists =
+    remoteRefCheck.success && Boolean(remoteRefCheck.stdout.trim());
+
+  let pullRes = { success: true, stdout: "", stderr: "" };
+
+  // 1. Pull apenas se a branch remota de fato já existir
+  if (remoteBranchExists) {
+    await executeGit(["fetch", safeRemote], repoDir);
+
     pullRes = await executeGit(
-      ["pull", safeRemote, safeBranch, "--rebase"],
+      [
+        "pull",
+        safeRemote,
+        safeBranch,
+        "--allow-unrelated-histories",
+        "--no-edit",
+      ],
       repoDir,
     );
+    if (!pullRes.success) {
+      pullRes = await executeGit(
+        ["pull", safeRemote, safeBranch, "--rebase"],
+        repoDir,
+      );
+    }
   }
 
-  // 3. Push
-  const pushRes = await executeGit(
-    ["push", "-u", safeRemote, safeBranch],
-    repoDir,
-  );
+  // 2. Push apenas se houver commits locais
+  let pushRes = { success: true, stdout: "", stderr: "" };
+  if (hasLocalCommits) {
+    pushRes = await executeGit(
+      ["push", "-u", safeRemote, safeBranch],
+      repoDir,
+    );
+  } else if (!remoteBranchExists) {
+    return {
+      success: true,
+      message: `Repositório remoto em branco pronto. Crie seu primeiro arquivo ou documento para publicar na branch '${safeBranch}'.`,
+      previousHead,
+    };
+  }
 
   const currHeadRes = await executeGit(["rev-parse", "HEAD"], repoDir);
   const currentHead = currHeadRes.success
@@ -495,21 +543,25 @@ export async function syncGit(
   }
 
   const msgParts: string[] = [];
-  if (pullRes.success) {
-    msgParts.push(`Pull: ${pullRes.stdout || "Atualizado com sucesso"}`);
-  } else if (pullRes.stderr) {
-    msgParts.push(`Pull Aviso: ${pullRes.stderr}`);
+  if (remoteBranchExists) {
+    if (pullRes.success) {
+      msgParts.push(`Pull: ${pullRes.stdout || "Atualizado com sucesso"}`);
+    } else if (pullRes.stderr) {
+      msgParts.push(`Pull Aviso: ${pullRes.stderr}`);
+    }
   }
 
-  if (pushRes.success) {
-    msgParts.push(`Push: ${pushRes.stdout || "Enviado com sucesso"}`);
-  } else if (pushRes.stderr) {
-    msgParts.push(`Push Aviso: ${pushRes.stderr}`);
+  if (hasLocalCommits) {
+    if (pushRes.success) {
+      msgParts.push(`Push: ${pushRes.stdout || "Enviado com sucesso"}`);
+    } else if (pushRes.stderr) {
+      msgParts.push(`Push Aviso: ${pushRes.stderr}`);
+    }
   }
 
   return {
-    success: pushRes.success || pullRes.success,
-    message: msgParts.join(" | ") || "Sincronizado",
+    success: (hasLocalCommits ? pushRes.success : true) && (remoteBranchExists ? pullRes.success : true),
+    message: msgParts.join(" | ") || (hasLocalCommits ? "Sincronizado" : "Pronto"),
     previousHead,
     currentHead,
     newCommitsCount,

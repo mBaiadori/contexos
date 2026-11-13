@@ -285,13 +285,16 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
                   <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
                   <div style={{ flex: 1, lineHeight: "1.4" }}>
                     <strong style={{ fontSize: "14px" }}>
-                      {isAdminError ? "Permissão de Administrador Necessária" : "Erro ao criar repositório"}
+                      {isAdminError ? "Permissão de Administrador ou Restrição da Organização" : "Erro ao criar repositório"}
                     </strong>
                     <div style={{ marginTop: "4px" }}>
-                      {isAdminError
-                        ? `A organização '${selectedOwner}' foi criada após seu login ou possui restrição de acesso a aplicativos terceiros. O GitHub exige conceder acesso ao aplicativo ou ser o administrador configurado.`
-                        : errorMessage}
+                      {errorMessage}
                     </div>
+                    {isAdminError && (
+                      <div style={{ marginTop: "4px", fontSize: "12px", opacity: 0.9 }}>
+                        Dica: Verifique se a organização permite que membros criem repositórios ou se há restrições para aplicativos de terceiros nas configurações da organização no GitHub.
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -1173,7 +1173,30 @@ export class ReposService {
       }
     }
 
-    // 8. Branch Protection no GitHub
+    // 8. Git Add, Commit e Push inicial (cria e publica a branch padrão no GitHub)
+    const isGit = await isGitRepo(repoDir);
+    const defaultBranch = assertBranchName(cfg.active_repo?.default_branch || "main");
+    if (isGit) {
+      try {
+        await executeGit(["branch", "-M", defaultBranch], repoDir).catch(() => {});
+        await executeGit(["add", "-A"], repoDir);
+        await executeGit(
+          ["commit", "-m", "chore(context-os): inicializar governanca do framework"],
+          repoDir,
+        );
+
+        if (cfg.token && cfg.active_repo?.html_url) {
+          await executeGit(["push", "-u", "origin", defaultBranch], repoDir);
+        }
+      } catch (gitErr: any) {
+        console.warn(
+          `[ReposService] Aviso no commit inicial em ${name}:`,
+          gitErr.message,
+        );
+      }
+    }
+
+    // 9. Branch Protection no GitHub (apenas após a branch já existir remotamente)
     let protectionMessage = "Não aplicável";
     const shouldEnableProtection =
       security?.enable_branch_protection ?? preset === "recommended";
@@ -1183,7 +1206,6 @@ export class ReposService {
       cfg.token &&
       cfg.active_repo?.full_name?.includes("/")
     ) {
-      const defaultBranch = cfg.active_repo?.default_branch || "main";
       const pRes = await applyBranchProtection(
         cfg.active_repo.full_name,
         defaultBranch,
@@ -1194,28 +1216,6 @@ export class ReposService {
         pRes.statusCode === 200 || pRes.statusCode === 201
           ? "Ativada com sucesso"
           : `Pendente (${pRes.data?.message || "Aviso"})`;
-    }
-
-    // 9. Git Add, Commit e Push
-    const isGit = await isGitRepo(repoDir);
-    if (isGit) {
-      try {
-        await executeGit(["add", "-A"], repoDir);
-        await executeGit(
-          ["commit", "-m", "chore(context-os): inicializar governanca do framework"],
-          repoDir,
-        );
-
-        if (cfg.token && cfg.active_repo?.html_url) {
-          const defaultBranch = assertBranchName(cfg.active_repo?.default_branch || "main");
-          await executeGit(["push", "origin", defaultBranch], repoDir);
-        }
-      } catch (gitErr: any) {
-        console.warn(
-          `[ReposService] Aviso no commit inicial em ${name}:`,
-          gitErr.message,
-        );
-      }
     }
 
     // 10. Atualiza active_repo e invalida árvore

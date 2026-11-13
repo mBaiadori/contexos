@@ -179,6 +179,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
       activeOrg.login.toLowerCase() === user.login.toLowerCase()
     )
       return true;
+    // Membros de organização também têm permissão para criar repositórios (o GitHub permite caso a org habilite)
+    if (activeOrg.role === "member") return true;
+    // Se está em qualquer organização ativa válida onde o usuário tem acesso
+    if (activeOrg.login && activeOrg.login !== "local") return true;
     return false;
   }, [activeOrg, user]);
 

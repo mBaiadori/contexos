@@ -93,7 +93,8 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
 
   // Current branch
   const branchRes = await executeGit(["rev-parse", "--abbrev-ref", "HEAD"], repoDir);
-  const branch = branchRes.stdout || (await getDefaultBranch(repoDir));
+  const rawBranch = branchRes.success && branchRes.stdout?.trim() ? branchRes.stdout.trim() : "";
+  const branch = rawBranch && rawBranch !== "HEAD" ? rawBranch : (await getDefaultBranch(repoDir));
 
   // Remote URL
   const remoteRes = await executeGit(["remote", "get-url", "origin"], repoDir);
