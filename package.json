@@ -1,6 +1,6 @@
 {
   "name": "contexos",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "private": true,
   "scripts": {
     "dev": "npx -y concurrently -k \"npm --prefix server run dev\" \"npm --prefix frontend run dev\"",
