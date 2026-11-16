@@ -291,6 +291,33 @@ export async function createAndCheckoutBranch(
       return { success: true, message: `Trocou para a branch '${safeName}'.` };
     }
 
+    // Se baseBranch não foi informado e a branch existe no remoto (origin/<safeName>),
+    // faz checkout rastreando a branch remota real em vez de criar uma nova a partir do HEAD atual
+    if (!baseBranch) {
+      const remoteExistsRes = await executeGit(
+        ["rev-parse", "--verify", `refs/remotes/origin/${safeName}`],
+        repoDir,
+      );
+      if (remoteExistsRes.success) {
+        const trackRes = await executeGit(
+          ["checkout", "-b", safeName, "--track", `origin/${safeName}`],
+          repoDir,
+        );
+        if (!trackRes.success) {
+          return {
+            success: false,
+            message:
+              trackRes.stderr ||
+              `Erro ao alternar para a branch remota '${safeName}'.`,
+          };
+        }
+        return {
+          success: true,
+          message: `Trocou para a branch '${safeName}'.`,
+        };
+      }
+    }
+
     // Identifica a branch de origem antes da criação
     let currentBranchBefore = "";
     try {
@@ -300,16 +327,30 @@ export async function createAndCheckoutBranch(
       }
     } catch {}
 
+    const defaultBranchName = await getDefaultBranch(repoDir);
+
     const safeStartPoint = baseBranch
       ? /^[0-9a-f]{7,40}$/i.test(baseBranch.trim())
         ? assertCommitish(baseBranch.trim(), "Commit base")
         : assertBranchName(baseBranch.trim(), "Branch base")
       : undefined;
 
-    const effectiveParent =
-      safeStartPoint && !/^[0-9a-f]{7,40}$/i.test(safeStartPoint)
-        ? safeStartPoint
-        : currentBranchBefore || (await getDefaultBranch(repoDir));
+    let effectiveParent = defaultBranchName;
+    if (safeStartPoint && !/^[0-9a-f]{7,40}$/i.test(safeStartPoint)) {
+      effectiveParent = safeStartPoint;
+    } else if (safeStartPoint && /^[0-9a-f]{7,40}$/i.test(safeStartPoint)) {
+      const isMainCommit = await executeGit(
+        ["merge-base", "--is-ancestor", safeStartPoint, defaultBranchName],
+        repoDir,
+      );
+      if (isMainCommit.success) {
+        effectiveParent = defaultBranchName;
+      } else if (currentBranchBefore) {
+        effectiveParent = currentBranchBefore;
+      }
+    } else if (currentBranchBefore) {
+      effectiveParent = currentBranchBefore;
+    }
 
     const args = safeStartPoint
       ? ["checkout", "-b", safeName, safeStartPoint]

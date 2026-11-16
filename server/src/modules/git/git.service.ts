@@ -38,6 +38,8 @@ interface RepoPRItem {
   description?: string;
   branch?: string;
   target_branch?: string;
+  base_sha?: string;
+  head_sha?: string;
   status?: string;
   merged_at?: string;
   updated_at?: string;
@@ -649,11 +651,36 @@ export class GitService {
 
       const displayName = resolveDisplayName(branch, isDefault, pr);
       const cfgParent = branchConfigParents.get(branch);
+
+      // Verifica se esta branch foi mesclada na Principal
+      const hasMergedPR = repoPRs.some((p) => p.branch === branch && p.status === "MERGED");
+      const directMerge = mergeBySecondParent.get(tip.hash);
+      const wasMergedIntoMain =
+        !isDefault &&
+        (hasMergedPR ||
+          Boolean(directMerge) ||
+          (reachableFromMain.has(tip.hash) && !mainAncestors.has(tip.hash)));
+
+      // Verifica se o cfgParent já é uma branch mesclada na Principal
+      const parentTip = cfgParent ? branchTips.get(cfgParent) : undefined;
+      const isCfgParentMerged =
+        Boolean(cfgParent && cfgParent !== defaultBranch) &&
+        (repoPRs.some((p) => p.branch === cfgParent && p.status === "MERGED") ||
+          (parentTip
+            ? mergeBySecondParent.has(parentTip.hash) ||
+              (reachableFromMain.has(parentTip.hash) && !mainAncestors.has(parentTip.hash))
+            : false));
+
       const parentBranch = isDefault
         ? undefined
-        : cfgParent && branchTips.has(cfgParent) && cfgParent !== branch
-          ? cfgParent
-          : defaultBranch;
+        : pr?.target_branch === defaultBranch ||
+            Boolean(directMerge) ||
+            isCfgParentMerged ||
+            !cfgParent ||
+            !branchTips.has(cfgParent) ||
+            cfgParent === branch
+          ? defaultBranch
+          : cfgParent;
 
       // Commits exclusivos da branch (caminhando pelo first-parent até tocar na linhagem da main)
       const branchCommits: Array<{
@@ -678,6 +705,31 @@ export class GitService {
           }
           const c = commitByHash.get(cur);
           if (!c) break;
+
+          // Se cur é um commit de merge local espelhado cujo 2º pai já foi mesclado na Principal,
+          // ancora a base no commit de merge correspondente na Principal
+          if (c.parents.length > 1) {
+            const shadowedMainMerge = mergeBySecondParent.get(c.parents[1]);
+            if (shadowedMainMerge) {
+              baseHash = shadowedMainMerge.hash;
+              baseDate =
+                shadowedMainMerge.date ||
+                commitByHash.get(shadowedMainMerge.hash)?.date ||
+                "";
+              break;
+            }
+          }
+
+          // Se durante a caminhada (após a ponta da branch) encontramos um commit que já era
+          // ponta de outra PR mesclada na Principal, interrompe para não absorver commits alheios
+          if (cur !== tip.hash && mergeBySecondParent.has(cur)) {
+            const priorMerge = mergeBySecondParent.get(cur)!;
+            baseHash = priorMerge.hash;
+            baseDate =
+              priorMerge.date || commitByHash.get(priorMerge.hash)?.date || "";
+            break;
+          }
+
           branchCommits.push({
             hash: c.hash,
             shortHash: c.shortHash,
@@ -687,16 +739,14 @@ export class GitService {
           });
           cur = c.parents[0] || "";
         }
-      }
 
-      // Verifica se esta branch foi mesclada na Principal
-      const hasMergedPR = repoPRs.some((p) => p.branch === branch && p.status === "MERGED");
-      const directMerge = mergeBySecondParent.get(tip.hash);
-      const wasMergedIntoMain =
-        !isDefault &&
-        (hasMergedPR ||
-          Boolean(directMerge) ||
-          (reachableFromMain.has(tip.hash) && !mainAncestors.has(tip.hash)));
+        // Se a proposta possui base_sha explícito pertencente à linhagem da Principal,
+        // garante que o ponto de partida reflita a base oficial registrada na criação do PR
+        if (pr?.base_sha && mainAncestors.has(pr.base_sha)) {
+          baseHash = pr.base_sha;
+          baseDate = commitByHash.get(pr.base_sha)?.date || baseDate;
+        }
+      }
 
       const branchStashes = stashes.filter(
         (s) =>

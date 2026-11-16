@@ -278,7 +278,50 @@ export class PRsLifecycleService {
     try {
       const activeToken = getActiveBearerToken(cfg.token);
       await healRepositoryState(repoDir, { token: activeToken });
-      await createAndCheckoutBranch(repoDir, branchName);
+
+      // Preserva em memória os arquivos alterados pelo usuário antes de criar a branch
+      // a partir da branch oficial (defaultBranch), evitando que um HEAD antigo ou
+      // branch já mesclada contamine a origem da nova edição.
+      const pendingBuffers = new Map<string, Buffer | null>();
+      for (const relPath of allChangedPaths) {
+        const absPath = path.join(repoDir, relPath);
+        if (fs.existsSync(absPath) && !fs.statSync(absPath).isDirectory()) {
+          pendingBuffers.set(relPath, fs.readFileSync(absPath));
+        } else {
+          pendingBuffers.set(relPath, null);
+        }
+      }
+
+      const branchRes = await createAndCheckoutBranch(
+        repoDir,
+        branchName,
+        defaultBranch,
+        payload.title?.trim(),
+      );
+      if (!branchRes.success) {
+        // Caso o checkout direto encontre conflito com a working tree ou a branch já exista,
+        // força o posicionamento a partir da defaultBranch e reaplica os buffers editados
+        await executeGit(
+          ["checkout", "-f", "-B", assertBranchName(branchName), assertBranchName(defaultBranch)],
+          repoDir,
+        );
+        await executeGit(
+          ["config", `branch.${branchName}.parent`, defaultBranch],
+          repoDir,
+        ).catch(() => {});
+      }
+
+      for (const [relPath, buf] of pendingBuffers.entries()) {
+        const absPath = path.join(repoDir, relPath);
+        if (buf !== null) {
+          fs.mkdirSync(path.dirname(absPath), { recursive: true });
+          fs.writeFileSync(absPath, buf);
+        } else if (fs.existsSync(absPath)) {
+          try {
+            fs.unlinkSync(absPath);
+          } catch {}
+        }
+      }
 
       // Persiste o título semântico humano associado à branch no Git config
       if (payload.title?.trim()) {
@@ -1195,25 +1238,42 @@ export class PRsLifecycleService {
         }
       }
 
-      // 5. Remote GitHub Merge (if GitHub PR)
+      // 5. Remote GitHub Sync / Merge (if GitHub PR)
       if (
         cfg.authenticated &&
-        cfg.token &&
+        activeToken &&
         activeRepo?.full_name &&
-        targetPR.github_number
+        !activeRepo?.is_local
       ) {
         try {
-          await callGitHubAPI(
-            `/repos/${activeRepo.full_name}/pulls/${targetPR.github_number}/merge`,
-            cfg.token,
-            "PUT",
-            {
-              commit_title: `Merge PR #${targetPR.id}: ${targetPR.title}`,
-              commit_message: auditLines.join("\n"),
-              merge_method: "merge",
-            },
+          const pushRes = await executeGit(
+            ["push", "origin", targetBranch],
+            repoDir,
+            activeToken,
           );
-          await executeGit(["push", "origin", targetBranch], repoDir);
+          if (!pushRes.success && targetPR.github_number) {
+            const ghMergeRes = await callGitHubAPI(
+              `/repos/${activeRepo.full_name}/pulls/${targetPR.github_number}/merge`,
+              activeToken,
+              "PUT",
+              {
+                commit_title: `Merge PR #${targetPR.id}: ${targetPR.title}`,
+                commit_message: auditLines.join("\n"),
+                merge_method: "merge",
+              },
+            );
+            if (ghMergeRes.statusCode >= 200 && ghMergeRes.statusCode < 300) {
+              await executeGit(
+                ["fetch", "origin", targetBranch],
+                repoDir,
+                activeToken,
+              );
+              await executeGit(
+                ["reset", "--hard", `origin/${targetBranch}`],
+                repoDir,
+              );
+            }
+          }
         } catch (ghMergeErr) {
           console.warn(
             `[PRsService] Aviso ao executar merge no GitHub remoto:`,

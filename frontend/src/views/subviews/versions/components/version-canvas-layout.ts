@@ -130,11 +130,23 @@ export function calculateCanvasLayout({
     .slice(0, 40)
     .reverse();
 
+  const trunkHashes = new Set(mainCommits.map((c) => c.hash.toLowerCase()));
+
   // 2. Mapeamento de parentesco das branches
   const parentMap = new Map<string, string>();
   otherNodes.forEach((n) => {
     let p = n.parentBranch;
-    if (!p || p === n.name || !otherNodes.some((x) => x.name === p)) {
+    const pNode = p ? otherNodes.find((x) => x.name === p) : undefined;
+    const mergedDirectlyInTrunk = Boolean(
+      n.mergeCommitHash && trunkHashes.has(n.mergeCommitHash.toLowerCase()),
+    );
+    if (
+      !p ||
+      p === n.name ||
+      !pNode ||
+      pNode.isMerged ||
+      mergedDirectlyInTrunk
+    ) {
       p = defaultNode?.name || defaultBranch;
     }
     parentMap.set(n.name, p);
@@ -147,8 +159,6 @@ export function calculateCanvasLayout({
     list.push(n.name);
     childrenMap.set(p, list);
   });
-
-  const trunkHashes = new Set(mainCommits.map((c) => c.hash.toLowerCase()));
 
   // 3. Commits de cada branch (apenas commits únicos à branch, sem duplicar a main!)
   const branchCommitsMap = new Map<string, GitGraphCommit[]>();
