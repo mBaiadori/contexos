@@ -1,4 +1,3 @@
-import { FileText, Plus } from "lucide-react";
 import React, {
   useCallback,
   useEffect,
@@ -19,12 +18,7 @@ import {
   parseFrontmatter,
   serializeFrontmatter,
 } from "../../services/frontmatter";
-import type {
-  DocumentMetadataItem,
-  GitCommitInfo,
-  SupportedLanguage,
-  SyncToMainPreview,
-} from "../../types";
+import type { DocumentMetadataItem } from "../../types";
 import type { DictionaryPopoverData } from "../dictionary/DictionaryPopover";
 import { DocConnectivityBar } from "./DocConnectivityBar";
 import { DocumentHistoryDrawer } from "./DocumentHistoryDrawer";
@@ -36,8 +30,11 @@ import {
   NotionEditorEngine,
   type FragmentStatusInfo,
 } from "./notion-editor-engine";
-import { TranslationBanner } from "./TranslationBanner";
 import { VisualMarkdownDiff } from "./VisualMarkdownDiff";
+import { EditorEmptyState } from "./EditorEmptyState";
+import { EditorNotificationBanners } from "./EditorNotificationBanners";
+import { useEditorTranslations } from "./useEditorTranslations";
+import { useEditorGitHistory } from "./useEditorGitHistory";
 
 interface NotionEditorProps {
   content: string;
@@ -92,26 +89,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [titleValue, setTitleValue] = useState<string>("");
   const titleValueRef = useRef(titleValue);
   titleValueRef.current = titleValue;
-  const translationParsedRef = useRef<{
-    hasFrontmatter: boolean;
-    metadata: Record<string, any>;
-    body: string;
-  }>({
-    hasFrontmatter: false,
-    metadata: {},
-    body: "",
-  });
+
   const [dictionaryPopoverData, setDictionaryPopoverData] =
     useState<DictionaryPopoverData | null>(null);
 
   // Git Mode, Visual Diff & Document History Drawer State
   const [isGitMode, setIsGitMode] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
-  const [selectedCommit, setSelectedCommit] = useState<GitCommitInfo | null>(
-    null,
-  );
-  const [historicalContent, setHistoricalContent] = useState<string>("");
-  const [blameData, setBlameData] = useState<any[]>([]);
   const [docMetadata, setDocMetadata] = useState<DocumentMetadataItem | null>(
     null,
   );
@@ -125,18 +109,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const titleDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-
-  // Translation & SSOT State
-  const [activeLanguage, setActiveLanguage] = useState<string>("pt-BR");
-  const [defaultLanguage, setDefaultLanguage] = useState<string>("pt-BR");
-  const [supportedLanguages, setSupportedLanguages] = useState<
-    SupportedLanguage[]
-  >([]);
-  const [isTranslationOutdated, setIsTranslationOutdated] = useState(false);
-  const [syncPreview, setSyncPreview] = useState<SyncToMainPreview | null>(
-    null,
-  );
-  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
   // Collaborative PR Editing Mode State
   const [searchParams] = useSearchParams();
@@ -158,7 +130,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       content.includes(">>>>>>> ")
     );
   }, [content]);
-  const [isSyncingToMain, setIsSyncingToMain] = useState(false);
 
   // Load document content directly from PR branch when in PR editing mode
   useEffect(() => {
@@ -247,12 +218,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const lastEmittedMarkdownRef = useRef<string>("");
   const engineChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const activeLanguageRef = useRef(activeLanguage);
-  activeLanguageRef.current = activeLanguage;
-
-  const defaultLanguageRef = useRef(defaultLanguage);
-  defaultLanguageRef.current = defaultLanguage;
-
   const parsed = parseFrontmatter(content || "");
   const docBody = parsed.hasFrontmatter ? parsed.body : (content || "");
   const effectivePrompt =
@@ -265,17 +230,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   // Armazena com segurança o conteúdo íntegro do Documento Oficial (SSOT)
   const officialContentRef = useRef(content || "");
-  if (activeLanguage.toLowerCase() === defaultLanguage.toLowerCase()) {
-    officialContentRef.current = content || "";
-  }
+  const docBodyRef = useRef(docBody);
 
   const editorTabRef = useRef(editorTab);
   editorTabRef.current = editorTab;
-
-  const docBodyRef = useRef(docBody);
-  if (activeLanguage.toLowerCase() === defaultLanguage.toLowerCase()) {
-    docBodyRef.current = docBody;
-  }
 
   const effectivePromptRef = useRef(effectivePrompt);
   effectivePromptRef.current = effectivePrompt;
@@ -291,6 +249,65 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const parsedRef = useRef(parsed);
   parsedRef.current = parsed;
+
+  const {
+    activeLanguage,
+    setActiveLanguage,
+    activeLanguageRef,
+    defaultLanguage,
+    defaultLanguageRef,
+    supportedLanguages,
+    isTranslationOutdated,
+    syncPreview,
+    isSyncModalOpen,
+    setIsSyncModalOpen,
+    isSyncingToMain,
+    isUpdatingFromMain,
+    translationParsedRef,
+    saveActiveTranslation,
+    handleSelectLanguage,
+    handleUpdateFromMain,
+    handleSyncToMain,
+    handleConfirmApplyToMain,
+  } = useEditorTranslations({
+    filePath,
+    isTemplateMode,
+    content,
+    fileMetadata,
+    docMetadata,
+    engineRef,
+    docBodyRef,
+    officialContentRef,
+    parsedRef,
+    titleValueRef,
+    setTitleValue,
+    setEditorToast,
+    isInternalChangeRef,
+    engineChangeTimerRef,
+    onChangeRef,
+    updateFileMetadataRef,
+    onReload,
+  });
+
+  const {
+    selectedCommit,
+    setSelectedCommit,
+    historicalContent,
+    blameData,
+    handleRestoreHistoricalVersion,
+  } = useEditorGitHistory({
+    filePath,
+    isGitMode,
+    setIsGitMode,
+    onChange,
+    refreshPendingChanges,
+    refreshGitStatus,
+  });
+
+  if (activeLanguage.toLowerCase() === defaultLanguage.toLowerCase()) {
+    officialContentRef.current = content || "";
+    docBodyRef.current = docBody;
+  }
 
   const handleSwitchTab = (newTab: "document" | "prompt") => {
     if (newTab === editorTab) return;
@@ -375,49 +392,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       }
     }
 
-    // Reset commit selection when switching file
-    setSelectedCommit(null);
-    setHistoricalContent("");
     setFragmentAlert(null);
   }, [filePath, fileMetadata]);
-
-  const [isUpdatingFromMain, setIsUpdatingFromMain] = useState(false);
-
-  // Gravar tradução ativa no disco preservando frontmatter e título traduzido
-  const saveActiveTranslation = async () => {
-    if (
-      !filePath ||
-      activeLanguageRef.current.toLowerCase() ===
-        defaultLanguageRef.current.toLowerCase()
-    ) {
-      return;
-    }
-    if (engineChangeTimerRef.current) {
-      clearTimeout(engineChangeTimerRef.current);
-      engineChangeTimerRef.current = null;
-    }
-
-    const currentMd = engineRef.current
-      ? engineRef.current.getMarkdown()
-      : docBodyRef.current;
-
-    const meta = {
-      ...(translationParsedRef.current?.metadata || {}),
-      title: titleValueRef.current || translationParsedRef.current?.metadata?.title || "",
-    };
-
-    const fullTransContent = serializeFrontmatter(meta, currentMd ? currentMd.trim() : "");
-
-    try {
-      await API.saveTranslation({
-        path: filePath,
-        lang: activeLanguageRef.current,
-        content: fullTransContent,
-      });
-    } catch (e) {
-      console.warn("[NotionEditor] Falha ao salvar tradução:", e);
-    }
-  };
 
   // Sincronizar o título local com os metadados do documento ou customTitle
   useEffect(() => {
@@ -473,283 +449,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     titleDebounceTimerRef.current = setTimeout(() => {
       updateDocumentTitle(newVal);
     }, 400);
-  };
-
-  // Load Blame info when entering Git / Audit Mode
-  useEffect(() => {
-    if (isGitMode && filePath) {
-      API.getFileBlame(filePath)
-        .then((res) => {
-          if (res.ok && res.data?.blame) {
-            setBlameData(res.data.blame);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [isGitMode, filePath]);
-
-  // Load Historical Content when selecting a past commit
-  useEffect(() => {
-    if (!selectedCommit || !filePath) {
-      setHistoricalContent("");
-      return;
-    }
-
-    API.getFileVersion(filePath, selectedCommit.hash)
-      .then((res) => {
-        if (res.ok && res.data?.success) {
-          setHistoricalContent(res.data.content);
-        }
-      })
-      .catch((err) => {
-        console.error("[NotionEditor] Erro ao carregar versão do commit:", err);
-      });
-  }, [selectedCommit, filePath]);
-
-  // Carregar dados de tradução e idiomas suportados quando o arquivo ativo muda
-  useEffect(() => {
-    if (!filePath || isTemplateMode) return;
-    API.listTranslations(filePath)
-      .then((res) => {
-        if (res.ok && res.data) {
-          const defLang = res.data.defaultLanguage || "pt-BR";
-          setDefaultLanguage(defLang);
-          setActiveLanguage(defLang);
-          setSupportedLanguages(res.data.supportedLanguages || []);
-        }
-      })
-      .catch(() => {});
-  }, [filePath, isTemplateMode]);
-
-  // Alternar entre Documento Oficial e Versões Traduzidas
-  const handleSelectLanguage = async (lang: string) => {
-    if (!filePath) return;
-    const isTargetMain =
-      lang.toLowerCase() === defaultLanguageRef.current.toLowerCase();
-
-    // Se estiver saindo de uma tradução, grava rascunho de tradução com metadados completos
-    if (
-      activeLanguageRef.current.toLowerCase() !==
-      defaultLanguageRef.current.toLowerCase()
-    ) {
-      await saveActiveTranslation();
-    }
-
-    if (isTargetMain) {
-      setActiveLanguage(defaultLanguageRef.current);
-      setIsTranslationOutdated(false);
-
-      // Restaura o corpo e o título oficial no editor a partir do buffer oficial intacto
-      const rawOfficial = officialContentRef.current || content || "";
-      const mainParsed = parseFrontmatter(rawOfficial);
-      const metaTitle =
-        mainParsed.metadata?.title !== undefined
-          ? mainParsed.metadata.title
-          : fileMetadata?.title !== undefined
-          ? fileMetadata.title
-          : docMetadata?.title || "";
-      setTitleValue(metaTitle);
-      parsedRef.current = mainParsed;
-      docBodyRef.current = mainParsed.body;
-
-      if (engineRef.current) {
-        isInternalChangeRef.current = true;
-        engineRef.current.setMarkdown(mainParsed.body || "");
-      }
-      if (onReload) onReload();
-      return;
-    }
-
-    try {
-      const res = await API.getTranslationFile(filePath, lang);
-      if (res.ok && res.data) {
-        setActiveLanguage(lang);
-        setIsTranslationOutdated(res.data.isOutdated);
-
-        // Traduções carregam Frontmatter para metadados locais (title, etc.) e corpo traduzido
-        const parsedTrans = parseFrontmatter(res.data.content);
-        translationParsedRef.current = parsedTrans;
-        const transBody = parsedTrans.hasFrontmatter
-          ? parsedTrans.body
-          : res.data.content || "";
-        docBodyRef.current = transBody;
-
-        const transTitle =
-          parsedTrans.metadata?.title !== undefined
-            ? parsedTrans.metadata.title
-            : "";
-        setTitleValue(transTitle);
-
-        if (engineRef.current) {
-          isInternalChangeRef.current = true;
-          engineRef.current.setMarkdown(transBody);
-        }
-      }
-    } catch (err: any) {
-      setEditorToast({
-        text:
-          err?.message ||
-          `Não foi possível carregar a tradução (${lang.toUpperCase()}).`,
-        type: "warning",
-      });
-      setTimeout(() => setEditorToast(null), 3000);
-    }
-  };
-
-  // Atualizar tradução existente que esteja desatualizada em relação ao documento oficial
-  const handleUpdateFromMain = async () => {
-    if (
-      !filePath ||
-      activeLanguageRef.current.toLowerCase() ===
-        defaultLanguageRef.current.toLowerCase()
-    )
-      return;
-    setIsUpdatingFromMain(true);
-    try {
-      const res = await API.translateDocument({
-        path: filePath,
-        targetLang: activeLanguageRef.current,
-      });
-
-      if (res.ok && res.data) {
-        setIsTranslationOutdated(false);
-        const parsedTrans = parseFrontmatter(res.data.content);
-        translationParsedRef.current = parsedTrans;
-        const transBody = parsedTrans.hasFrontmatter
-          ? parsedTrans.body
-          : res.data.content || "";
-        docBodyRef.current = transBody;
-
-        const transTitle =
-          parsedTrans.metadata?.title !== undefined
-            ? parsedTrans.metadata.title
-            : "";
-        setTitleValue(transTitle);
-
-        if (engineRef.current) {
-          isInternalChangeRef.current = true;
-          engineRef.current.setMarkdown(transBody);
-        }
-        setEditorToast({
-          text: `Tradução (${activeLanguageRef.current.toUpperCase()}) atualizada com sucesso a partir do documento oficial!`,
-          type: "success",
-        });
-        setTimeout(() => setEditorToast(null), 3000);
-      } else {
-        setEditorToast({
-          text:
-            (res.data as any)?.error ||
-            "Erro ao atualizar tradução do documento oficial.",
-          type: "warning",
-        });
-        setTimeout(() => setEditorToast(null), 3000);
-      }
-    } catch (err: any) {
-      setEditorToast({
-        text: err?.message || "Falha na comunicação ao atualizar tradução.",
-        type: "warning",
-      });
-      setTimeout(() => setEditorToast(null), 3000);
-    } finally {
-      setIsUpdatingFromMain(false);
-    }
-  };
-
-  // Preparar Sincronização Bidirecional da versão traduzida para o Documento Oficial
-  const handleSyncToMain = async () => {
-    if (!filePath) return;
-    setIsSyncingToMain(true);
-    try {
-      const currentMd = engineRef.current
-        ? engineRef.current.getMarkdown()
-        : docBodyRef.current;
-
-      const res = await API.syncTranslationToMain({
-        path: filePath,
-        translatedContent: currentMd,
-        fromLang: activeLanguageRef.current,
-      });
-
-      if (res.ok && res.data) {
-        setSyncPreview(res.data);
-        setIsSyncModalOpen(true);
-      } else {
-        setEditorToast({
-          text:
-            (res.data as any)?.error ||
-            "Erro ao preparar sincronização para o documento oficial.",
-          type: "warning",
-        });
-        setTimeout(() => setEditorToast(null), 3000);
-      }
-    } catch (err: any) {
-      setEditorToast({
-        text: err?.message || "Falha na comunicação ao sincronizar tradução.",
-        type: "warning",
-      });
-      setTimeout(() => setEditorToast(null), 3000);
-    } finally {
-      setIsSyncingToMain(false);
-    }
-  };
-
-  // Confirmar Aplicação no Documento Oficial
-  const handleConfirmApplyToMain = async (newMainContent: string) => {
-    if (!filePath) return;
-    const res = await API.applyTranslationToMain({
-      path: filePath,
-      content: newMainContent,
-    });
-    if (res.ok) {
-      setEditorToast({
-        text: "Documento oficial atualizado com sucesso a partir da tradução!",
-        type: "success",
-      });
-      setTimeout(() => setEditorToast(null), 3500);
-
-      // 1. Atualiza o buffer de conteúdo oficial para a nova versão consolidada
-      officialContentRef.current = newMainContent;
-
-      // 2. Alterna o estado ativo de volta para o idioma oficial
-      setActiveLanguage(defaultLanguageRef.current);
-      setIsTranslationOutdated(false);
-
-      // 3. Extrai metadados e corpo do novo documento oficial
-      const mainParsed = parseFrontmatter(newMainContent);
-      const metaTitle =
-        mainParsed.metadata?.title !== undefined
-          ? mainParsed.metadata.title
-          : fileMetadata?.title !== undefined
-          ? fileMetadata.title
-          : docMetadata?.title || "";
-      setTitleValue(metaTitle);
-      parsedRef.current = mainParsed;
-      docBodyRef.current = mainParsed.body;
-
-      // 4. Atualiza o canvas do NotionEditor imediatamente sem necessidade de refresh
-      if (engineRef.current) {
-        isInternalChangeRef.current = true;
-        engineRef.current.setMarkdown(mainParsed.body);
-      }
-
-      // 5. Propaga o novo conteúdo oficial completo para o buffer do workspace pai
-      onChangeRef.current(newMainContent);
-
-      // Se o título mudou nos metadados oficiais, propaga alteração
-      if (metaTitle && metaTitle !== fileMetadata?.title) {
-        updateFileMetadataRef.current({ title: metaTitle });
-      }
-
-      // 6. Recarrega árvores e referências
-      if (onReload) onReload();
-    } else {
-      setEditorToast({
-        text:
-          (res.data as any)?.error || "Erro ao atualizar documento oficial.",
-        type: "warning",
-      });
-      setTimeout(() => setEditorToast(null), 3000);
-    }
   };
 
   // Manual save trigger (Ctrl+S ou clique) que faz o flush imediato
@@ -1312,25 +1011,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   };
 
-  const handleRestoreHistoricalVersion = async () => {
-    if (!historicalContent) return;
-    if (
-      window.confirm(
-        `Deseja restaurar o documento para a Versão #${selectedCommit?.shortHash || selectedCommit?.hash.slice(0, 7) || "selecionada"} (${selectedCommit?.message || ""})?`,
-      )
-    ) {
-      onChange(historicalContent);
-      setIsGitMode(false);
-      setSelectedCommit(null);
-      await API.saveProjectFile({
-        path: filePath!,
-        content: historicalContent,
-      });
-      await refreshPendingChanges();
-      await refreshGitStatus();
-    }
-  };
-
   const currentContent = editorTab === "document" ? docBody : effectivePrompt;
   const wordCount = currentContent.trim()
     ? currentContent.trim().split(/\s+/).length
@@ -1338,57 +1018,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const lineCount = currentContent ? currentContent.split(/\r?\n/).length : 0;
 
   if (!filePath) {
-    return (
-      <div id="editor-empty-state" className="editor-empty-state">
-        <div className="editor-empty-state-card">
-          <div className="empty-icon-circle">
-            <FileText size={32} color="var(--primary, #2563eb)" />
-          </div>
-          <h2
-            style={{
-              fontSize: "18px",
-              fontWeight: 600,
-              color: "var(--text-heading, #0f172a)",
-              margin: "14px 0 6px",
-            }}
-          >
-            Nenhum Documento Selecionado
-          </h2>
-          <p
-            style={{
-              fontSize: "13px",
-              color: "var(--text-muted, #64748b)",
-              margin: "0 0 22px",
-              lineHeight: 1.5,
-              maxWidth: "380px",
-            }}
-          >
-            Selecione uma especificação na árvore lateral ou inicie a modelagem
-            de um novo domínio de arquitetura.
-          </p>
-          <div
-            className="empty-state-actions"
-            style={{ display: "flex", gap: "10px", justifyContent: "center" }}
-          >
-            {onOpenScaffoldWizard && (
-              <button
-                id="btn-empty-new-spec"
-                className="btn btn-primary btn-sm"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-                onClick={onOpenScaffoldWizard}
-              >
-                <Plus size={15} />
-                <span>Explorar Templates & Criar</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+    return <EditorEmptyState onOpenScaffoldWizard={onOpenScaffoldWizard} />;
   }
 
   const comparisonOldContent = selectedCommit
@@ -1506,221 +1136,38 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           />
         )}
 
-        {/* Collaborative PR Editing Banner */}
-        {isPREditing && (
-          <div
-            style={{
-              margin: "12px 24px 0",
-              padding: "10px 16px",
-              borderRadius: "var(--radius-md, 8px)",
-              background: "var(--md-sys-color-primary-container, #e0f2fe)",
-              border: "1px solid var(--md-sys-color-primary, #0284c7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              color: "var(--md-sys-color-on-primary-container, #0369a1)",
-              flexWrap: "wrap",
-              gap: "8px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span
-                className="material-symbols-outlined"
-                style={{
-                  color: "var(--md-sys-color-primary, #0284c7)",
-                  fontSize: "22px",
-                }}
-              >
-                rate_review
-              </span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: "13px" }}>
-                  Modo de Edição na Proposta #{prId}
-                </div>
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--md-sys-color-on-surface-variant, #334155)",
-                  }}
-                >
-                  As alterações são gravadas na branch da proposta. O seu
-                  workspace e branch ativa permanecem intactos.
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <button
-                type="button"
-                className="ui-btn ui-btn--tonal ui-btn--sm"
-                onClick={() =>
-                  navigate(
-                    `/repo/${encodeURIComponent(activeRepo?.name || "local")}/revisoes`,
-                  )
-                }
-                style={{
-                  fontSize: "12px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "16px" }}
-                >
-                  arrow_back
-                </span>
-                Voltar para Revisões
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Translation Mode Banner */}
-        {!isTemplateMode &&
-          activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase() && (
-            <TranslationBanner
-              currentLanguage={activeLanguage}
-              defaultLanguage={defaultLanguage}
-              supportedLanguages={supportedLanguages}
-              isOutdated={isTranslationOutdated}
-              onSyncToMain={handleSyncToMain}
-              onBackToMain={() => handleSelectLanguage(defaultLanguage)}
-              onUpdateFromMain={handleUpdateFromMain}
-              isSyncing={isSyncingToMain}
-              isUpdating={isUpdatingFromMain}
-            />
-          )}
-
-        {/* Merge Conflict Banner */}
-        {hasMergeConflict && (
-          <div
-            style={{
-              margin: "12px 24px 0",
-              padding: "12px 16px",
-              borderRadius: "var(--radius-md, 8px)",
-              background: "rgba(234, 179, 8, 0.12)",
-              border: "1px solid rgba(234, 179, 8, 0.4)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              color: "var(--color-on-surface)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span
-                className="material-symbols-outlined"
-                style={{ color: "#eab308", fontSize: "22px" }}
-              >
-                merge_type
-              </span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: "13px" }}>
-                  Conflito de Merge Detectado
-                </div>
-                <div
-                  style={{ fontSize: "12px", color: "var(--color-outline)" }}
-                >
-                  Este documento possui alterações conflitantes entre sua versão
-                  local e o repositório Git.
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsConflictModalOpen(true)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: "6px",
-                background: "#eab308",
-                color: "#000",
-                fontWeight: 600,
-                fontSize: "12px",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "16px" }}
-              >
-                splitscreen
-              </span>
-              Resolver Conflito Visualmente
-            </button>
-          </div>
-        )}
-
-        {/* Fragment Not Found / Snippet Alert Banner */}
-        {fragmentAlert && fragmentAlert.type === "not_found" && (
-          <div
-            className="fragment-not-found-banner"
-            id="fragment-not-found-alert"
-          >
-            <div className="fragment-alert-header">
-              <div className="fragment-alert-title-row">
-                <span className="material-symbols-outlined fragment-alert-icon">
-                  link_off
-                </span>
-                <span className="fragment-alert-title">
-                  Trecho referenciado não encontrado
-                </span>
-              </div>
-              <button
-                className="fragment-alert-close-btn"
-                title="Dispensar alerta"
-                onClick={() => setFragmentAlert(null)}
-              >
-                <span className="material-symbols-outlined icon-xs">close</span>
-              </button>
-            </div>
-            <p className="fragment-alert-description">
-              O link apontava para um trecho específico que foi substancialmente
-              modificado ou excluído deste documento.
-            </p>
-            <div className="fragment-alert-original-box">
-              <div className="fragment-alert-box-label">
-                <span>Texto que estava lá originalmente:</span>
-                <button
-                  type="button"
-                  className="btn-copy-original-fragment"
-                  title="Copiar texto original para a área de transferência"
-                  onClick={() => {
-                    navigator.clipboard.writeText(fragmentAlert.exact);
-                    setEditorToast({
-                      text: "Texto original copiado!",
-                      type: "success",
-                    });
-                    setTimeout(() => setEditorToast(null), 2000);
-                  }}
-                >
-                  <span className="material-symbols-outlined icon-xs">
-                    content_copy
-                  </span>
-                  Copiar texto
-                </button>
-              </div>
-              <div className="fragment-alert-box-quote">
-                {fragmentAlert.prefix && (
-                  <span className="fragment-quote-context">
-                    ...{fragmentAlert.prefix}{" "}
-                  </span>
-                )}
-                <span className="fragment-quote-exact">
-                  {fragmentAlert.exact}
-                </span>
-                {fragmentAlert.suffix && (
-                  <span className="fragment-quote-context">
-                    {" "}
-                    {fragmentAlert.suffix}...
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Notification Banners */}
+        <EditorNotificationBanners
+          isPREditing={isPREditing}
+          prId={prId}
+          onNavigateToReviews={() =>
+            navigate(
+              `/repo/${encodeURIComponent(activeRepo?.name || "local")}/revisoes`,
+            )
+          }
+          isTemplateMode={isTemplateMode}
+          activeLanguage={activeLanguage}
+          defaultLanguage={defaultLanguage}
+          supportedLanguages={supportedLanguages}
+          isTranslationOutdated={isTranslationOutdated}
+          onSyncToMain={handleSyncToMain}
+          onBackToMain={() => handleSelectLanguage(defaultLanguage)}
+          onUpdateFromMain={handleUpdateFromMain}
+          isSyncingToMain={isSyncingToMain}
+          isUpdatingFromMain={isUpdatingFromMain}
+          hasMergeConflict={hasMergeConflict}
+          onOpenConflictModal={() => setIsConflictModalOpen(true)}
+          fragmentAlert={fragmentAlert}
+          onDismissFragmentAlert={() => setFragmentAlert(null)}
+          onCopyOriginalFragment={(text) => {
+            navigator.clipboard.writeText(text);
+            setEditorToast({
+              text: "Texto original copiado!",
+              type: "success",
+            });
+            setTimeout(() => setEditorToast(null), 2000);
+          }}
+        />
 
         {/* 2. Body: Either Document Lock Gate, Visual Markdown Diff (Git Mode) or Notion Live Editor */}
         {isDocumentLocked ? (

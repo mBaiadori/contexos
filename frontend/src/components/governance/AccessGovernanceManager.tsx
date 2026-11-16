@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from "react";
 import {
   Users,
-  Plus,
-  Trash2,
-  UserCheck,
-  ShieldAlert,
   ShieldCheck,
-  UserPlus,
-  Play,
+  ShieldAlert,
+  UserCheck,
   CheckCircle,
+  Play,
   X,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
-import { Spinner, Button } from "../ui";
+import { Spinner } from "../ui";
 import { API } from "../../services/api";
 import type {
   OrganizationTeamInfo,
@@ -23,80 +18,22 @@ import type {
   OrgTeamMemberInfo,
   GovernanceActionWorkflowStatus,
 } from "../../types";
+import {
+  type SelectedGovernanceTeam,
+  type SelectedGovernanceMember,
+  type AccessGovernanceManagerProps,
+  PERMISSION_OPTIONS,
+} from "./governance-types";
+import { GovernanceTeamsTab } from "./tabs/GovernanceTeamsTab";
+import { GovernanceMembersTab } from "./tabs/GovernanceMembersTab";
+import { GovernanceRepoAccessTab } from "./tabs/GovernanceRepoAccessTab";
+import { GovernanceActionsTab } from "./tabs/GovernanceActionsTab";
 
-export interface SelectedGovernanceTeam {
-  slug: string;
-  name: string;
-  permission: "pull" | "triage" | "push" | "maintain" | "admin" | string;
-  members_count?: number;
-}
-
-export interface SelectedGovernanceMember {
-  username: string;
-  name?: string;
-  avatar_url?: string;
-  permission: "pull" | "triage" | "push" | "maintain" | "admin" | string;
-  role?: string;
-  is_owner?: boolean;
-  status?: "active" | "pending" | string;
-}
-
-export interface AccessGovernanceManagerProps {
-  /** Organização alvo para sincronizar times e membros */
-  orgLogin: string;
-  /** Nome do repositório (opcional para modo direto/live) */
-  repoName?: string;
-  /** Modo: 'org' (gerenciamento global da org), 'repo' (gerenciamento de acesso ao repo) ou 'form' (criando repo) */
-  mode?: "org" | "repo" | "form" | "live";
-  /** Estado de times selecionados (modo form) */
-  selectedTeams?: SelectedGovernanceTeam[];
-  /** Callback para alteração de times (modo form) */
-  onChangeTeams?: (teams: SelectedGovernanceTeam[]) => void;
-  /** Estado de membros selecionados (modo form) */
-  selectedMembers?: SelectedGovernanceMember[];
-  /** Callback para alteração de membros (modo form) */
-  onChangeMembers?: (members: SelectedGovernanceMember[]) => void;
-  /** Estilo de layout compacto para modais */
-  compact?: boolean;
-}
-
-const PERMISSION_OPTIONS = [
-  {
-    id: "pull",
-    label: "Leitura",
-    description: "Visualizar e ler documentos do projeto",
-    color: "#0284c7", // Sky
-    bg: "rgba(2, 132, 199, 0.12)",
-  },
-  {
-    id: "triage",
-    label: "Triagem",
-    description: "Criar tarefas, apontar pendências e gerenciar discussões",
-    color: "#0d9488", // Teal
-    bg: "rgba(13, 148, 136, 0.12)",
-  },
-  {
-    id: "push",
-    label: "Edição e Escrita",
-    description: "Criar rascunhos, editar documentos e propor alterações",
-    color: "#10b981", // Emerald
-    bg: "rgba(16, 185, 129, 0.12)",
-  },
-  {
-    id: "maintain",
-    label: "Coordenação",
-    description: "Revisar, aprovar e integrar propostas à versão oficial",
-    color: "#8b5cf6", // Indigo / Purple
-    bg: "rgba(139, 92, 246, 0.12)",
-  },
-  {
-    id: "admin",
-    label: "Administração",
-    description: "Acesso total, governança e configurações do repositório",
-    color: "#ec4899", // Rose / Pink
-    bg: "rgba(236, 72, 153, 0.12)",
-  },
-];
+export type {
+  SelectedGovernanceTeam,
+  SelectedGovernanceMember,
+  AccessGovernanceManagerProps,
+};
 
 export const AccessGovernanceManager: React.FC<
   AccessGovernanceManagerProps
@@ -768,864 +705,74 @@ export const AccessGovernanceManager: React.FC<
 
       {/* ABA 1: TIMES DA ORGANIZAÇÃO (Criação, Membros e Gestão) */}
       {activeTab === "teams" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <span className="access-gov-section-title" style={{ margin: 0 }}>
-              Times da Organização @{orgLogin}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowCreateTeam(!showCreateTeam)}
-              icon={<Plus size={13} />}
-            >
-              Novo Time
-            </Button>
-          </div>
-
-          {/* Form para Criação de Time */}
-          {showCreateTeam && (
-            <form
-              onSubmit={handleCreateOrgTeam}
-              style={{
-                background:
-                  "var(--md-sys-color-surface-container-low, #f8fafc)",
-                border: "1px solid var(--border-subtle, #e2e8f0)",
-                borderRadius: "10px",
-                padding: "14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "var(--text-heading, #0f172a)",
-                }}
-              >
-                Criar Novo Time no GitHub
-              </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <input
-                  type="text"
-                  placeholder="Nome do Time (ex: Engenharia, Frontend, QA)"
-                  value={newTeamName}
-                  onChange={(e) => setNewTeamName(e.target.value)}
-                  required
-                  className="access-gov-search-input"
-                  style={{ flex: 1 }}
-                />
-                <select
-                  value={newTeamPrivacy}
-                  onChange={(e) => setNewTeamPrivacy(e.target.value as any)}
-                  className="access-gov-select"
-                  style={{ width: "130px" }}
-                >
-                  <option value="closed">Visível (Closed)</option>
-                  <option value="secret">Secreto (Secret)</option>
-                </select>
-              </div>
-              <input
-                type="text"
-                placeholder="Descrição opcional do time..."
-                value={newTeamDesc}
-                onChange={(e) => setNewTeamDesc(e.target.value)}
-                className="access-gov-search-input"
-              />
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "8px",
-                }}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowCreateTeam(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  type="submit"
-                  disabled={isMutating || !newTeamName.trim()}
-                >
-                  {isMutating ? <Spinner size="sm" /> : "Criar Time na Org"}
-                </Button>
-              </div>
-            </form>
-          )}
-
-          {/* Lista de Times da Org com Membros Expansíveis */}
-          {orgTeams.length > 0 ? (
-            <div className="access-gov-list">
-              {orgTeams.map((team) => {
-                const isExpanded = expandedTeamSlug === team.slug;
-                return (
-                  <div
-                    key={team.slug}
-                    style={{
-                      background: "var(--md-sys-color-surface, #ffffff)",
-                      border: "1px solid var(--border-subtle, #e2e8f0)",
-                      borderRadius: "8px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "10px 12px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                        }}
-                      >
-                        <div className="access-gov-icon-box">
-                          <Users size={14} />
-                        </div>
-                        <div>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "6px",
-                            }}
-                          >
-                            <span className="access-gov-name">{team.name}</span>
-                            <span
-                              style={{
-                                fontSize: "10.5px",
-                                padding: "1px 6px",
-                                borderRadius: "4px",
-                                background: "rgba(99, 102, 241, 0.1)",
-                                color: "#4f46e5",
-                                fontWeight: 600,
-                              }}
-                            >
-                              @{orgLogin}/{team.slug}
-                            </span>
-                          </div>
-                          {team.description && (
-                            <span
-                              className="access-gov-sub"
-                              style={{ display: "block", marginTop: "2px" }}
-                            >
-                              {team.description}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTeamMembers(team.slug)}
-                          className="access-gov-tab-btn"
-                          style={{ border: "1px solid #e2e8f0" }}
-                        >
-                          <UserCheck size={12} />
-                          <span>Membros</span>
-                          {isExpanded ? (
-                            <ChevronUp size={12} />
-                          ) : (
-                            <ChevronDown size={12} />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteOrgTeam(team.slug)}
-                          disabled={isMutating}
-                          className="access-gov-btn-delete"
-                          title="Excluir time"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Membros do Time Expansíveis */}
-                    {isExpanded && (
-                      <div
-                        style={{
-                          borderTop: "1px solid var(--border-subtle, #e2e8f0)",
-                          background:
-                            "var(--md-sys-color-surface-container-lowest, #fcfdfe)",
-                          padding: "12px 14px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "8px",
-                            marginBottom: "10px",
-                          }}
-                        >
-                          <input
-                            type="text"
-                            placeholder="Adicionar membro ao time (@username)..."
-                            value={addTeamMemberUsername}
-                            onChange={(e) =>
-                              setAddTeamMemberUsername(e.target.value)
-                            }
-                            className="access-gov-search-input"
-                            style={{ flex: 1 }}
-                          />
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleAddMemberToTeam(team.slug)}
-                            disabled={
-                              isMutating || !addTeamMemberUsername.trim()
-                            }
-                          >
-                            <Plus size={12} /> Adicionar
-                          </Button>
-                        </div>
-
-                        {isLoadingTeamMembers ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              fontSize: "11px",
-                              color: "#64748b",
-                            }}
-                          >
-                            <Spinner size="sm" /> Carregando membros...
-                          </div>
-                        ) : teamMembersList.length > 0 ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: "6px",
-                            }}
-                          >
-                            {teamMembersList.map((m) => (
-                              <div
-                                key={m.login}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "6px",
-                                  padding: "3px 8px",
-                                  borderRadius: "9999px",
-                                  background: "rgba(2, 132, 199, 0.08)",
-                                  border: "1px solid rgba(2, 132, 199, 0.25)",
-                                  fontSize: "11px",
-                                  color: "#0369a1",
-                                }}
-                              >
-                                <img
-                                  src={m.avatar_url}
-                                  alt={m.login}
-                                  style={{
-                                    width: "16px",
-                                    height: "16px",
-                                    borderRadius: "9999px",
-                                  }}
-                                />
-                                <span>@{m.login}</span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleRemoveMemberFromTeam(
-                                      team.slug,
-                                      m.login,
-                                    )
-                                  }
-                                  style={{
-                                    border: "none",
-                                    background: "transparent",
-                                    cursor: "pointer",
-                                    color: "#94a3b8",
-                                    padding: "0 2px",
-                                    display: "inline-flex",
-                                  }}
-                                  title="Remover do time"
-                                >
-                                  <X size={11} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div
-                            style={{
-                              fontSize: "11px",
-                              color: "#94a3b8",
-                              fontStyle: "italic",
-                            }}
-                          >
-                            Nenhum membro neste time ainda. Adicione membros
-                            acima.
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="access-gov-empty">
-              Nenhum time criado nesta organização ainda. Use o botão "Novo
-              Time" acima para organizar seus times de desenvolvimento.
-            </div>
-          )}
-        </div>
+        <GovernanceTeamsTab
+          orgLogin={orgLogin}
+          showCreateTeam={showCreateTeam}
+          setShowCreateTeam={setShowCreateTeam}
+          newTeamName={newTeamName}
+          setNewTeamName={setNewTeamName}
+          newTeamPrivacy={newTeamPrivacy}
+          setNewTeamPrivacy={setNewTeamPrivacy}
+          newTeamDesc={newTeamDesc}
+          setNewTeamDesc={setNewTeamDesc}
+          handleCreateOrgTeam={handleCreateOrgTeam}
+          orgTeams={orgTeams}
+          expandedTeamSlug={expandedTeamSlug}
+          handleToggleTeamMembers={handleToggleTeamMembers}
+          handleDeleteOrgTeam={handleDeleteOrgTeam}
+          addTeamMemberUsername={addTeamMemberUsername}
+          setAddTeamMemberUsername={setAddTeamMemberUsername}
+          handleAddMemberToTeam={handleAddMemberToTeam}
+          handleRemoveMemberFromTeam={handleRemoveMemberFromTeam}
+          isLoadingTeamMembers={isLoadingTeamMembers}
+          teamMembersList={teamMembersList}
+          isMutating={isMutating}
+        />
       )}
 
       {/* ABA 2: MEMBROS DA ORGANIZAÇÃO & CONVITES */}
       {activeTab === "members" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <span className="access-gov-section-title" style={{ margin: 0 }}>
-              Membros Oficiais da Organização
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowInviteOrgMember(!showInviteOrgMember)}
-              icon={<UserPlus size={13} />}
-            >
-              Convidar Membro
-            </Button>
-          </div>
-
-          {/* Form para Convidar Membro para a Org */}
-          {showInviteOrgMember && (
-            <form
-              onSubmit={handleInviteOrgMember}
-              style={{
-                background:
-                  "var(--md-sys-color-surface-container-low, #f8fafc)",
-                border: "1px solid var(--border-subtle, #e2e8f0)",
-                borderRadius: "10px",
-                padding: "14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "var(--text-heading, #0f172a)",
-                }}
-              >
-                Enviar Convite de Ingresso na Organização
-              </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <input
-                  type="text"
-                  placeholder="Nome de usuário do GitHub ou E-mail (@user ou user@email.com)"
-                  value={inviteUsername}
-                  onChange={(e) => setInviteUsername(e.target.value)}
-                  required
-                  className="access-gov-search-input"
-                  style={{ flex: 1 }}
-                />
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as any)}
-                  className="access-gov-select"
-                  style={{ width: "160px" }}
-                >
-                  <option value="direct_member">Membro Regular</option>
-                  <option value="admin">Owner / Admin</option>
-                </select>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "8px",
-                }}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowInviteOrgMember(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  type="submit"
-                  disabled={isMutating || !inviteUsername.trim()}
-                >
-                  {isMutating ? <Spinner size="sm" /> : "Enviar Convite"}
-                </Button>
-              </div>
-            </form>
-          )}
-
-          {/* Lista de Membros */}
-          <div className="access-gov-list">
-            {orgMembers.map((member) => (
-              <div key={member.login} className="access-gov-row">
-                <div className="access-gov-row-left">
-                  <img
-                    src={member.avatar_url}
-                    alt={member.login}
-                    className="access-gov-avatar"
-                  />
-                  <div className="access-gov-info">
-                    <span className="access-gov-name">@{member.login}</span>
-                    <span className="access-gov-sub">
-                      {member.role === "admin"
-                        ? "👑 Owner da Organização"
-                        : "Membro Regular"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="access-gov-row-right">
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      padding: "3px 8px",
-                      borderRadius: "4px",
-                      fontWeight: 600,
-                      background:
-                        member.role === "admin"
-                          ? "rgba(236, 72, 153, 0.12)"
-                          : "rgba(2, 132, 199, 0.12)",
-                      color: member.role === "admin" ? "#ec4899" : "#0284c7",
-                    }}
-                  >
-                    {member.role === "admin" ? "Owner / Admin" : "Member"}
-                  </span>
-
-                  {member.role !== "admin" && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveOrgMember(member.login)}
-                      disabled={isMutating}
-                      className="access-gov-btn-delete"
-                      title="Remover membro da organização"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <GovernanceMembersTab
+          showInviteOrgMember={showInviteOrgMember}
+          setShowInviteOrgMember={setShowInviteOrgMember}
+          inviteUsername={inviteUsername}
+          setInviteUsername={setInviteUsername}
+          inviteRole={inviteRole}
+          setInviteRole={setInviteRole}
+          handleInviteOrgMember={handleInviteOrgMember}
+          orgMembers={orgMembers}
+          handleRemoveOrgMember={handleRemoveOrgMember}
+          isMutating={isMutating}
+        />
       )}
 
       {/* ABA 3: ACESSO AO REPOSITÓRIO (Times & Colaboradores Diretos/Externos) */}
       {activeTab === "repo_access" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          {/* Seção de Times com Acesso ao Repositório */}
-          <div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "8px",
-              }}
-            >
-              <span className="access-gov-section-title" style={{ margin: 0 }}>
-                🛡️ Times com Acesso ao Repositório ({currentRepoTeams.length})
-              </span>
-            </div>
-
-            {currentRepoTeams.length > 0 ? (
-              <div className="access-gov-list">
-                {currentRepoTeams.map((team) => {
-                  const permCfg = getPermConfig(team.permission);
-                  return (
-                    <div key={team.slug} className="access-gov-row">
-                      <div className="access-gov-row-left">
-                        <div className="access-gov-icon-box">
-                          <Users size={14} />
-                        </div>
-                        <div className="access-gov-info">
-                          <span className="access-gov-name">{team.name}</span>
-                          <span className="access-gov-sub">
-                            @{orgLogin}/{team.slug}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="access-gov-row-right">
-                        <select
-                          value={team.permission}
-                          onChange={(e) =>
-                            handleUpdateTeamPerm(team.slug, e.target.value)
-                          }
-                          disabled={isMutating}
-                          style={{
-                            color: permCfg.color,
-                            backgroundColor: permCfg.bg,
-                            borderColor: `${permCfg.color}40`,
-                          }}
-                          className="access-gov-select"
-                        >
-                          {PERMISSION_OPTIONS.map((opt) => (
-                            <option
-                              key={opt.id}
-                              value={opt.id}
-                              style={{
-                                background: "#ffffff",
-                                color: "#0f172a",
-                              }}
-                            >
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTeamFromRepo(team.slug)}
-                          disabled={isMutating}
-                          className="access-gov-btn-delete"
-                          title="Remover time do repositório"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="access-gov-empty">
-                Nenhum time associado a este repositório. Atribua times da
-                organização abaixo.
-              </div>
-            )}
-
-            {/* Sugestões de Times para Adicionar */}
-            {availableTeamsForRepo.length > 0 && (
-              <div
-                className="access-gov-search-section"
-                style={{ marginTop: "10px" }}
-              >
-                <span className="access-gov-section-title">
-                  Adicionar Time da Org ao Repositório
-                </span>
-                <div className="access-gov-suggest-list">
-                  {availableTeamsForRepo.map((team) => (
-                    <div key={team.slug} className="access-gov-suggest-item">
-                      <div
-                        style={{
-                          minWidth: 0,
-                          overflow: "hidden",
-                          paddingRight: "8px",
-                        }}
-                      >
-                        <div className="access-gov-name">{team.name}</div>
-                        <div className="access-gov-sub">
-                          @{orgLogin}/{team.slug}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleAddTeamToRepo(team)}
-                        disabled={isMutating}
-                        className="access-gov-suggest-btn"
-                      >
-                        <Plus size={12} /> Adicionar
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Seção de Colaboradores Individuais / Outside Collaborators */}
-          <div style={{ marginTop: "8px" }}>
-            <span className="access-gov-section-title">
-              👤 Colaboradores Individuais & Externos (
-              {currentRepoCollaborators.length})
-            </span>
-
-            {currentRepoCollaborators.length > 0 ? (
-              <div className="access-gov-list">
-                {currentRepoCollaborators.map((c) => {
-                  const permCfg = getPermConfig(c.permission);
-                  return (
-                    <div key={c.username} className="access-gov-row">
-                      <div className="access-gov-row-left">
-                        {c.avatar_url ? (
-                          <img
-                            src={c.avatar_url}
-                            alt={c.username}
-                            className="access-gov-avatar"
-                          />
-                        ) : (
-                          <div className="access-gov-avatar-fallback">
-                            {c.username.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <div className="access-gov-info">
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "6px",
-                            }}
-                          >
-                            <span className="access-gov-name">
-                              @{c.username}
-                            </span>
-                            {c.is_owner && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  background: "rgba(236,72,153,0.15)",
-                                  color: "#ec4899",
-                                  padding: "1px 5px",
-                                  borderRadius: "4px",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                Owner
-                              </span>
-                            )}
-                          </div>
-                          {c.name && c.name !== c.username && (
-                            <span className="access-gov-sub">{c.name}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="access-gov-row-right">
-                        {!c.is_owner ? (
-                          <>
-                            <select
-                              value={c.permission}
-                              onChange={(e) =>
-                                handleUpdateCollaboratorPerm(
-                                  c.username,
-                                  e.target.value,
-                                )
-                              }
-                              disabled={isMutating}
-                              style={{
-                                color: permCfg.color,
-                                backgroundColor: permCfg.bg,
-                                borderColor: `${permCfg.color}40`,
-                              }}
-                              className="access-gov-select"
-                            >
-                              {PERMISSION_OPTIONS.map((opt) => (
-                                <option
-                                  key={opt.id}
-                                  value={opt.id}
-                                  style={{
-                                    background: "#ffffff",
-                                    color: "#0f172a",
-                                  }}
-                                >
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleRemoveCollaborator(c.username)
-                              }
-                              disabled={isMutating}
-                              className="access-gov-btn-delete"
-                              title="Remover acesso do colaborador"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </>
-                        ) : (
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              color: "#64748b",
-                              fontWeight: 500,
-                            }}
-                          >
-                            Acesso Total
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="access-gov-empty">
-                Nenhum colaborador individual adicionado diretamente.
-              </div>
-            )}
-
-            {/* Campo de Convite Direto para o Repositório */}
-            <div
-              className="access-gov-search-section"
-              style={{ marginTop: "10px" }}
-            >
-              <span className="access-gov-section-title">
-                Convidar Colaborador Externo
-              </span>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <input
-                  type="text"
-                  placeholder="Nome de usuário do GitHub (@username)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="access-gov-search-input"
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    if (searchQuery.trim()) {
-                      handleAddCollaborator(searchQuery.trim(), "push");
-                      setSearchQuery("");
-                    }
-                  }}
-                  disabled={isMutating || !searchQuery.trim()}
-                >
-                  <Plus size={12} /> Convidar
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GovernanceRepoAccessTab
+          currentRepoTeams={currentRepoTeams}
+          orgLogin={orgLogin}
+          getPermConfig={getPermConfig}
+          handleUpdateTeamPerm={handleUpdateTeamPerm}
+          handleRemoveTeamFromRepo={handleRemoveTeamFromRepo}
+          availableTeamsForRepo={availableTeamsForRepo}
+          handleAddTeamToRepo={handleAddTeamToRepo}
+          currentRepoCollaborators={currentRepoCollaborators}
+          handleUpdateCollaboratorPerm={handleUpdateCollaboratorPerm}
+          handleRemoveCollaborator={handleRemoveCollaborator}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          handleAddCollaborator={handleAddCollaborator}
+          isMutating={isMutating}
+        />
       )}
 
       {/* ABA 4: GITHUB ACTIONS GATEKEEPER */}
       {activeTab === "actions" && repoName && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div
-            style={{
-              background: "var(--md-sys-color-surface-container-low, #f8fafc)",
-              border: "1px solid var(--border-subtle, #e2e8f0)",
-              borderRadius: "12px",
-              padding: "16px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                marginBottom: "10px",
-              }}
-            >
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  background: workflowStatus?.installed
-                    ? "rgba(16, 185, 129, 0.15)"
-                    : "rgba(245, 158, 11, 0.15)",
-                  color: workflowStatus?.installed ? "#10b981" : "#f59e0b",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {workflowStatus?.installed ? (
-                  <ShieldCheck size={20} />
-                ) : (
-                  <ShieldAlert size={20} />
-                )}
-              </div>
-              <div>
-                <h4
-                  style={{
-                    margin: 0,
-                    fontSize: "13.5px",
-                    fontWeight: 600,
-                    color: "var(--text-heading, #0f172a)",
-                  }}
-                >
-                  GitHub Actions Governance Gatekeeper
-                </h4>
-                <p
-                  style={{
-                    margin: "2px 0 0",
-                    fontSize: "11.5px",
-                    color: "var(--text-muted, #64748b)",
-                  }}
-                >
-                  {workflowStatus?.installed
-                    ? "Workflow ativo em .github/workflows/governance-check.yml validando CODEOWNERS, Quorum e Secrets nos PRs."
-                    : "Ainda não instalado. Proteja seus repositórios privados com validação automatizada de CI/CD."}
-                </p>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                marginTop: "12px",
-              }}
-            >
-              <Button
-                variant={workflowStatus?.installed ? "secondary" : "primary"}
-                size="sm"
-                onClick={handleInstallWorkflow}
-                disabled={isInstallingWorkflow}
-                icon={
-                  workflowStatus?.installed ? (
-                    <CheckCircle size={13} />
-                  ) : (
-                    <Play size={13} />
-                  )
-                }
-              >
-                {isInstallingWorkflow
-                  ? "Instalando..."
-                  : workflowStatus?.installed
-                    ? "Reinstalar / Atualizar Workflow"
-                    : "Instalar Workflow de Governança no Repositório"}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <GovernanceActionsTab
+          workflowStatus={workflowStatus}
+          handleInstallWorkflow={handleInstallWorkflow}
+          isInstallingWorkflow={isInstallingWorkflow}
+        />
       )}
     </div>
   );

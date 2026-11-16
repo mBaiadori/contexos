@@ -3,7 +3,7 @@
   "newFunction_server_src": 0,
   "execAsync_server_src": 3,
   "dangerouslySetInnerHTML_unsanitized_frontend": 0,
-  "innerHTML_unsanitized_frontend": 15,
+  "innerHTML_unsanitized_frontend": 10,
   "any_frontend_src": 322,
-  "any_server_src": 448
+  "any_server_src": 391
 }

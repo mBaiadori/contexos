@@ -21,7 +21,40 @@ import type { DictionaryTerm } from '../../types';
 import type { DictionaryPopoverData } from '../dictionary/DictionaryPopover';
 
 import mermaid from 'mermaid';
-import { isSafeUrl, sanitizeSvg, sanitizeHtml, setSafeHtml, escapeHtml } from '../../utils/sanitize';
+import { isSafeUrl, sanitizeSvg, setSafeHtml, escapeHtml } from '../../utils/sanitize';
+import {
+  createTableHtml,
+  createTableFromMarkdown,
+  createToggleBlockHtml,
+  createCalloutBlockHtml,
+  createTodoItemHtml,
+  createCodeBlockHtml,
+  createMermaidBlockHtml,
+  findTopLevelBlock,
+  turnBlockInto,
+  toggleCalloutType,
+} from './notion-editor-blocks';
+import {
+  parseInlineMarkdown,
+  parseListBlock,
+  parseMarkdownLinesToHtml,
+  serializeNode,
+  serializeInline,
+  serializeTable,
+  serializeToggle,
+  serializeCallout,
+  serializeBlockquote,
+  serializeList,
+  serializeCanvasToMarkdown,
+  convertHtmlToMarkdown,
+} from './notion-editor-markdown';
+import {
+  indentListItem,
+  outdentListItem,
+  handleEnterInListItem,
+  handleBackspaceInListItem,
+  checkMarkdownInputRules,
+} from './notion-editor-lists';
 
 try {
   mermaid.initialize({
@@ -765,346 +798,28 @@ export class NotionEditorEngine {
   }
 
   findTopLevelBlock(node: Node | null): HTMLElement | null {
-    let current = node as HTMLElement | null;
-    while (current && current.parentElement && current.parentElement !== this.canvas) {
-      current = current.parentElement;
-    }
-    return current;
+    return findTopLevelBlock(node, this.canvas);
   }
 
   turnBlockInto(block: HTMLElement, type: string) {
-    const text = block.textContent?.trim() || '';
-    let newEl: HTMLElement | null = null;
-
-    if (type === 'h1') newEl = document.createElement('h1');
-    else if (type === 'h2') newEl = document.createElement('h2');
-    else if (type === 'h3') newEl = document.createElement('h3');
-    else if (type === 'p') newEl = document.createElement('p');
-    else if (type === 'quote') newEl = document.createElement('blockquote');
-    else if (type === 'todo') {
-      const div = document.createElement('div');
-      div.innerHTML = this.createTodoItemHtml(text || 'Nova tarefa');
-      newEl = div.firstElementChild as HTMLElement;
-    } else if (type === 'callout') {
-      const div = document.createElement('div');
-      div.innerHTML = this.createCalloutBlockHtml('note', text || 'Nota de destaque...');
-      newEl = div.firstElementChild as HTMLElement;
-    } else if (type === 'code') {
-      const div = document.createElement('div');
-      div.innerHTML = this.createCodeBlockHtml('javascript', text || '// Código');
-      newEl = div.firstElementChild as HTMLElement;
-    }
-
-    if (newEl && !['todo', 'callout', 'code'].includes(type)) {
-      newEl.textContent = text || '';
-      if (!newEl.innerHTML) newEl.innerHTML = '<br>';
-    }
-
-    if (newEl) {
-      block.replaceWith(newEl);
-      this.attachInteractiveListeners();
-      this.placeCursorIn(newEl);
-      this.recordChange();
-    }
+    turnBlockInto(block, type, {
+      attachInteractiveListeners: () => this.attachInteractiveListeners(),
+      placeCursorIn: (el) => this.placeCursorIn(el),
+      recordChange: () => this.recordChange(),
+    });
   }
 
   toggleCalloutType(calloutEl: HTMLElement | null) {
-    if (!calloutEl) return;
-    const types = ['note', 'tip', 'warning', 'danger'];
-    const current = calloutEl.dataset.type || 'note';
-    const nextIdx = (types.indexOf(current) + 1) % types.length;
-    const nextType = types[nextIdx];
-
-    calloutEl.dataset.type = nextType;
-    const iconSpan = calloutEl.querySelector('.notion-callout-icon');
-    if (iconSpan) {
-      const iconMap: Record<string, string> = {
-        note: 'info',
-        tip: 'check_circle',
-        warning: 'warning',
-        danger: 'error'
-      };
-      iconSpan.textContent = iconMap[nextType] || 'info';
-    }
+    toggleCalloutType(calloutEl);
     this.recordChange();
   }
 
-  // ===========================================================================
-  // MARKDOWN TO DOM (PARSER)
-  // ===========================================================================
-
   parseListBlock(lines: string[], startIndex: number): { html: string; nextIndex: number } {
-    const listLines: { indent: number; type: 'ul' | 'ol'; text: string }[] = [];
-    let i = startIndex;
-
-    while (i < lines.length) {
-      const line = lines[i];
-      // Se for To-Do, encerra o bloco de lista comum
-      if (line.match(/^(\s*)[-*+•–—]\s+\[([ xX])\]\s+/)) {
-        break;
-      }
-      const match = line.match(/^(\s*)([-*+•–—]|\d+\.)\s+(.*)$/);
-      if (!match) {
-        break;
-      }
-      const indent = match[1].length;
-      const marker = match[2];
-      const type: 'ul' | 'ol' = /^\d+\./.test(marker) ? 'ol' : 'ul';
-      const text = match[3];
-      listLines.push({ indent, type, text });
-      i++;
-    }
-
-    if (listLines.length === 0) {
-      return { html: '', nextIndex: startIndex };
-    }
-
-    const stack: { type: 'ul' | 'ol'; indent: number; hasOpenLi: boolean }[] = [];
-    let result = '';
-
-    for (const item of listLines) {
-      if (stack.length === 0) {
-        stack.push({ type: item.type, indent: item.indent, hasOpenLi: true });
-        result += `<${item.type}><li>${this.parseInlineMarkdown(item.text)}`;
-      } else {
-        const top = stack[stack.length - 1];
-
-        if (item.indent > top.indent) {
-          stack.push({ type: item.type, indent: item.indent, hasOpenLi: true });
-          result += `<${item.type}><li>${this.parseInlineMarkdown(item.text)}`;
-        } else if (item.indent < top.indent) {
-          while (stack.length > 1 && stack[stack.length - 1].indent > item.indent) {
-            const popped = stack.pop()!;
-            result += `</li></${popped.type}>`;
-          }
-          const currentTop = stack[stack.length - 1];
-          if (currentTop.hasOpenLi) {
-            result += `</li>`;
-          }
-          currentTop.hasOpenLi = true;
-          result += `<li>${this.parseInlineMarkdown(item.text)}`;
-        } else {
-          if (top.type === item.type) {
-            result += `</li><li>${this.parseInlineMarkdown(item.text)}`;
-          } else {
-            stack.pop();
-            result += `</li></${top.type}><${item.type}><li>${this.parseInlineMarkdown(item.text)}`;
-            stack.push({ type: item.type, indent: item.indent, hasOpenLi: true });
-          }
-        }
-      }
-    }
-
-    while (stack.length > 0) {
-      const popped = stack.pop()!;
-      result += `</li></${popped.type}>`;
-    }
-
-    return { html: result, nextIndex: i };
+    return parseListBlock(lines, startIndex);
   }
 
   parseMarkdownLinesToHtml(lines: string[]): string {
-    const htmlFragments: string[] = [];
-    let i = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-
-      // 1. Mermaid Code Block
-      if (line.trim().startsWith('```mermaid')) {
-        let code = '';
-        i++;
-        while (i < lines.length && !lines[i].trim().startsWith('```')) {
-          code += lines[i] + '\n';
-          i++;
-        }
-        i++;
-        htmlFragments.push(this.createMermaidBlockHtml(code.trim()));
-        continue;
-      }
-
-      // 2. Generic Code Block
-      if (line.trim().startsWith('```')) {
-        const lang = line.trim().replace(/^```/, '').trim() || 'text';
-        let code = '';
-        i++;
-        while (i < lines.length && !lines[i].trim().startsWith('```')) {
-          code += lines[i] + '\n';
-          i++;
-        }
-        i++;
-        htmlFragments.push(this.createCodeBlockHtml(lang, code.trim()));
-        continue;
-      }
-
-      // 3. Dropdown / Toggle List
-      if (line.trim().startsWith('<details') || line.trim().startsWith('<details>')) {
-        let toggleContent = '';
-        let summaryTitle = 'Seção Expansível';
-        i++;
-        while (i < lines.length && !lines[i].trim().startsWith('</details>')) {
-          const sumMatch = lines[i].match(/<summary>(.*?)<\/summary>/i);
-          if (sumMatch) {
-            summaryTitle = sumMatch[1].trim();
-          } else {
-            toggleContent += lines[i] + '\n';
-          }
-          i++;
-        }
-        i++;
-        htmlFragments.push(this.createToggleBlockHtml(summaryTitle, toggleContent.trim()));
-        continue;
-      }
-
-      // 4. Callout / Alert Box (> [!NOTE], > [!NOTA], > [!TIP], > [!DICA], etc.)
-      const calloutMatch = line.match(/^>\s*\[!\s*([a-zA-ZÀ-ÿ0-9_-]+)\s*\](?:\s*(.*))?$/i);
-      if (calloutMatch) {
-        const rawType = calloutMatch[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        let type = 'note';
-        if (['tip', 'dica', 'success', 'sucesso'].includes(rawType)) type = 'tip';
-        else if (['warning', 'aviso', 'atencao', 'important', 'importante', 'caution', 'cuidado'].includes(rawType)) type = 'warning';
-        else if (['danger', 'perigo'].includes(rawType)) type = 'danger';
-
-        const calloutLines: string[] = [];
-        if (calloutMatch[2] && calloutMatch[2].trim()) {
-          calloutLines.push(calloutMatch[2].trim());
-        }
-        i++;
-        while (i < lines.length && lines[i].startsWith('>')) {
-          calloutLines.push(lines[i].replace(/^>\s?/, ''));
-          i++;
-        }
-        const calloutBody = calloutLines.join('\n');
-        htmlFragments.push(this.createCalloutBlockHtml(type, calloutBody.trim()));
-        continue;
-      }
-
-      // 4.1. Admonition Container (:::note, :::tip, :::warning, etc.)
-      const containerMatch = line.match(/^:::\s*([a-zA-ZÀ-ÿ0-9_-]+)(?:\s+(.*))?$/i);
-      if (containerMatch) {
-        const rawType = containerMatch[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        let type = 'note';
-        if (['tip', 'dica', 'success', 'sucesso'].includes(rawType)) type = 'tip';
-        else if (['warning', 'aviso', 'atencao', 'important', 'importante', 'caution', 'cuidado'].includes(rawType)) type = 'warning';
-        else if (['danger', 'perigo'].includes(rawType)) type = 'danger';
-
-        const containerLines: string[] = [];
-        if (containerMatch[2] && containerMatch[2].trim()) {
-          containerLines.push(containerMatch[2].trim());
-        }
-        i++;
-        while (i < lines.length && !lines[i].trim().startsWith(':::')) {
-          containerLines.push(lines[i]);
-          i++;
-        }
-        if (i < lines.length && lines[i].trim().startsWith(':::')) {
-          i++;
-        }
-        const containerBody = containerLines.join('\n');
-        htmlFragments.push(this.createCalloutBlockHtml(type, containerBody.trim()));
-        continue;
-      }
-
-      // 5. GFM Table
-      if (line.trim().startsWith('|')) {
-        const tableLines: string[] = [];
-        while (i < lines.length && lines[i].trim().startsWith('|')) {
-          tableLines.push(lines[i]);
-          i++;
-        }
-        if (tableLines.length >= 2) {
-          htmlFragments.push(this.createTableFromMarkdown(tableLines));
-          continue;
-        } else {
-          // Se for apenas uma linha isolada com pipes, retrocede o índice para processar normalmente
-          i -= tableLines.length;
-        }
-      }
-
-      // 6. To-Do Checklist (- [ ] , - [x] , * [ ] , – [ ])
-      const todoMatch = line.match(/^(\s*)[-*+–—]\s*\[([ xX]?)\]\s*(.*)$/);
-      if (todoMatch) {
-        const indentSpaces = todoMatch[1].length;
-        const indentLevel = Math.floor(indentSpaces / 2);
-        const isChecked = todoMatch[2].toLowerCase() === 'x';
-        const text = todoMatch[3];
-        htmlFragments.push(this.createTodoItemHtml(text, isChecked, indentLevel));
-        i++;
-        continue;
-      }
-
-      // 7. Headings
-      const h1Match = line.match(/^#\s+(.*)$/);
-      if (h1Match) {
-        htmlFragments.push(`<h1>${this.parseInlineMarkdown(h1Match[1])}</h1>`);
-        i++;
-        continue;
-      }
-      const h2Match = line.match(/^##\s+(.*)$/);
-      if (h2Match) {
-        htmlFragments.push(`<h2>${this.parseInlineMarkdown(h2Match[1])}</h2>`);
-        i++;
-        continue;
-      }
-      const h3Match = line.match(/^###\s+(.*)$/);
-      if (h3Match) {
-        htmlFragments.push(`<h3>${this.parseInlineMarkdown(h3Match[1])}</h3>`);
-        i++;
-        continue;
-      }
-      const h4Match = line.match(/^####\s+(.*)$/);
-      if (h4Match) {
-        htmlFragments.push(`<h4>${this.parseInlineMarkdown(h4Match[1])}</h4>`);
-        i++;
-        continue;
-      }
-
-      // 8. Horizontal Rule
-      if (line.match(/^(\*{3,}|-{3,}|_{3,})$/)) {
-        htmlFragments.push('<hr>');
-        i++;
-        continue;
-      }
-
-      // 9. Blockquote / Card Container (Rich recursive markdown support)
-      if (line.startsWith('>')) {
-        const quoteLines: string[] = [];
-        while (i < lines.length && lines[i].startsWith('>')) {
-          quoteLines.push(lines[i].replace(/^>\s?/, ''));
-          i++;
-        }
-        const innerHtml = this.parseMarkdownLinesToHtml(quoteLines);
-        htmlFragments.push(`<blockquote>${innerHtml}</blockquote>`);
-        continue;
-      }
-
-      // 10. Listas com Bullets ou Numeradas (suporte a múltiplos níveis de aninhamento)
-      const listMatch = line.match(/^(\s*)([-*+•–—]|\d+\.)\s+(.*)$/);
-      if (listMatch) {
-        const { html, nextIndex } = this.parseListBlock(lines, i);
-        if (html) {
-          htmlFragments.push(html);
-          i = nextIndex;
-          continue;
-        }
-      }
-
-      // 12. Empty lines between markdown blocks are ignored (they are markdown separators, not DOM nodes)
-      if (!line.trim()) {
-        i++;
-        continue;
-      }
-
-      // 13. Regular Paragraph
-      htmlFragments.push(`<p>${this.parseInlineMarkdown(line)}</p>`);
-      i++;
-    }
-
-    if (htmlFragments.length === 0) {
-      return '<p><br></p>';
-    }
-
-    return sanitizeHtml(htmlFragments.join('\n'));
+    return parseMarkdownLinesToHtml(lines);
   }
 
   isFocused(): boolean {
@@ -1226,166 +941,15 @@ export class NotionEditorEngine {
   // ===========================================================================
 
   serializeBlockquote(blockquote: HTMLElement): string {
-    const lines: string[] = [];
-    const children = Array.from(blockquote.childNodes);
-
-    for (const child of children) {
-      if (child.nodeType === Node.TEXT_NODE) {
-        const text = child.textContent?.trim();
-        if (text) lines.push(`> ${text}`);
-      } else if (child.nodeType === Node.ELEMENT_NODE) {
-        const el = child as HTMLElement;
-        const tag = el.tagName ? el.tagName.toLowerCase() : '';
-
-        if (tag === 'h1') lines.push(`> # ${this.serializeInline(el)}`);
-        else if (tag === 'h2') lines.push(`> ## ${this.serializeInline(el)}`);
-        else if (tag === 'h3') lines.push(`> ### ${this.serializeInline(el)}`);
-        else if (tag === 'h4') lines.push(`> #### ${this.serializeInline(el)}`);
-        else if (tag === 'p') {
-          const text = this.serializeInline(el).trim();
-          lines.push(text ? `> ${text}` : '>');
-        } else if (tag === 'ul' || tag === 'ol') {
-          const listLines = this.serializeList(el, 0);
-          listLines.forEach((l) => lines.push(`> ${l}`));
-        } else if (tag === 'hr') {
-          lines.push('> ---');
-        } else if (el.classList.contains('notion-code-block')) {
-          const lang = el.querySelector('.notion-code-lang')?.textContent?.trim() || '';
-          const code = (el.querySelector('.notion-code-content') as HTMLElement)?.innerText || '';
-          lines.push(`> \`\`\`${lang}`);
-          code.split('\n').forEach((cLine) => lines.push(`> ${cLine}`));
-          lines.push('> ```');
-        } else {
-          const text = this.serializeInline(el).trim();
-          if (text) lines.push(`> ${text}`);
-        }
-      }
-    }
-
-    return lines.length > 0 ? lines.join('\n') : '> ';
+    return serializeBlockquote(blockquote);
   }
 
   serializeList(listEl: HTMLElement, depth = 0): string[] {
-    const lines: string[] = [];
-    const isOrdered = listEl.tagName.toLowerCase() === 'ol';
-    const indent = '  '.repeat(depth);
-    let idx = 1;
-
-    const directLis = Array.from(listEl.children).filter(
-      (c) => c.tagName && c.tagName.toLowerCase() === 'li'
-    ) as HTMLElement[];
-
-    for (const li of directLis) {
-      let liText = '';
-      const childLists: HTMLElement[] = [];
-
-      for (const child of Array.from(li.childNodes)) {
-        if (child.nodeType === Node.ELEMENT_NODE) {
-          const el = child as HTMLElement;
-          const tag = el.tagName ? el.tagName.toLowerCase() : '';
-          if (tag === 'ul' || tag === 'ol') {
-            childLists.push(el);
-            continue;
-          }
-        }
-        liText += this.serializeNode(child);
-      }
-
-      const prefix = isOrdered ? `${indent}${idx}. ` : `${indent}- `;
-      lines.push(`${prefix}${liText.trim()}`);
-      idx++;
-
-      for (const childList of childLists) {
-        const subLines = this.serializeList(childList, depth + 1);
-        lines.push(...subLines);
-      }
-    }
-
-    return lines;
+    return serializeList(listEl, depth);
   }
 
   getMarkdown(): string {
-    const lines: string[] = [];
-    const children = Array.from(this.canvas.children) as HTMLElement[];
-
-    for (const node of children) {
-      if (node.classList && (node.classList.contains('notion-inline-diff-card') || node.classList.contains('not-prose'))) {
-        continue;
-      }
-
-      const tag = node.tagName ? node.tagName.toLowerCase() : '';
-
-      if (tag === 'h1') {
-        lines.push(`# ${this.serializeInline(node)}`);
-        lines.push('');
-      } else if (tag === 'h2') {
-        lines.push(`## ${this.serializeInline(node)}`);
-        lines.push('');
-      } else if (tag === 'h3') {
-        lines.push(`### ${this.serializeInline(node)}`);
-        lines.push('');
-      } else if (tag === 'h4') {
-        lines.push(`#### ${this.serializeInline(node)}`);
-        lines.push('');
-      } else if (tag === 'p') {
-        const text = this.serializeInline(node).trim();
-        if (text) {
-          lines.push(text);
-          lines.push('');
-        }
-      } else if (tag === 'hr') {
-        lines.push('---');
-        lines.push('');
-      } else if (tag === 'blockquote') {
-        lines.push(this.serializeBlockquote(node));
-        lines.push('');
-      } else if (tag === 'ul' || tag === 'ol') {
-        const listLines = this.serializeList(node, 0);
-        lines.push(...listLines);
-        lines.push('');
-      } else if (node.classList.contains('notion-table-block') || node.classList.contains('notion-table-wrapper')) {
-        lines.push(this.serializeTable(node));
-        lines.push('');
-      } else if (node.classList.contains('notion-toggle') || tag === 'details') {
-        lines.push(this.serializeToggle(node));
-        lines.push('');
-      } else if (node.classList.contains('notion-callout')) {
-        lines.push(this.serializeCallout(node));
-        lines.push('');
-      } else if (node.classList.contains('notion-todo-item')) {
-        const chk = node.querySelector('.notion-todo-checkbox') as HTMLInputElement | null;
-        const isChecked = chk ? chk.checked : false;
-        const textEl = (node.querySelector('.notion-todo-text') || node) as HTMLElement;
-        const text = this.serializeInline(textEl).trim();
-        const indentLevel = parseInt(node.getAttribute('data-indent') || '0', 10);
-        const indent = '  '.repeat(indentLevel);
-        lines.push(`${indent}- [${isChecked ? 'x' : ' '}] ${text}`);
-      } else if (node.classList.contains('notion-code-block')) {
-        const langEl = node.querySelector('.notion-code-lang');
-        const codeEl = (node.querySelector('.notion-code-content') || node.querySelector('code')) as HTMLElement | null;
-        const lang = langEl ? langEl.textContent?.trim().toLowerCase() : '';
-        const code = codeEl ? codeEl.innerText : '';
-        lines.push(`\`\`\`${lang}`);
-        lines.push(code);
-        lines.push('```');
-        lines.push('');
-      } else if (node.classList.contains('notion-mermaid-block')) {
-        const textarea = node.querySelector('.notion-mermaid-textarea') as HTMLTextAreaElement | null;
-        const code = textarea ? textarea.value.trim() : (node.dataset.mermaidCode || '');
-        lines.push('```mermaid');
-        lines.push(code);
-        lines.push('```');
-        lines.push('');
-      } else {
-        const text = this.serializeInline(node).trim();
-        if (text) {
-          lines.push(text);
-          lines.push('');
-        }
-      }
-    }
-
-    return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    return serializeCanvasToMarkdown(this.canvas);
   }
 
   setDictionaryTerms(terms: DictionaryTerm[]) {
@@ -1418,251 +982,55 @@ export class NotionEditorEngine {
   }
 
   parseInlineMarkdown(text: string): string {
-    if (!text) return '<br>';
-
-    // 1. Pass: Tokenizar trechos de código inline `...`
-    const codeTokens: string[] = [];
-    let processed = text.replace(/`([^`]+)`/g, (_m, code) => {
-      const idx = codeTokens.length;
-      codeTokens.push(`<code>${escapeHtml(code)}</code>`);
-      return `\x00CODE_${idx}\x00`;
-    });
-
-    // 2. Pass: Tokenizar links [label](url) com suporte a parênteses balanceados na URL
-    const linkTokens: string[] = [];
-    let linkProcessed = '';
-    let i = 0;
-    while (i < processed.length) {
-      if (processed[i] === '[') {
-        const labelClose = processed.indexOf(']', i + 1);
-        if (labelClose !== -1 && processed[labelClose + 1] === '(') {
-          const rawLabel = processed.substring(i + 1, labelClose);
-          let depth = 1;
-          let j = labelClose + 2;
-          while (j < processed.length && depth > 0) {
-            if (processed[j] === '(') depth++;
-            else if (processed[j] === ')') depth--;
-            j++;
-          }
-          if (depth === 0) {
-            const rawHref = processed.substring(labelClose + 2, j - 1);
-            const tokenIdx = linkTokens.length;
-
-            const cleanLabel = (rawLabel || '').replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || rawLabel;
-            const trimmedHref = (rawHref || '').trim();
-            const safeTargetHref = isSafeUrl(trimmedHref) ? escapeHtml(trimmedHref) : '#';
-            const isExternal = /^[a-z][a-z0-9+.-]*:/i.test(trimmedHref) || trimmedHref.startsWith('//');
-            const isDoc = !isExternal && !trimmedHref.startsWith('//') && (trimmedHref.endsWith('.md') || trimmedHref.includes('.md#') || trimmedHref.startsWith('#') || trimmedHref.includes(':~:text='));
-
-            const formattedLabel = escapeHtml(cleanLabel);
-            const linkHtml = `<a href="${safeTargetHref}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}"${!isDoc ? ' rel="noopener noreferrer"' : ''}>${formattedLabel}</a>`;
-            linkTokens.push(linkHtml);
-            linkProcessed += `\x00LINK_${tokenIdx}\x00`;
-            i = j;
-            continue;
-          }
-        }
-      }
-      linkProcessed += processed[i];
-      i++;
-    }
-    processed = linkProcessed;
-
-    // 3. Pass: Escapar HTML nos fragmentos de texto comuns fora de tokens
-    processed = escapeHtml(processed);
-
-    // 4. Pass: Formatação inline sobre o texto já escapado
-    // Negrito **texto**
-    processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // Tachado ~~texto~~
-    processed = processed.replace(/~~(.*?)~~/g, '<s>$1</s>');
-    // Itálico *texto* (protege expressões aritméticas como 2*3*4)
-    processed = processed.replace(/(^|[^\w\\])\*([^\s*](?:[\s\S]*?[^\s*])?)\*(?=[^\w\\]|$)/g, '$1<em>$2</em>');
-
-    // 5. Pass: Restaurar tokens de links e código
-    processed = processed.replace(/\x00LINK_(\d+)\x00/g, (_m, id) => linkTokens[Number(id)]);
-    processed = processed.replace(/\x00CODE_(\d+)\x00/g, (_m, id) => codeTokens[Number(id)]);
-
-    return processed;
+    return parseInlineMarkdown(text);
   }
 
   serializeNode(node: Node | null): string {
-    if (!node) return '';
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent || '';
-    }
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement;
-      const tag = el.tagName ? el.tagName.toLowerCase() : '';
-
-      // Ignorar ícones (Material Symbols / SVG) para nunca serializar o nome do ícone como texto no Markdown
-      if (
-        el.classList.contains('material-symbols-outlined') || 
-        el.classList.contains('notion-icon') || 
-        el.classList.contains('icon-xs') ||
-        el.classList.contains('icon-sm') ||
-        tag === 'svg'
-      ) {
-        return '';
-      }
-
-      if (tag === 'strong' || tag === 'b') {
-        return `**${this.serializeInline(el)}**`;
-      } else if (tag === 'em' || tag === 'i') {
-        return `*${this.serializeInline(el)}*`;
-      } else if (tag === 's' || tag === 'strike') {
-        return `~~${this.serializeInline(el)}~~`;
-      } else if (tag === 'code') {
-        return `\`${el.textContent || ''}\``;
-      } else if (tag === 'a') {
-        const href = el.getAttribute('href') || '#';
-        let label = this.serializeInline(el);
-        label = label.replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || label;
-        return `[${label}](${href})`;
-      } else if (tag === 'br') {
-        return '\n';
-      } else {
-        return this.serializeInline(el);
-      }
-    }
-    return '';
+    return serializeNode(node);
   }
 
   serializeInline(element: HTMLElement | null): string {
-    if (!element) return '';
-    let result = '';
-    element.childNodes.forEach(child => {
-      result += this.serializeNode(child);
-    });
-    return result;
+    return serializeInline(element);
   }
 
   serializeTable(wrapper: HTMLElement): string {
-    const table = wrapper.querySelector('table');
-    if (!table) return '';
-
-    const rows = Array.from(table.querySelectorAll('tr'));
-    if (rows.length === 0) return '';
-
-    const mdLines: string[] = [];
-    rows.forEach((tr, rIdx) => {
-      const cells = Array.from(tr.querySelectorAll('th, td')) as HTMLElement[];
-      const rowStr = '| ' + cells.map(c => this.serializeInline(c).trim() || ' ').join(' | ') + ' |';
-      mdLines.push(rowStr);
-
-      if (rIdx === 0) {
-        const sepStr = '| ' + cells.map(() => '---').join(' | ') + ' |';
-        mdLines.push(sepStr);
-      }
-    });
-
-    return mdLines.join('\n');
+    return serializeTable(wrapper);
   }
 
   serializeToggle(toggle: HTMLElement): string {
-    const summary = toggle.querySelector('summary');
-    const title = summary ? (summary.querySelector('.notion-toggle-summary-text')?.textContent || summary.textContent || 'Seção').trim() : 'Seção';
-    const content = (toggle.querySelector('.notion-toggle-content') || toggle) as HTMLElement;
-    const body = this.serializeInline(content).trim();
-
-    return `<details>\n<summary>${title}</summary>\n\n${body}\n</details>`;
+    return serializeToggle(toggle);
   }
 
   serializeCallout(callout: HTMLElement): string {
-    const type = (callout.dataset.type || 'note').toUpperCase();
-    const content = (callout.querySelector('.notion-callout-content') || callout) as HTMLElement;
-    const body = this.serializeInline(content).trim();
-    const lines = body.split('\n');
-
-    return `> [!${type}]\n` + lines.map(l => `> ${l}`).join('\n');
+    return serializeCallout(callout);
   }
 
-  // ===========================================================================
-  // HTML GENERATORS
-  // ===========================================================================
-
   createTableHtml(rows = 3, cols = 3): string {
-    return NotionTable.createDefaultHtml(rows, cols);
+    return createTableHtml(rows, cols);
   }
 
   createTableFromMarkdown(tableLines: string[]): string {
-    return NotionTable.fromMarkdownLines(tableLines);
+    return createTableFromMarkdown(tableLines);
   }
 
   createToggleBlockHtml(title = 'Clique para expandir', content = 'Conteúdo oculto...'): string {
-    return `
-      <details class="notion-toggle" open>
-        <summary>
-          <span class="notion-toggle-summary-text" contenteditable="true">${escapeHtml(title)}</span>
-        </summary>
-        <div class="notion-toggle-content" contenteditable="true">
-          <p>${this.parseInlineMarkdown(content)}</p>
-        </div>
-      </details>
-    `;
+    return createToggleBlockHtml(title, content, parseInlineMarkdown);
   }
 
   createCalloutBlockHtml(type = 'note', content = 'Insira o contexto aqui...'): string {
-    const iconMap: Record<string, string> = {
-      note: 'info',
-      tip: 'check_circle',
-      warning: 'warning',
-      danger: 'error'
-    };
-    const icon = iconMap[type] || 'info';
-
-    return `
-      <div class="notion-callout" data-type="${type}" contenteditable="false">
-        <span class="notion-callout-icon material-symbols-outlined icon-sm" title="Clique para alternar tipo de alerta">${icon}</span>
-        <div class="notion-callout-content" contenteditable="true">${this.parseInlineMarkdown(content)}</div>
-      </div>
-    `;
+    return createCalloutBlockHtml(type, content, parseInlineMarkdown);
   }
 
   createTodoItemHtml(text = 'Nova tarefa', isChecked = false, indent = 0): string {
-    const indentAttr = indent > 0 ? ` data-indent="${indent}" style="margin-left: ${indent * 24}px"` : '';
-    return `
-      <div class="notion-todo-item ${isChecked ? 'checked' : ''}"${indentAttr} contenteditable="false">
-        <input type="checkbox" class="notion-todo-checkbox" ${isChecked ? 'checked' : ''} />
-        <span class="notion-todo-text" contenteditable="true">${this.parseInlineMarkdown(text)}</span>
-      </div>
-    `;
+    return createTodoItemHtml(text, isChecked, indent, parseInlineMarkdown);
   }
 
   createCodeBlockHtml(lang = 'javascript', code = '// Código aqui'): string {
-    return `
-      <div class="notion-code-block" contenteditable="false">
-        <div class="notion-code-header">
-          <span class="notion-code-lang">${escapeHtml(lang)}</span>
-          <button type="button" class="btn-code-copy">Copiar</button>
-        </div>
-        <pre class="notion-code-content" contenteditable="true"><code>${escapeHtml(code)}</code></pre>
-      </div>
-    `;
+    return createCodeBlockHtml(lang, code);
   }
 
   createMermaidBlockHtml(code = 'flowchart TD\n  A[Início] --> B[Processo]\n  B --> C[Fim]'): string {
-    const id = `mermaid-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    return `
-      <div class="notion-mermaid-block" id="${id}" data-mermaid-code="${escapeHtml(code)}" contenteditable="false">
-        <div class="notion-mermaid-header">
-          <div class="notion-mermaid-title">
-            <span class="material-symbols-outlined icon-xs">schema</span>
-            <span>Diagrama Mermaid</span>
-          </div>
-          <div class="notion-mermaid-actions">
-            <button type="button" class="btn-mermaid-action btn-toggle-mermaid-editor">Editar Código</button>
-            <button type="button" class="btn-mermaid-action btn-refresh-mermaid">Renderizar</button>
-          </div>
-        </div>
-        <div class="notion-mermaid-render">
-          <span style="color:#94a3b8; font-size:12px;">Renderizando diagrama...</span>
-        </div>
-        <div class="notion-mermaid-editor">
-          <textarea class="notion-mermaid-textarea" spellcheck="false">${escapeHtml(code)}</textarea>
-        </div>
-      </div>
-    `;
+    return createMermaidBlockHtml(code);
   }
 
   // ===========================================================================
@@ -1748,203 +1116,34 @@ export class NotionEditorEngine {
   }
 
   indentListItem(li: HTMLElement): boolean {
-    const prevLi = li.previousElementSibling as HTMLElement | null;
-    if (!prevLi || prevLi.tagName.toLowerCase() !== 'li') {
-      return false;
-    }
-
-    const parentList = li.parentElement;
-    if (!parentList) return false;
-    const parentTag = parentList.tagName.toLowerCase() === 'ol' ? 'ol' : 'ul';
-
-    // Procura se prevLi já possui uma sublista filha correspondente
-    let sublist = prevLi.querySelector(`:scope > ${parentTag}`) as HTMLElement | null;
-    if (!sublist) {
-      sublist = prevLi.querySelector(':scope > ul, :scope > ol') as HTMLElement | null;
-    }
-
-    if (!sublist) {
-      sublist = document.createElement(parentTag);
-      prevLi.appendChild(sublist);
-    }
-
-    sublist.appendChild(li);
-    this.placeCursorIn(li);
-    this.recordChange();
-    return true;
+    return indentListItem(li, {
+      placeCursorIn: (el) => this.placeCursorIn(el),
+      recordChange: () => this.recordChange(),
+    });
   }
 
   outdentListItem(li: HTMLElement): boolean {
-    const currentList = li.parentElement;
-    if (!currentList) return false;
-
-    // Verifica se a lista atual está aninhada dentro de outro li pai
-    const parentLi = currentList.closest('li');
-    const grandparentList = parentLi?.parentElement;
-
-    if (parentLi && grandparentList && (grandparentList.tagName.toLowerCase() === 'ul' || grandparentList.tagName.toLowerCase() === 'ol')) {
-      // Outdent de nível aninhado: move o li para depois do parentLi no grandparentList
-      parentLi.insertAdjacentElement('afterend', li);
-
-      // Se a sublista anterior ficou vazia, remove-a
-      if (currentList.querySelectorAll('li').length === 0) {
-        currentList.remove();
-      }
-
-      this.placeCursorIn(li);
-      this.recordChange();
-      return true;
-    }
-
-    // Outdent do nível raiz: converte o li em parágrafo <p>
-    const topList = currentList;
-    if (topList.parentElement === this.canvas || topList.parentElement?.tagName.toLowerCase() === 'blockquote') {
-      const p = document.createElement('p');
-
-      // Extrai o conteúdo direto do li, preservando links e formatação inline mas separando sublistas
-      let hasContent = false;
-      const childLists: HTMLElement[] = [];
-      for (const child of Array.from(li.childNodes)) {
-        if (child.nodeType === Node.ELEMENT_NODE && ['UL', 'OL'].includes((child as HTMLElement).tagName)) {
-          childLists.push(child as HTMLElement);
-        } else {
-          p.appendChild(child.cloneNode(true));
-          if (child.textContent?.trim()) hasContent = true;
-        }
-      }
-
-      if (!hasContent && !p.innerHTML.trim()) {
-        p.innerHTML = '<br>';
-      }
-
-      const prevSiblings: HTMLElement[] = [];
-      let sib = li.previousElementSibling as HTMLElement | null;
-      while (sib) {
-        prevSiblings.unshift(sib);
-        sib = sib.previousElementSibling as HTMLElement | null;
-      }
-
-      const nextSiblings: HTMLElement[] = [];
-      sib = li.nextElementSibling as HTMLElement | null;
-      while (sib) {
-        nextSiblings.push(sib);
-        sib = sib.nextElementSibling as HTMLElement | null;
-      }
-
-      if (prevSiblings.length > 0 && nextSiblings.length > 0) {
-        // Divide a lista em duas partes
-        const nextList = document.createElement(topList.tagName);
-        for (const nextLi of nextSiblings) {
-          nextList.appendChild(nextLi);
-        }
-        topList.insertAdjacentElement('afterend', p);
-        p.insertAdjacentElement('afterend', nextList);
-        li.remove();
-      } else if (prevSiblings.length > 0) {
-        topList.insertAdjacentElement('afterend', p);
-        li.remove();
-      } else if (nextSiblings.length > 0) {
-        topList.insertAdjacentElement('beforebegin', p);
-        li.remove();
-      } else {
-        topList.replaceWith(p);
-      }
-
-      // Se havia sublistas filhas, insere-as logo após o parágrafo
-      let lastInserted: HTMLElement = p;
-      for (const childList of childLists) {
-        lastInserted.insertAdjacentElement('afterend', childList);
-        lastInserted = childList;
-      }
-
-      this.placeCursorIn(p);
-      this.recordChange();
-      return true;
-    }
-
-    return false;
+    return outdentListItem(li, {
+      canvas: this.canvas,
+      placeCursorIn: (el) => this.placeCursorIn(el),
+      recordChange: () => this.recordChange(),
+    });
   }
 
   handleEnterInListItem(li: HTMLElement, e: KeyboardEvent): boolean {
-    let liText = '';
-    let hasChildList = false;
-    for (const child of Array.from(li.childNodes)) {
-      if (child.nodeType === Node.ELEMENT_NODE && ['UL', 'OL'].includes((child as HTMLElement).tagName)) {
-        hasChildList = true;
-      } else {
-        liText += child.textContent || '';
-      }
-    }
-
-    if (!liText.trim()) {
-      e.preventDefault();
-      this.outdentListItem(li);
-      return true;
-    }
-
-    if (hasChildList) {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const sublist = li.querySelector(':scope > ul, :scope > ol') as HTMLElement | null;
-        if (sublist && !sublist.contains(range.startContainer)) {
-          e.preventDefault();
-          const newLi = document.createElement('li');
-          newLi.innerHTML = '<br>';
-          sublist.insertAdjacentElement('beforebegin', newLi);
-          this.placeCursorIn(newLi);
-          this.recordChange();
-          return true;
-        }
-      }
-    }
-
-    return false;
+    return handleEnterInListItem(li, e, {
+      canvas: this.canvas,
+      placeCursorIn: (el) => this.placeCursorIn(el),
+      recordChange: () => this.recordChange(),
+    });
   }
 
   handleBackspaceInListItem(li: HTMLElement, e: KeyboardEvent): boolean {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
-      return false;
-    }
-
-    const range = selection.getRangeAt(0);
-    let isAtStart = false;
-    if (range.startOffset === 0) {
-      let node: Node | null = range.startContainer;
-      isAtStart = true;
-      while (node && node !== li) {
-        if (node.previousSibling) {
-          isAtStart = false;
-          break;
-        }
-        node = node.parentNode;
-      }
-    }
-
-    if (isAtStart) {
-      let liText = '';
-      for (const child of Array.from(li.childNodes)) {
-        if (child.nodeType !== Node.ELEMENT_NODE || !['UL', 'OL'].includes((child as HTMLElement).tagName)) {
-          liText += child.textContent || '';
-        }
-      }
-
-      if (!liText.trim()) {
-        e.preventDefault();
-        this.outdentListItem(li);
-        return true;
-      }
-
-      const parentLi = li.parentElement?.closest('li');
-      if (parentLi) {
-        e.preventDefault();
-        this.outdentListItem(li);
-        return true;
-      }
-    }
-
-    return false;
+    return handleBackspaceInListItem(li, e, {
+      canvas: this.canvas,
+      placeCursorIn: (el) => this.placeCursorIn(el),
+      recordChange: () => this.recordChange(),
+    });
   }
 
   // ===========================================================================
@@ -1958,71 +1157,12 @@ export class NotionEditorEngine {
   }
 
   checkMarkdownInputRules() {
-    const selection = window.getSelection();
-    if (!selection || !selection.rangeCount) return;
-
-    const range = selection.getRangeAt(0);
-    const node = range.startContainer;
-    if (!node || node.nodeType !== Node.TEXT_NODE) return;
-
-    const text = node.textContent || '';
-    const parent = node.parentElement;
-    if (!parent || parent.tagName.toLowerCase() !== 'p') return;
-
-    if (text.startsWith('# ')) {
-      node.textContent = text.substring(2);
-      this.turnBlockInto(parent, 'h1');
-    } else if (text.startsWith('## ')) {
-      node.textContent = text.substring(3);
-      this.turnBlockInto(parent, 'h2');
-    } else if (text.startsWith('### ')) {
-      node.textContent = text.substring(4);
-      this.turnBlockInto(parent, 'h3');
-    } else if (text.startsWith('- ') || text.startsWith('* ') || text.startsWith('+ ') || text.startsWith('• ')) {
-      node.textContent = text.replace(/^[-*+•–—]\s/, '');
-      const prevEl = parent.previousElementSibling;
-      const li = document.createElement('li');
-      li.innerHTML = node.textContent || '<br>';
-      if (prevEl && prevEl.tagName.toLowerCase() === 'ul') {
-        prevEl.appendChild(li);
-        parent.remove();
-      } else {
-        const ul = document.createElement('ul');
-        ul.appendChild(li);
-        parent.replaceWith(ul);
-      }
-      this.placeCursorIn(li);
-      this.recordChange();
-    } else if (text.startsWith('1. ')) {
-      node.textContent = text.substring(3);
-      const prevEl = parent.previousElementSibling;
-      const li = document.createElement('li');
-      li.innerHTML = node.textContent || '<br>';
-      if (prevEl && prevEl.tagName.toLowerCase() === 'ol') {
-        prevEl.appendChild(li);
-        parent.remove();
-      } else {
-        const ol = document.createElement('ol');
-        ol.appendChild(li);
-        parent.replaceWith(ol);
-      }
-      this.placeCursorIn(li);
-      this.recordChange();
-    } else if (text.startsWith('[] ') || text.startsWith('[ ] ')) {
-      node.textContent = text.replace(/^\[\s?\]\s/, '');
-      this.turnBlockInto(parent, 'todo');
-    } else if (text.startsWith('> ')) {
-      node.textContent = text.substring(2);
-      this.turnBlockInto(parent, 'quote');
-    } else if (text.startsWith('--- ')) {
-      const hr = document.createElement('hr');
-      parent.replaceWith(hr);
-      const newP = document.createElement('p');
-      newP.innerHTML = '<br>';
-      hr.insertAdjacentElement('afterend', newP);
-      this.placeCursorIn(newP);
-      this.recordChange();
-    }
+    checkMarkdownInputRules({
+      canvas: this.canvas,
+      placeCursorIn: (el) => this.placeCursorIn(el),
+      recordChange: () => this.recordChange(),
+      turnBlockInto: (b, t) => this.turnBlockInto(b, t),
+    });
   }
 
   // ===========================================================================
@@ -2567,103 +1707,7 @@ export class NotionEditorEngine {
   }
 
   convertHtmlToMarkdown(htmlString: string): string {
-    if (typeof DOMParser === 'undefined' || !htmlString) return '';
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlString, 'text/html');
-      const body = doc.body;
-      if (!body) return '';
-
-      // Remover scripts, estilos e metadados
-      body.querySelectorAll('style, script, meta, link, noscript').forEach(el => el.remove());
-
-      // Desembrulhar nós de contêiner redundantes (div, section, article)
-      let root: HTMLElement = body;
-      while (
-        root.children.length === 1 &&
-        root.firstElementChild &&
-        ['div', 'section', 'article', 'main'].includes(root.firstElementChild.tagName.toLowerCase())
-      ) {
-        root = root.firstElementChild as HTMLElement;
-      }
-
-      const lines: string[] = [];
-      const children = Array.from(root.childNodes);
-
-      for (const node of children) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const t = node.textContent?.trim();
-          if (t) {
-            lines.push(t);
-            lines.push('');
-          }
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-          const el = node as HTMLElement;
-          const tag = el.tagName.toLowerCase();
-
-          if (/^h[1-6]$/.test(tag)) {
-            const level = parseInt(tag.charAt(1), 10);
-            lines.push(`${'#'.repeat(level)} ${this.serializeInline(el).trim()}`);
-            lines.push('');
-          } else if (tag === 'p') {
-            const t = this.serializeInline(el).trim();
-            if (t) {
-              lines.push(t);
-              lines.push('');
-            }
-          } else if (tag === 'ul' || tag === 'ol') {
-            const listLines = this.serializeList(el, 0);
-            lines.push(...listLines);
-            lines.push('');
-          } else if (tag === 'pre') {
-            const codeEl = el.querySelector('code') || el;
-            lines.push('```');
-            lines.push((codeEl as HTMLElement).innerText || codeEl.textContent || '');
-            lines.push('```');
-            lines.push('');
-          } else if (tag === 'blockquote') {
-            lines.push(this.serializeBlockquote(el));
-            lines.push('');
-          } else if (tag === 'hr') {
-            lines.push('---');
-            lines.push('');
-          } else if (tag === 'div') {
-            if (el.querySelector('p, ul, ol, h1, h2, h3, h4, h5, h6, pre, blockquote')) {
-              for (const sub of Array.from(el.childNodes)) {
-                if (sub.nodeType === Node.ELEMENT_NODE) {
-                  const subEl = sub as HTMLElement;
-                  const subTag = subEl.tagName.toLowerCase();
-                  if (subTag === 'ul' || subTag === 'ol') {
-                    lines.push(...this.serializeList(subEl, 0));
-                    lines.push('');
-                  } else {
-                    const t = this.serializeInline(subEl).trim();
-                    if (t) { lines.push(t); lines.push(''); }
-                  }
-                }
-              }
-            } else {
-              const t = this.serializeInline(el).trim();
-              if (t) {
-                lines.push(t);
-                lines.push('');
-              }
-            }
-          } else {
-            const t = this.serializeInline(el).trim();
-            if (t) {
-              lines.push(t);
-              lines.push('');
-            }
-          }
-        }
-      }
-
-      return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-    } catch (err) {
-      console.warn('[NotionEditorEngine] Erro ao converter HTML colado para Markdown:', err);
-      return '';
-    }
+    return convertHtmlToMarkdown(htmlString);
   }
 
   handlePaste(e: ClipboardEvent) {
