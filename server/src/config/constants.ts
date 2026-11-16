@@ -79,7 +79,7 @@ export function getAppVersion(): string {
       }
     }
   } catch {}
-  return '1.0.17';
+  return '1.0.18';
 }
 export const APP_VERSION = getAppVersion();
 

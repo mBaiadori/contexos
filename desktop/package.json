@@ -1,6 +1,6 @@
 {
   "name": "contexos-desktop",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Contexos - Spec-Driven Governance & Autonomous AI Platform",
   "type": "module",
   "main": "dist/main/index.js",
