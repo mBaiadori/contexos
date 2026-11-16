@@ -82,7 +82,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
     }, [initUpdater]);
 
     return (
-      <header className="dashboard-navbar" style={{ position: "relative" }}>
+      <header className="dashboard-navbar" style={{ position: "relative", zIndex: 200 }}>
         <div className="dash-brand">
           {user?.avatar_url && !avatarError ? (
             <img
@@ -210,7 +210,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
             pointerEvents: "auto",
             maxWidth: "calc(100% - 460px)",
             justifyContent: "center",
-            zIndex: 2,
+            zIndex: 10,
           }}
         >
           <h1

@@ -10,7 +10,7 @@ export const EditorLoadingBar: React.FC = () => {
         left: 0,
         right: 0,
         height: '2.5px',
-        zIndex: 60,
+        zIndex: 15,
         overflow: 'hidden',
         backgroundColor: 'rgba(37, 99, 235, 0.15)',
       }}

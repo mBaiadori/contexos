@@ -12,7 +12,8 @@
   justify-content: space-between;
   padding: 0 16px;
   flex-shrink: 0;
-  z-index: 20;
+  position: relative;
+  z-index: 200;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1387,7 +1388,7 @@ body.is-resizing .pane-resizer {
   background: var(--color-surface, #ffffff);
   flex-shrink: 0;
   position: relative;
-  z-index: 50;
+  z-index: 10;
 }
 
 .doc-meta-left {
@@ -1491,7 +1492,7 @@ body.is-resizing .pane-resizer {
   align-items: center;
   gap: 8px;
   position: relative;
-  z-index: 51;
+  z-index: 11;
 }
 
 .doc-icon-actions {
