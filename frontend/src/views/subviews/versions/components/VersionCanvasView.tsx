@@ -448,8 +448,8 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
             <g style={{ pointerEvents: "none" }}>
               <path
                 d={getSankeyHorizontalPath(
-                  activeMergedBranch.exitX,
-                  activeMergedBranch.exitY,
+                  activeMergedBranch.entryX,
+                  activeMergedBranch.entryY,
                   TRUNK_X,
                   mergeTargetTrunkCommit.y,
                 )}
@@ -513,7 +513,8 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                   y="-12"
                   width={tc.isTip ? 110 : 150}
                   height="24"
-                  fill="transparent"
+                  fill="rgba(0, 0, 0, 0.001)"
+                  style={{ pointerEvents: "all" }}
                 />
 
                 {/* Destaque aprimorado da versão ativa no workspace (High-contrast Pulse & Double-Ring Glow) */}
@@ -687,7 +688,8 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                     e.stopPropagation();
                     isInternalClickRef.current = true;
                     setSelectedNodeId(branchNodeId);
-                    onSelectCommit(getBranchCommit(br.node), br.node.name);
+                    const targetCommit = getBranchCommit(br.node);
+                    onSelectCommit(targetCommit, br.node.name);
                   }}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
@@ -696,7 +698,7 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                   }}
                   onMouseEnter={() => setHoveredNodeId(branchNodeId)}
                   onMouseLeave={() => setHoveredNodeId(null)}
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: "pointer", pointerEvents: "all" }}
                 >
                   {/* Hitbox precisa clicável no nó e no texto */}
                   {(() => {
@@ -715,7 +717,8 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                         y="-12"
                         width={totalW + 18}
                         height="24"
-                        fill="transparent"
+                        fill="rgba(0, 0, 0, 0.001)"
+                        style={{ pointerEvents: "all" }}
                       />
                     );
                   })()}
@@ -922,7 +925,8 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                           y="-10"
                           width="140"
                           height="20"
-                          fill="transparent"
+                          fill="rgba(0, 0, 0, 0.001)"
+                          style={{ pointerEvents: "all" }}
                         />
 
                         {/* Anel de seleção suave individual */}

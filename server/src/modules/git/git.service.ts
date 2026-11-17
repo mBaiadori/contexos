@@ -470,8 +470,9 @@ export class GitService {
         executeGit(
           [
             "for-each-ref",
-            "--format=%(refname:short)|%(objectname)|%(authordate:iso-strict)|%(authorname)|%(contents:subject)",
+            "--format=%(refname)|%(objectname)|%(authordate:iso-strict)|%(authorname)|%(contents:subject)",
             "refs/heads/",
+            "refs/remotes/origin/",
           ],
           repoDir,
         ),
@@ -530,8 +531,18 @@ export class GitService {
       for (const line of refsRes.stdout.trim().split("\n").filter(Boolean)) {
         const parts = line.split("|");
         if (parts.length >= 4) {
-          const [ref, hash, date, author, ...msgParts] = parts;
-          branchTips.set(ref, {
+          const [fullRef, hash, date, author, ...msgParts] = parts;
+          if (fullRef === "refs/remotes/origin/HEAD") continue;
+          let branchName = fullRef;
+          if (branchName.startsWith("refs/heads/")) {
+            branchName = branchName.slice("refs/heads/".length);
+          } else if (branchName.startsWith("refs/remotes/origin/")) {
+            branchName = branchName.slice("refs/remotes/origin/".length);
+          }
+          // Branches locais (refs/heads/) têm precedência sobre remotas
+          if (branchTips.has(branchName)) continue;
+
+          branchTips.set(branchName, {
             hash,
             shortHash: hash.slice(0, 7),
             author: author || "Git",
@@ -616,23 +627,6 @@ export class GitService {
       cursor = c.parents[0] || "";
     }
 
-    // Todos os commits alcançáveis a partir da main (incluindo commits trazidos por merge)
-    const reachableFromMain = new Set<string>();
-    if (mainTipHash && commitByHash.has(mainTipHash)) {
-      const stack = [mainTipHash];
-      while (stack.length > 0) {
-        const cur = stack.pop()!;
-        if (reachableFromMain.has(cur)) continue;
-        reachableFromMain.add(cur);
-        const c = commitByHash.get(cur);
-        if (c) {
-          for (const p of c.parents) {
-            if (!reachableFromMain.has(p)) stack.push(p);
-          }
-        }
-      }
-    }
-
     // Helper para nome amigável de branch
     const resolveDisplayName = (branch: string, isDefault: boolean, pr?: RepoPRItem): string => {
       if (isDefault) return "Principal";
@@ -652,24 +646,18 @@ export class GitService {
       const displayName = resolveDisplayName(branch, isDefault, pr);
       const cfgParent = branchConfigParents.get(branch);
 
-      // Verifica se esta branch foi mesclada na Principal
+      // Verifica se esta branch foi mesclada diretamente na Principal (PR mesclado ou merge commit cujo 2º pai é a ponta da branch)
+      // Não usamos reachableFromMain genérico aqui porque mesclar uma branch filha torna a ponta da branch pai alcançável pela main sem que a branch pai tenha sido mesclada diretamente.
       const hasMergedPR = repoPRs.some((p) => p.branch === branch && p.status === "MERGED");
       const directMerge = mergeBySecondParent.get(tip.hash);
-      const wasMergedIntoMain =
-        !isDefault &&
-        (hasMergedPR ||
-          Boolean(directMerge) ||
-          (reachableFromMain.has(tip.hash) && !mainAncestors.has(tip.hash)));
+      const wasMergedIntoMain = !isDefault && (hasMergedPR || Boolean(directMerge));
 
-      // Verifica se o cfgParent já é uma branch mesclada na Principal
+      // Verifica se o cfgParent já é uma branch mesclada diretamente na Principal
       const parentTip = cfgParent ? branchTips.get(cfgParent) : undefined;
       const isCfgParentMerged =
         Boolean(cfgParent && cfgParent !== defaultBranch) &&
         (repoPRs.some((p) => p.branch === cfgParent && p.status === "MERGED") ||
-          (parentTip
-            ? mergeBySecondParent.has(parentTip.hash) ||
-              (reachableFromMain.has(parentTip.hash) && !mainAncestors.has(parentTip.hash))
-            : false));
+          (parentTip ? mergeBySecondParent.has(parentTip.hash) : false));
 
       const parentBranch = isDefault
         ? undefined

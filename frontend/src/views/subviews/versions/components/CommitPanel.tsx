@@ -337,9 +337,34 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
                 width: "100%",
                 fontWeight: 600,
                 background: isSelectedMain ? "#2563eb" : undefined,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
               }}
             >
-              {isProcessing ? "Alternando..." : `Alternar para esta versão`}
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "16px", flexShrink: 0 }}
+              >
+                sync_alt
+              </span>
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  minWidth: 0,
+                }}
+              >
+                {isProcessing
+                  ? "Alternando..."
+                  : isSelectedBranch
+                    ? `Alterar para "${displayName}"`
+                    : isSelectedMain
+                      ? "Alterar para Principal"
+                      : "Alterar para este marco"}
+              </span>
             </Button>
           )}
 

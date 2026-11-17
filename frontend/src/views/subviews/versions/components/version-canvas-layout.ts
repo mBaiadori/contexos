@@ -385,8 +385,9 @@ export function calculateCanvasLayout({
     const branchY = slotStartY;
     const path = getSankeyHorizontalPath(sourceX, sourceY, entryX, branchY);
 
-    let color = node.isMerged ? "#059669" : "#7c3aed";
+    let color = "#7c3aed";
     if (node.type === "draft") color = "#d97706";
+    if (node.isMerged) color = "#059669";
 
     const bCommits = branchCommitsMap.get(node.name) || [];
     const branchCommitsRender: CanvasBranchItem["commits"] = [];

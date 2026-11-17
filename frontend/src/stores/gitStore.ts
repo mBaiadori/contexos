@@ -43,7 +43,7 @@ interface GitState {
     displayTitle?: string,
   ) => Promise<{ success: boolean; message: string }>;
   refreshVersionGraph: (targetRepoName?: string) => Promise<VersionGraphData | null>;
-  safeSwitch: (payload: { branch?: string; commitHash?: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard' }) => Promise<SafeSwitchResult>;
+  safeSwitch: (payload: { branch?: string; commitHash?: string; repo?: string; action?: 'check' | 'switch' | 'stash' | 'discard'; owner?: string }) => Promise<SafeSwitchResult>;
   popStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   dropStash: (stashId?: string) => Promise<{ success: boolean; message: string }>;
   clearStash: () => Promise<{ success: boolean; message: string }>;
@@ -324,10 +324,12 @@ export const useGitStore = create<GitState>((set, get) => ({
     commitHash?: string;
     repo?: string;
     action?: 'check' | 'switch' | 'stash' | 'discard';
+    owner?: string;
   }) => {
     const repo = useRepoStore.getState().activeRepo;
     const repoName = payload.repo || repo?.name;
-    const res = await API.safeSwitch({ ...payload, repo: repoName });
+    const repoOwner = payload.owner || repo?.owner;
+    const res = await API.safeSwitch({ ...payload, repo: repoName, owner: repoOwner });
     if (res.ok && res.data) {
       if (payload.action && payload.action !== 'check' && res.data.success) {
         await get().refreshGitStatus();

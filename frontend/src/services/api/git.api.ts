@@ -42,6 +42,7 @@ export const gitApi = {
     commitHash?: string;
     repo?: string;
     action?: 'check' | 'switch' | 'stash' | 'discard';
+    owner?: string;
   }): Promise<ApiResponse<SafeSwitchResult>> {
     const res = await fetch('/api/git/safe-switch', {
       method: 'POST',

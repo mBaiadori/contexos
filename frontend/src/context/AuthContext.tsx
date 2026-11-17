@@ -63,6 +63,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (Array.isArray(status.accounts)) {
         setAccounts(status.accounts);
       }
+      if (status.active_repo) {
+        useRepoStore.getState().setActiveRepo(status.active_repo);
+      }
     } catch (err) {
       console.error('[AuthContext] Erro ao obter status:', err);
       setUser(null);

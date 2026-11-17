@@ -137,12 +137,35 @@ export const VersionsCanvasSubView: React.FC<
       });
 
       if (switchRes.success) {
-        if (target.commitHash) setSelectedCommitHash(target.commitHash);
-        await Promise.all([
+        setFeedback({
+          type: "success",
+          message:
+            switchRes.message ||
+            `Alternado com sucesso para a versão "${target.branch || target.commitHash}".`,
+        });
+
+        const [, , newGraph] = await Promise.all([
           refreshGitStatus?.(),
           refreshPendingChanges?.(),
-          loadGraph(),
+          refreshVersionGraph ? refreshVersionGraph() : loadGraph(),
         ]);
+
+        if (newGraph) {
+          if (target.branch) {
+            const bNode = newGraph.nodes?.find((n) => n.name === target.branch);
+            const headOfBranch =
+              bNode?.lastCommit?.hash ||
+              newGraph.commits?.find((c) => c.isHead)?.hash ||
+              newGraph.headHash;
+            setSelectedCommitHash(headOfBranch || null);
+            setSelectedTargetBranch(target.branch);
+          } else if (target.commitHash) {
+            setSelectedCommitHash(target.commitHash);
+            setSelectedTargetBranch(newGraph.currentBranch || null);
+          }
+        } else if (target.branch) {
+          setSelectedTargetBranch(target.branch);
+        }
       } else {
         setFeedback({
           type: "error",
@@ -164,6 +187,7 @@ export const VersionsCanvasSubView: React.FC<
     if (!pendingTarget || !commitGit) return;
     setIsProcessing(true);
     setFeedback(null);
+    const target = pendingTarget;
     try {
       const commitRes = await commitGit(msg);
       if (!commitRes || !commitRes.success) {
@@ -177,7 +201,7 @@ export const VersionsCanvasSubView: React.FC<
       }
 
       const switchRes = await safeSwitch({
-        ...pendingTarget,
+        ...target,
         action: "switch",
       });
 
@@ -186,13 +210,31 @@ export const VersionsCanvasSubView: React.FC<
         setPendingTarget(null);
         setFeedback({
           type: "success",
-          message: "Marco salvo com sucesso e versão alternada.",
+          message:
+            switchRes.message ||
+            "Marco salvo com sucesso e versão alternada.",
         });
-        await Promise.all([
+        const [, , newGraph] = await Promise.all([
           refreshGitStatus?.(),
           refreshPendingChanges?.(),
-          loadGraph(),
+          refreshVersionGraph ? refreshVersionGraph() : loadGraph(),
         ]);
+        if (newGraph) {
+          if (target.branch) {
+            const bNode = newGraph.nodes?.find((n) => n.name === target.branch);
+            const headOfBranch =
+              bNode?.lastCommit?.hash ||
+              newGraph.commits?.find((c) => c.isHead)?.hash ||
+              newGraph.headHash;
+            setSelectedCommitHash(headOfBranch || null);
+            setSelectedTargetBranch(target.branch);
+          } else if (target.commitHash) {
+            setSelectedCommitHash(target.commitHash);
+            setSelectedTargetBranch(newGraph.currentBranch || null);
+          }
+        } else if (target.branch) {
+          setSelectedTargetBranch(target.branch);
+        }
       } else {
         setFeedback({
           type: "error",
@@ -210,9 +252,10 @@ export const VersionsCanvasSubView: React.FC<
   const handleConfirmStash = async () => {
     if (!pendingTarget) return;
     setIsProcessing(true);
+    const target = pendingTarget;
     try {
       const res = await safeSwitch({
-        ...pendingTarget,
+        ...target,
         action: "stash",
       });
       if (res.success) {
@@ -223,11 +266,27 @@ export const VersionsCanvasSubView: React.FC<
           message:
             res.message || "Rascunhos guardados no stash e versão alternada.",
         });
-        await Promise.all([
+        const [, , newGraph] = await Promise.all([
           refreshGitStatus?.(),
           refreshPendingChanges?.(),
-          loadGraph(),
+          refreshVersionGraph ? refreshVersionGraph() : loadGraph(),
         ]);
+        if (newGraph) {
+          if (target.branch) {
+            const bNode = newGraph.nodes?.find((n) => n.name === target.branch);
+            const headOfBranch =
+              bNode?.lastCommit?.hash ||
+              newGraph.commits?.find((c) => c.isHead)?.hash ||
+              newGraph.headHash;
+            setSelectedCommitHash(headOfBranch || null);
+            setSelectedTargetBranch(target.branch);
+          } else if (target.commitHash) {
+            setSelectedCommitHash(target.commitHash);
+            setSelectedTargetBranch(newGraph.currentBranch || null);
+          }
+        } else if (target.branch) {
+          setSelectedTargetBranch(target.branch);
+        }
       } else {
         setFeedback({
           type: "error",
@@ -245,9 +304,10 @@ export const VersionsCanvasSubView: React.FC<
   const handleConfirmDiscard = async () => {
     if (!pendingTarget) return;
     setIsProcessing(true);
+    const target = pendingTarget;
     try {
       const res = await safeSwitch({
-        ...pendingTarget,
+        ...target,
         action: "discard",
       });
       if (res.success) {
@@ -258,11 +318,27 @@ export const VersionsCanvasSubView: React.FC<
           message:
             res.message || "Alterações salvas na lixeira e versão alternada.",
         });
-        await Promise.all([
+        const [, , newGraph] = await Promise.all([
           refreshGitStatus?.(),
           refreshPendingChanges?.(),
-          loadGraph(),
+          refreshVersionGraph ? refreshVersionGraph() : loadGraph(),
         ]);
+        if (newGraph) {
+          if (target.branch) {
+            const bNode = newGraph.nodes?.find((n) => n.name === target.branch);
+            const headOfBranch =
+              bNode?.lastCommit?.hash ||
+              newGraph.commits?.find((c) => c.isHead)?.hash ||
+              newGraph.headHash;
+            setSelectedCommitHash(headOfBranch || null);
+            setSelectedTargetBranch(target.branch);
+          } else if (target.commitHash) {
+            setSelectedCommitHash(target.commitHash);
+            setSelectedTargetBranch(newGraph.currentBranch || null);
+          }
+        } else if (target.branch) {
+          setSelectedTargetBranch(target.branch);
+        }
       } else {
         setFeedback({
           type: "error",

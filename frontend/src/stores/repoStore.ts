@@ -220,13 +220,20 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       const res = await API.getOrgs();
       if (res.ok && res.data?.orgs) {
         set({ orgs: res.data.orgs });
-        const savedLogin = localStorage.getItem("spec_active_org_login");
-        if (savedLogin) {
+        const activeRepo = get().activeRepo;
+        const repoOwner = activeRepo?.owner;
+        const targetOrgLogin =
+          (repoOwner && res.data.orgs.some((o) => o.login.toLowerCase() === repoOwner.toLowerCase()))
+            ? repoOwner
+            : localStorage.getItem("spec_active_org_login");
+
+        if (targetOrgLogin) {
           const found = res.data.orgs.find(
-            (o) => o.login.toLowerCase() === savedLogin.toLowerCase(),
+            (o) => o.login.toLowerCase() === targetOrgLogin.toLowerCase(),
           );
           if (found) {
             set({ activeOrg: found });
+            localStorage.setItem("spec_active_org_login", found.login);
             await get().loadRepos(found.login);
             return;
           }
@@ -253,9 +260,32 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       } else if (res.ok) {
         set({ authError: null });
       }
-      if (res.ok && res.data?.repos) {
-        const cleanRepos = res.data.repos.filter((r) => r.name !== "default" && r.name !== "_default");
-        set({ repos: cleanRepos });
+      if (res.ok && res.data) {
+        if (res.data.repos) {
+          const cleanRepos = res.data.repos.filter((r) => r.name !== "default" && r.name !== "_default");
+          set({ repos: cleanRepos });
+        }
+        if (res.data.active_repo) {
+          const backendActiveRepo = res.data.active_repo;
+          const currentActive = get().activeRepo;
+          if (!currentActive || currentActive.name !== backendActiveRepo.name) {
+            set({ activeRepo: backendActiveRepo });
+          }
+          const repoOwner = backendActiveRepo.owner;
+          if (repoOwner && repoOwner !== "local" && !get().activeOrg) {
+            const foundOrg = get().orgs.find((o) => o.login.toLowerCase() === repoOwner.toLowerCase());
+            const orgToSet = foundOrg || { login: repoOwner, full_name: repoOwner };
+            set({ activeOrg: orgToSet });
+            try {
+              localStorage.setItem("spec_active_org_login", orgToSet.login);
+            } catch {}
+            // Se buscou sem organização ou com org divergente, recarrega os repos para a org do active_repo
+            if (!orgToFetch || orgToFetch.toLowerCase() !== repoOwner.toLowerCase()) {
+              await get().loadRepos(repoOwner);
+              return;
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("[repoStore] Erro ao carregar repositórios:", err);
