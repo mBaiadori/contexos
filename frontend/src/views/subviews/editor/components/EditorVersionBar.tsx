@@ -41,7 +41,6 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
   const [checkpointMsg, setCheckpointMsg] = useState("");
   const [isSavingCheckpoint, setIsSavingCheckpoint] = useState(false);
   const [isPubModalOpen, setIsPubModalOpen] = useState(false);
-  const [isUpdatingPub, setIsUpdatingPub] = useState(false);
   const [isBranchBusy, setIsBranchBusy] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
@@ -208,41 +207,6 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
       setFeedback({ type: "error", text: err?.message || "Erro ao criar rascunho de versão." });
     } finally {
       setIsBranchBusy(false);
-    }
-  };
-
-  const handleUpdateOpenPublication = async () => {
-    if (!activeRepo || !activeNode) return;
-    setIsUpdatingPub(true);
-    setFeedback(null);
-    try {
-      const res = await API.createPR({
-        title: activeNode.proposal?.title || displayVersionName,
-        description: activeNode.proposal?.description || "",
-        sourceBranch: currentBranch,
-        targetProposalId: activeNode.proposal?.id,
-        repo: activeRepo.name,
-      });
-      if (res.ok && res.data && !res.data.error) {
-        setFeedback({
-          type: "success",
-          text: res.data.message || "Publicação atualizada com suas novas alterações!",
-        });
-        await Promise.all([
-          refreshGitStatus?.(),
-          refreshPendingChanges?.(),
-          refreshVersionGraph?.(),
-        ]);
-      } else {
-        setFeedback({
-          type: "error",
-          text: res.data?.error || "Não foi possível atualizar a publicação.",
-        });
-      }
-    } catch (err: any) {
-      setFeedback({ type: "error", text: err?.message || "Erro ao atualizar publicação." });
-    } finally {
-      setIsUpdatingPub(false);
     }
   };
 
@@ -503,9 +467,9 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: "9999px",
-                background: "rgba(245, 158, 11, 0.12)",
-                color: "#b45309",
-                border: "1px solid rgba(245, 158, 11, 0.35)",
+                background: "rgba(124, 58, 237, 0.12)",
+                color: "#7c3aed",
+                border: "1px solid rgba(124, 58, 237, 0.3)",
                 whiteSpace: "nowrap",
               }}
             >
@@ -573,16 +537,25 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
           )}
 
           {hasOpenProposal ? (
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={handleUpdateOpenPublication}
-              isLoading={isUpdatingPub}
-              disabled={isUpdatingPub}
-              icon={<RefreshCw size={13} />}
-            >
-              {isUpdatingPub ? "Atualizando..." : "Atualizar Publicação"}
-            </Button>
+            (() => {
+              const hasUpdatesToPublish = uncommittedCount > 0 || (gitStatus?.ahead ?? 0) > 0;
+              return (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => setIsPubModalOpen(true)}
+                  disabled={!hasUpdatesToPublish}
+                  title={
+                    hasUpdatesToPublish
+                      ? "Revisar e atualizar a publicação aberta"
+                      : "Nenhuma nova alteração para enviar"
+                  }
+                  icon={<RefreshCw size={13} />}
+                >
+                  Atualizar Publicação
+                </Button>
+              );
+            })()
           ) : (!isOfficial && !isReadOnlyMode && (checkpointsCount > 0 || uncommittedCount > 0)) ||
             (isOfficial && uncommittedCount > 0) ? (
             <Button
@@ -614,8 +587,16 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
         nodes={versionGraph?.nodes || []}
         defaultBranch={defaultBranch}
         initialSourceBranch={!isOfficial && !isReadOnlyMode ? currentBranch : undefined}
-        onCreated={async () => {
-          setFeedback({ type: "success", text: "Pedido de publicação enviado!" });
+        existingProposal={hasOpenProposal ? activeNode?.proposal : undefined}
+        onCreated={async (pr) => {
+          setFeedback({
+            type: "success",
+            text:
+              pr?.message ||
+              (hasOpenProposal
+                ? "Publicação atualizada com suas novas alterações!"
+                : "Pedido de publicação enviado!"),
+          });
           await Promise.all([
             refreshGitStatus?.(),
             refreshPendingChanges?.(),

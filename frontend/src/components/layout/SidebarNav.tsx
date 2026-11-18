@@ -66,17 +66,17 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       title: "Linha do Tempo & Comparação de Versões",
     },
     {
+      id: "prs" as SubViewType,
+      label: "Publicações",
+      icon: <GitPullRequest size={19} />,
+      title: "Pedidos de Publicação na Versão Oficial",
+    },
+    {
       id: "aicenter" as SubViewType,
       label: "AI Center",
       icon: <Cpu size={19} />,
       title: "AI Center: Skills, Personas, Ferramentas Nativas & MCP",
       isActive: activeView === "aicenter" || activeView === "skills",
-    },
-    {
-      id: "prs" as SubViewType,
-      label: "Publicações",
-      icon: <GitPullRequest size={19} />,
-      title: "Pedidos de Publicação na Versão Oficial",
     },
     {
       id: "governance" as SubViewType,

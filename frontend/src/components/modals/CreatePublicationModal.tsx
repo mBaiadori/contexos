@@ -15,6 +15,12 @@ export interface CreatePublicationModalProps {
   nodes?: VersionNode[];
   defaultBranch?: string;
   initialSourceBranch?: string;
+  existingProposal?: {
+    id: number | string;
+    title?: string;
+    description?: string;
+    status?: string;
+  };
   onCreated?: (pr: any) => void | Promise<void>;
 }
 
@@ -25,6 +31,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   nodes = [],
   defaultBranch = "main",
   initialSourceBranch,
+  existingProposal,
   onCreated,
 }) => {
   const candidateNodes = useMemo(
@@ -71,12 +78,17 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
           : candidateNodes[0]?.name || "";
       setSourceBranch(preferred);
       const node = nodes.find((n) => n.name === preferred);
-      setTitle(node?.displayName && node.displayName !== preferred ? node.displayName : "");
-      setDescription("");
+      const activeProp =
+        node?.proposal?.status === "OPEN" ? node.proposal : existingProposal;
+      setTitle(
+        activeProp?.title ||
+          (node?.displayName && node.displayName !== preferred ? node.displayName : ""),
+      );
+      setDescription(activeProp?.description || "");
       setErrorMsg(null);
       setExpandedFile(null);
     }
-  }, [isOpen, initialSourceBranch, defaultBranch, candidateNodes, nodes]);
+  }, [isOpen, initialSourceBranch, defaultBranch, candidateNodes, nodes, existingProposal]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -130,6 +142,9 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   if (!isOpen) return null;
 
   const selectedNode = nodes.find((n) => n.name === sourceBranch);
+  const activeProposal =
+    selectedNode?.proposal?.status === "OPEN" ? selectedNode.proposal : existingProposal;
+  const isUpdateMode = Boolean(activeProposal);
   const currentActiveBranch = nodes.find((n) => n.isCurrent)?.name;
   const isViewingCurrentBranch =
     !sourceBranch || !currentActiveBranch || sourceBranch === currentActiveBranch;
@@ -177,6 +192,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
         title: title.trim(),
         description: description.trim(),
         sourceBranch: sourceBranch || undefined,
+        targetProposalId: activeProposal?.id,
         squash: true,
         repo: repoName,
       });
@@ -241,10 +257,12 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: 700, color: "var(--text-heading)" }}>
               <Send size={18} color="var(--color-primary, #2563eb)" />
-              <span>Enviar para Publicação</span>
+              <span>{isUpdateMode ? "Atualizar Publicação" : "Enviar para Publicação"}</span>
             </span>
             <span style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
-              Envie seu rascunho de versão para ser integrado na Versão Oficial.
+              {isUpdateMode
+                ? "Revise as alterações e atualize o pedido de publicação existente."
+                : "Envie seu rascunho de versão para ser integrado na Versão Oficial."}
             </span>
           </div>
           <button
@@ -672,7 +690,13 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
             disabled={isSubmitting || isLoadingDiff || !title.trim() || totalChangedCount === 0}
             icon={<Send size={14} />}
           >
-            {isSubmitting ? "Enviando..." : "Enviar Pedido de Publicação"}
+            {isSubmitting
+              ? isUpdateMode
+                ? "Atualizando..."
+                : "Enviando..."
+              : isUpdateMode
+                ? "Atualizar Publicação"
+                : "Enviar Pedido de Publicação"}
           </Button>
         </div>
       </div>
