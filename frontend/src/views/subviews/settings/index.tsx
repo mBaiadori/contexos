@@ -3,8 +3,6 @@ import { PageContainer, PageBody, AlertBanner } from "../../../components/ui";
 import { SettingsHeader } from "./components/SettingsHeader";
 import { TaxonomySection } from "./components/TaxonomySection";
 import { LanguagesSection } from "./components/LanguagesSection";
-import { AgentHarnessSection } from "./components/AgentHarnessSection";
-import { AIEngineSection } from "./components/AIEngineSection";
 import { UserSessionSection } from "./components/UserSessionSection";
 import { DeleteTaxonomyModal } from "./components/DeleteTaxonomyModal";
 import { LanguageModals } from "./components/LanguageModals";
@@ -15,11 +13,7 @@ export const SettingsSubView: React.FC = () => {
 
   return (
     <PageContainer>
-      <SettingsHeader
-        activeRepoName={data.activeRepo?.name}
-        isSavingAll={data.isSavingAll}
-        handleSaveAllSettings={data.handleSaveAllSettings}
-      />
+      <SettingsHeader activeRepoName={data.activeRepo?.name} />
 
       <PageBody>
         <div
@@ -127,46 +121,7 @@ export const SettingsSubView: React.FC = () => {
             handleSaveLanguages={data.handleSaveLanguages}
           />
 
-          {/* 2. SEÇÃO: MOTOR DE IA E HARNESS DE AGENTES */}
-          <section
-            id="ai-engine"
-            className="ui-stack ui-stack--md"
-            style={{ scrollMarginTop: "72px" }}
-          >
-            {/* CARD 1: AGENTES CONECTADOS & CLI HARNESS */}
-            <AgentHarnessSection
-              harnessProvider={data.harnessProvider}
-              setHarnessProvider={data.setHarnessProvider}
-              detectedProviders={data.detectedProviders}
-              agentEffort={data.agentEffort}
-              setAgentEffort={data.setAgentEffort}
-              isCheckingHarness={data.isCheckingHarness}
-              checkHarnessProviders={data.checkHarnessProviders}
-              harnessCheckFeedback={data.harnessCheckFeedback}
-              antigravityCliPath={data.antigravityCliPath}
-              setAntigravityCliPath={data.setAntigravityCliPath}
-              claudeCliPath={data.claudeCliPath}
-              setClaudeCliPath={data.setClaudeCliPath}
-            />
-
-            {/* CARD 2: MOTOR DE INTELIGÊNCIA ARTIFICIAL */}
-            <AIEngineSection
-              provider={data.provider}
-              setProvider={data.setProvider}
-              model={data.model}
-              setModel={data.setModel}
-              apiKey={data.apiKey}
-              setApiKey={data.setApiKey}
-              endpoint={data.endpoint}
-              setEndpoint={data.setEndpoint}
-              selectOptions={data.selectOptions}
-              fetchModelsForProvider={data.fetchModelsForProvider}
-              isLoadingModels={data.isLoadingModels}
-              handleSaveAISettings={data.handleSaveAISettings}
-            />
-          </section>
-
-          {/* 3. SEÇÃO: SESSÃO & GITHUB */}
+          {/* 2. SEÇÃO: SESSÃO & GITHUB */}
           <UserSessionSection
             user={data.user}
             onLogout={data.logout}

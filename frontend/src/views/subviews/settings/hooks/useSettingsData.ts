@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../../context/AuthContext";
-import { useAI } from "../../../../context/AIContext";
 import { useWorkspace } from "../../../../context/WorkspaceContext";
 import { API } from "../../../../services/api";
 import { RAINBOW_28_HUES } from "../../../../components/common/ColorDotPicker";
@@ -10,7 +9,6 @@ import type {
   DocumentMetadataItem,
   SupportedLanguage,
 } from "../../../../types";
-import type { SelectOption } from "../../../../components/ui";
 import { formatStatusName, type DeleteDialogState } from "../types";
 
 const ALL_28_COLORS = RAINBOW_28_HUES.flatMap((h) => h.colors);
@@ -18,18 +16,7 @@ const ALL_28_COLORS = RAINBOW_28_HUES.flatMap((h) => h.colors);
 export function useSettingsData() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { aiSettings, saveAISettings } = useAI();
   const { activeRepo, loadProjectConfig, saveProjectConfig } = useWorkspace();
-
-  // AI Provider State
-  const [provider, setProvider] = useState<string>("gemini");
-  const [model, setModel] = useState<string>("gemini-2.5-flash");
-  const [apiKey, setApiKey] = useState<string>("");
-  const [endpoint, setEndpoint] = useState<string>("http://localhost:11434/v1");
-  const [modelsList, setModelsList] = useState<
-    Array<{ id: string; name: string; description?: string }>
-  >([]);
-  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
 
   // Categories State
   const [categories, setCategories] = useState<TaxonomyItem[]>([]);
@@ -99,164 +86,8 @@ export function useSettingsData() {
   const [isAddLanguageModalOpen, setIsAddLanguageModalOpen] = useState(false);
   const [languageSearchFilter, setLanguageSearchFilter] = useState("");
 
-  // Connected Agent Harness State
-  const [harnessProvider, setHarnessProvider] = useState<string>("antigravity");
-  const [antigravityCliPath, setAntigravityCliPath] = useState<string>("");
-  const [claudeCliPath, setClaudeCliPath] = useState<string>("");
-  const [agentEffort, setAgentEffort] = useState<"low" | "medium" | "high">("medium");
-  const [agentModelOverride, setAgentModelOverride] = useState<string>("");
-  const [detectedProviders, setDetectedProviders] = useState<
-    Array<{
-      id: string;
-      name: string;
-      description: string;
-      mode: string;
-      isAvailable: boolean;
-      isAuthenticated: boolean;
-      statusMessage?: string;
-    }>
-  >([]);
-  const [isCheckingHarness, setIsCheckingHarness] = useState<boolean>(false);
-  const [harnessCheckFeedback, setHarnessCheckFeedback] = useState<string | null>(null);
-
-  const checkHarnessProviders = useCallback(async () => {
-    setIsCheckingHarness(true);
-    try {
-      const res = await API.getAIProviders();
-      if (res.ok && res.data?.providers) {
-        setDetectedProviders(res.data.providers);
-        setHarnessCheckFeedback("Conectividade e status dos agentes atualizados!");
-      }
-    } catch (err) {
-      console.error("[SettingsSubView] Erro ao checar provedores de agentes:", err);
-      setHarnessCheckFeedback("Erro ao verificar conectividade dos agentes.");
-    } finally {
-      setIsCheckingHarness(false);
-      setTimeout(() => setHarnessCheckFeedback(null), 3500);
-    }
-  }, []);
-
   // Status feedback
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
-  const [isSavingAll, setIsSavingAll] = useState<boolean>(false);
-
-  const fetchModelsForProvider = useCallback(
-    async (provId: string, customKey?: string, customEp?: string) => {
-      setIsLoadingModels(true);
-      try {
-        const res = await API.getAIModels({
-          provider: provId,
-          api_key: customKey || apiKey || undefined,
-          custom_endpoint: customEp || endpoint || undefined,
-        });
-
-        if (res.ok && res.data) {
-          let items: Array<{ id: string; name: string; description?: string }> = [];
-          if (res.data.detailedModels && res.data.detailedModels.length > 0) {
-            items = res.data.detailedModels;
-          } else if (res.data.models && res.data.models.length > 0) {
-            items = res.data.models.map((m: any) =>
-              typeof m === "string" ? { id: m, name: m } : m,
-            );
-          }
-          setModelsList(items);
-        } else {
-          setModelsList([]);
-        }
-      } catch (err) {
-        console.error("[SettingsSubView] Erro ao buscar lista de modelos:", err);
-        setModelsList([]);
-      } finally {
-        setIsLoadingModels(false);
-      }
-    },
-    [apiKey, endpoint],
-  );
-
-  useEffect(() => {
-    if (aiSettings) {
-      const activeProv = aiSettings.active_provider || aiSettings.provider || "gemini";
-      setProvider(activeProv);
-      setModel(
-        aiSettings.active_model ||
-          aiSettings.model ||
-          (activeProv === "gemini" ? "gemini-2.5-flash" : "gpt-4o"),
-      );
-      setEndpoint(aiSettings.custom_endpoint || "http://localhost:11434/v1");
-      if (aiSettings.default_provider) {
-        setHarnessProvider(aiSettings.default_provider);
-      }
-      if (aiSettings.antigravity_cli_path) {
-        setAntigravityCliPath(aiSettings.antigravity_cli_path);
-      }
-      if (aiSettings.claude_cli_path) {
-        setClaudeCliPath(aiSettings.claude_cli_path);
-      }
-      if (aiSettings.agent_effort) {
-        setAgentEffort(aiSettings.agent_effort);
-      }
-      if (aiSettings.agent_model) {
-        setAgentModelOverride(aiSettings.agent_model);
-      }
-      fetchModelsForProvider(activeProv, undefined, aiSettings.custom_endpoint);
-    }
-    checkHarnessProviders();
-  }, [aiSettings, fetchModelsForProvider, checkHarnessProviders]);
-
-  const selectOptions: SelectOption[] = useMemo(() => {
-    if (modelsList.length === 0) {
-      return [
-        { value: model, label: model, description: "Modelo ativo selecionado" },
-        {
-          value: "gemini-2.5-flash",
-          label: "Gemini 2.5 Flash",
-          description: "Alta velocidade e capacidades multimodais",
-          badge: "Flash",
-          badgeType: "success",
-        },
-        {
-          value: "gemini-2.5-pro",
-          label: "Gemini 2.5 Pro",
-          description: "Raciocínio complexo e codificação profunda",
-          badge: "Pro",
-          badgeType: "warning",
-        },
-        {
-          value: "gemini-1.5-flash",
-          label: "Gemini 1.5 Flash",
-          description: "Modelo versátil",
-          badge: "Flash",
-          badgeType: "info",
-        },
-      ];
-    }
-
-    return modelsList.map((m) => {
-      let badge: string | undefined;
-      let badgeType: "primary" | "success" | "warning" | "neutral" | "info" =
-        "primary";
-
-      if (m.id.includes("pro")) {
-        badge = "Pro";
-        badgeType = "warning";
-      } else if (m.id.includes("flash")) {
-        badge = "Flash";
-        badgeType = "success";
-      } else if (m.id.includes("reason") || m.id.includes("r1")) {
-        badge = "Reasoner";
-        badgeType = "info";
-      }
-
-      return {
-        value: m.id,
-        label: m.name !== m.id ? m.name : m.id,
-        description: m.description || m.id,
-        icon: "smart_toy",
-        badge,
-        badgeType,
-      };
-    });
-  }, [modelsList, model]);
 
   // Carregar Configurações e Documentos
   const loadAllSettings = useCallback(async () => {
@@ -821,58 +652,6 @@ export function useSettingsData() {
     await persistTaxonomy({ statuses: updated });
   };
 
-  const handleSaveAISettings = async () => {
-    try {
-      await saveAISettings(provider, model, apiKey, endpoint, {
-        default_provider: harnessProvider,
-        antigravity_cli_path: antigravityCliPath,
-        claude_cli_path: claudeCliPath,
-        agent_effort: agentEffort,
-        agent_model: agentModelOverride,
-      });
-      await checkHarnessProviders();
-      setSaveStatus("Configurações de IA e Agentes CLI salvas com sucesso!");
-      setTimeout(() => setSaveStatus(null), 3500);
-    } catch (err) {
-      console.error("[SettingsSubView] Erro ao salvar IA:", err);
-      setSaveStatus("Erro ao salvar configurações de IA.");
-    }
-  };
-
-  const handleSaveAllSettings = async () => {
-    setIsSavingAll(true);
-    try {
-      await saveAISettings(provider, model, apiKey, endpoint, {
-        default_provider: harnessProvider,
-        antigravity_cli_path: antigravityCliPath,
-        claude_cli_path: claudeCliPath,
-        agent_effort: agentEffort,
-        agent_model: agentModelOverride,
-      });
-      await saveProjectConfig({
-        categories,
-        badges,
-        tags,
-        statuses,
-        governance_rules: {
-          min_approvals_default: minApprovals,
-        },
-        default_language: defaultLanguage,
-        supported_languages: supportedLanguages,
-        translation_engine: translationEngine,
-      });
-      await checkHarnessProviders();
-
-      setSaveStatus("Todas as configurações foram salvas com sucesso!");
-      setTimeout(() => setSaveStatus(null), 3500);
-    } catch (err) {
-      console.error("[SettingsSubView] Erro ao salvar tudo:", err);
-      setSaveStatus("Erro ao salvar configurações gerais.");
-    } finally {
-      setIsSavingAll(false);
-    }
-  };
-
   const handleSaveLanguages = useCallback(
     async (overrides?: {
       defaultLanguage?: string;
@@ -892,16 +671,6 @@ export function useSettingsData() {
     user,
     logout,
     activeRepo,
-    provider,
-    setProvider,
-    model,
-    setModel,
-    apiKey,
-    setApiKey,
-    endpoint,
-    setEndpoint,
-    modelsList,
-    isLoadingModels,
     categories,
     isAddingCategory,
     setIsAddingCategory,
@@ -986,28 +755,9 @@ export function useSettingsData() {
     setIsAddLanguageModalOpen,
     languageSearchFilter,
     setLanguageSearchFilter,
-    harnessProvider,
-    setHarnessProvider,
-    antigravityCliPath,
-    setAntigravityCliPath,
-    claudeCliPath,
-    setClaudeCliPath,
-    agentEffort,
-    setAgentEffort,
-    agentModelOverride,
-    setAgentModelOverride,
-    detectedProviders,
-    isCheckingHarness,
-    harnessCheckFeedback,
-    checkHarnessProviders,
     saveStatus,
     setSaveStatus,
-    isSavingAll,
-    handleSaveAISettings,
-    handleSaveAllSettings,
     handleSaveLanguages,
-    fetchModelsForProvider,
-    selectOptions,
     docMetadataList,
     loadProjectConfig,
   };

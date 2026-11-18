@@ -64,6 +64,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     approveAction,
     rejectAction,
     aiSettings,
+    isSettingsModalOpen,
     openSettingsModal,
     quickSetModel,
     newChatSession,
@@ -79,6 +80,50 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
 
   // Skills state
   const [availableSkills, setAvailableSkills] = useState<any[]>([]);
+
+  // Live CLI / Provider Detection State
+  const [detectedProviders, setDetectedProviders] = useState<
+    Array<{
+      id: string;
+      name: string;
+      isAvailable: boolean;
+      isAuthenticated: boolean;
+      statusMessage?: string;
+    }>
+  >([]);
+  const [isCheckingProviders, setIsCheckingProviders] = useState(false);
+
+  const checkProviders = useCallback(async () => {
+    setIsCheckingProviders(true);
+    try {
+      const res = await API.getAIProviders();
+      if (res.ok && res.data?.providers) {
+        setDetectedProviders(res.data.providers);
+      }
+    } catch (err) {
+      console.warn("[AICopilotPanel] Erro ao verificar provedores:", err);
+    } finally {
+      setIsCheckingProviders(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && !isSettingsModalOpen) {
+      checkProviders();
+    }
+  }, [isOpen, isSettingsModalOpen, checkProviders]);
+
+  const activeApiProv =
+    aiSettings?.active_provider || aiSettings?.provider || "gemini";
+  const isApiConfigured = Boolean(
+    aiSettings?.providers?.[activeApiProv]?.configured ||
+      Object.values(aiSettings?.providers || {}).some((p) => p?.configured),
+  );
+  const activeCliInfo = detectedProviders.find((p) => p.id === activeProviderId);
+  const isActiveConnectionReady =
+    activeProviderId === "direct-api"
+      ? isApiConfigured
+      : Boolean(activeCliInfo?.isAvailable && activeCliInfo?.isAuthenticated);
 
   // Live Thinking Step & Timer
   const thinkingStep = useCopilotStore((s) => s.thinkingStep);
@@ -601,17 +646,11 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             {isRawMode ? "RAW" : "Harness"}
           </button>
 
-          {/* Provider Selector Pill */}
+          {/* Provider Connection Pill */}
           {!isRawMode && (
             <button
               type="button"
-              onClick={() =>
-                setActiveProviderId(
-                  activeProviderId === "antigravity"
-                    ? "direct-api"
-                    : "antigravity",
-                )
-              }
+              onClick={openSettingsModal}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -622,25 +661,14 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 fontWeight: 600,
                 cursor: "pointer",
                 border: "1px solid",
-                background:
-                  activeProviderId === "antigravity"
-                    ? "rgba(34, 197, 94, 0.15)"
-                    : "var(--color-surface-container, #f1f3f4)",
-                color:
-                  activeProviderId === "antigravity"
-                    ? "#16a34a"
-                    : "var(--text-muted, #64748b)",
-                borderColor:
-                  activeProviderId === "antigravity"
-                    ? "#22c55e"
-                    : "var(--color-outline-variant, #cbd5e1)",
+                background: isActiveConnectionReady
+                  ? "rgba(34, 197, 94, 0.14)"
+                  : "rgba(245, 158, 11, 0.14)",
+                color: isActiveConnectionReady ? "#16a34a" : "#d97706",
+                borderColor: isActiveConnectionReady ? "#22c55e" : "#f59e0b",
                 transition: "all 0.15s ease",
               }}
-              title={
-                activeProviderId === "antigravity"
-                  ? "Agente Antigravity Conectado (Acesso Local à Máquina)"
-                  : "Direct API (Modo Livre sem ferramentas de terminal)"
-              }
+              title="Clique para conectar ou trocar entre CLI instalada e Chave de API"
             >
               <span
                 style={{
@@ -648,13 +676,18 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   width: "6px",
                   height: "6px",
                   borderRadius: "50%",
-                  backgroundColor:
-                    activeProviderId === "antigravity" ? "#22c55e" : "#94a3b8",
+                  backgroundColor: isActiveConnectionReady
+                    ? "#22c55e"
+                    : "#f59e0b",
                 }}
               />
-              {activeProviderId === "antigravity"
-                ? "Antigravity"
-                : "Direct API"}
+              {!isActiveConnectionReady
+                ? "Conectar IA"
+                : activeProviderId === "antigravity"
+                  ? "Antigravity CLI"
+                  : activeProviderId === "claude-code"
+                    ? "Claude Code CLI"
+                    : `API • ${activeProviderDisplay}`}
             </button>
           )}
 
@@ -780,6 +813,108 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Guided Connection Card when no CLI or API Key is ready */}
+        {messages.length === 0 && !isActiveConnectionReady && !isCheckingProviders && (
+          <div
+            style={{
+              margin: "8px 4px",
+              padding: "12px 14px",
+              borderRadius: "10px",
+              border: "1px solid var(--color-outline-variant, #cbd5e1)",
+              background: "var(--color-surface-container, #f8fafc)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              fontSize: "12px",
+            }}
+          >
+            <div style={{ fontWeight: 600, fontSize: "13px" }}>
+              Conecte uma IA para começar
+            </div>
+            <p
+              style={{
+                margin: 0,
+                color: "var(--text-muted, #64748b)",
+                lineHeight: 1.45,
+              }}
+            >
+              Use uma CLI instalada no computador (com agentes e harness) ou informe uma Chave de API.
+            </p>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {["antigravity", "claude-code"].map((id) => {
+                const p = detectedProviders.find((item) => item.id === id);
+                const ok = Boolean(p?.isAvailable && p?.isAuthenticated);
+                const label = id === "antigravity" ? "Antigravity (agy)" : "Claude Code (claude)";
+                return (
+                  <span
+                    key={id}
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                      fontSize: "11px",
+                      fontWeight: 500,
+                      background: ok ? "rgba(34, 197, 94, 0.14)" : "rgba(148, 163, 184, 0.16)",
+                      color: ok ? "#16a34a" : "var(--text-muted, #64748b)",
+                    }}
+                  >
+                    {ok ? "✓" : "○"} {label}
+                  </span>
+                );
+              })}
+              <span
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: "999px",
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  background: isApiConfigured
+                    ? "rgba(34, 197, 94, 0.14)"
+                    : "rgba(148, 163, 184, 0.16)",
+                  color: isApiConfigured ? "#16a34a" : "var(--text-muted, #64748b)",
+                }}
+              >
+                {isApiConfigured ? "✓" : "○"} Chave de API
+              </span>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={openSettingsModal}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "#10b981",
+                  color: "#ffffff",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Configurar Conexão
+              </button>
+              <button
+                type="button"
+                onClick={checkProviders}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                  background: "transparent",
+                  color: "inherit",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                }}
+              >
+                Verificar novamente
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Dynamic Messages */}
         {messages.map((msg) => (

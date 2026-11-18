@@ -1388,7 +1388,7 @@ body.is-resizing .pane-resizer {
   background: var(--color-surface, #ffffff);
   flex-shrink: 0;
   position: relative;
-  z-index: 10;
+  z-index: 50;
 }
 
 .doc-meta-left {
