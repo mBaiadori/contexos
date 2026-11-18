@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../../../context/WorkspaceContext";
 import { useAuth } from "../../../../context/AuthContext";
 import { API } from "../../../../services/api";
-import { isPathHidden } from "../../../../utils/hidden-files";
 import type { DraftItem, TabType, WhatsNewFilterType } from "../types";
 
 export function useVersionsData(onOpenFile?: (path: string) => void) {
@@ -29,7 +28,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   const tabParam = searchParams.get("tab") as TabType | null;
 
   const activeTab: TabType = useMemo(() => {
-    if (tabParam && ["whats-new", "drafts", "system"].includes(tabParam)) {
+    if (tabParam && ["whats-new", "drafts"].includes(tabParam)) {
       return tabParam;
     }
     return hasUnreadWhatsNew ? "whats-new" : "drafts";
@@ -37,7 +36,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
 
   // Synchronize URL search params
   useEffect(() => {
-    if (!tabParam || !["whats-new", "drafts", "system"].includes(tabParam)) {
+    if (!tabParam || !["whats-new", "drafts"].includes(tabParam)) {
       const defaultTab = hasUnreadWhatsNew ? "whats-new" : "drafts";
       setSearchParams(
         (prev) => {
@@ -67,7 +66,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   );
   const [repoEditsCounts, setRepoEditsCounts] = useState<Record<string, number>>({});
   const [allReposDrafts, setAllReposDrafts] = useState<DraftItem[]>([]);
-  const [allReposSystemDrafts, setAllReposSystemDrafts] = useState<DraftItem[]>([]);
   const [isLoadingChanges, setIsLoadingChanges] = useState(false);
 
   useEffect(() => {
@@ -103,10 +101,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   const [draftDiffs, setDraftDiffs] = useState<Record<string, string>>({});
   const [loadingDraftDiffs, setLoadingDraftDiffs] = useState<Record<string, boolean>>({});
 
-  const [expandedSystemFiles, setExpandedSystemFiles] = useState<Record<string, boolean>>({});
-  const [systemDiffs, setSystemDiffs] = useState<Record<string, string>>({});
-  const [loadingSystemDiffs, setLoadingSystemDiffs] = useState<Record<string, boolean>>({});
-
   // Collapsible cards state
   const [isWhatsNewProposalsExpanded, setIsWhatsNewProposalsExpanded] = useState(false);
   const [isWhatsNewCommitsExpanded, setIsWhatsNewCommitsExpanded] = useState(false);
@@ -126,20 +120,18 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
 
       const counts: Record<string, number> = {};
       const drafts: DraftItem[] = [];
-      const systemDrafts: DraftItem[] = [];
 
       await Promise.all(
         targetRepoList.map(async (r) => {
           try {
             const data = await API.getWorkspaceChanges(r.name);
-            const rChanges = data?.changes || [];
-            const rSystem = data?.system_changes || [];
-
-            const visibleChanges = rChanges.filter((c: any) => c?.path && !isPathHidden(c.path));
-            counts[r.name] = visibleChanges.length;
+            const rChanges = (data?.changes || []).filter(
+              (c: any) => c?.path && c.path !== ".docs.metadata.json",
+            );
+            counts[r.name] = rChanges.length;
 
             if (filter === "all" || filter.toLowerCase() === r.name.toLowerCase()) {
-              for (const c of visibleChanges) {
+              for (const c of rChanges) {
                 drafts.push({
                   path: c.path.replace(/^\/+/, ""),
                   repoName: r.name,
@@ -152,22 +144,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
                   new_content: c.new_content || "",
                 });
               }
-
-              for (const s of rSystem) {
-                if (s?.path) {
-                  systemDrafts.push({
-                    path: s.path.replace(/^\/+/, ""),
-                    repoName: r.name,
-                    status: s.type === "ADDED" ? "??" : s.type === "DELETED" ? "D" : "M",
-                    type: s.type || "MODIFIED",
-                    additions: s.additions,
-                    deletions: s.deletions,
-                    diff_text: s.diff_text || s.diff,
-                    old_content: s.old_content || "",
-                    new_content: s.new_content || "",
-                  });
-                }
-              }
             }
           } catch (err) {
             console.warn(`[VersionsSubView] Erro ao carregar edições de ${r.name}:`, err);
@@ -177,7 +153,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
 
       setRepoEditsCounts((prev) => ({ ...prev, ...counts }));
       setAllReposDrafts(drafts);
-      setAllReposSystemDrafts(systemDrafts);
     } catch (err) {
       console.error("[VersionsSubView] Erro ao carregar alterações de trabalho:", err);
     } finally {
@@ -193,10 +168,8 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   useEffect(() => {
     setExpandedDraftFiles({});
     setExpandedWhatsNewFiles({});
-    setExpandedSystemFiles({});
     setDraftDiffs({});
     setWhatsNewDiffs({});
-    setSystemDiffs({});
     setPrTitle("");
     setPrDescription("");
     setCreatedPRUrl(null);
@@ -204,7 +177,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   }, [activeRepo?.name, selectedRepoFilter]);
 
   const allDraftFiles = allReposDrafts;
-  const allSystemDraftFiles = allReposSystemDrafts;
   const changedFiles = allDraftFiles;
   const isClean = allDraftFiles.length === 0;
 
@@ -260,28 +232,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     [draftDiffs],
   );
 
-  const fetchSystemDiff = useCallback(
-    async (filePath: string, targetRepo?: string) => {
-      const key = `${targetRepo || "local"}:${filePath}`;
-      if (!filePath || systemDiffs[key]) return;
-      setLoadingSystemDiffs((prev) => ({ ...prev, [key]: true }));
-      try {
-        const res = await API.getGitDiff(filePath, targetRepo);
-        if (res?.ok && res?.data?.diff) {
-          setSystemDiffs((prev) => ({ ...prev, [key]: res.data.diff }));
-        }
-      } catch (err) {
-        console.error(
-          `[VersionsSubView] Erro ao buscar diff de sistema de ${filePath}:`,
-          err,
-        );
-      } finally {
-        setLoadingSystemDiffs((prev) => ({ ...prev, [key]: false }));
-      }
-    },
-    [systemDiffs],
-  );
-
   const toggleWhatsNewFile = (filePath: string) => {
     const isNowExpanded = !expandedWhatsNewFiles[filePath];
     setExpandedWhatsNewFiles((prev) => ({
@@ -299,15 +249,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     setExpandedDraftFiles((prev) => ({ ...prev, [key]: isNowExpanded }));
     if (isNowExpanded) {
       fetchDraftDiff(filePath, repoName);
-    }
-  };
-
-  const toggleSystemFile = (filePath: string, repoName?: string) => {
-    const key = `${repoName || "local"}:${filePath}`;
-    const isNowExpanded = !expandedSystemFiles[key];
-    setExpandedSystemFiles((prev) => ({ ...prev, [key]: isNowExpanded }));
-    if (isNowExpanded) {
-      fetchSystemDiff(filePath, repoName);
     }
   };
 
@@ -336,20 +277,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
       if (nextState) fetchDraftDiff(f.path, f.repoName);
     });
     setExpandedDraftFiles(nextMap);
-  };
-
-  const toggleAllSystemFiles = () => {
-    const areAllExpanded =
-      allSystemDraftFiles.length > 0 &&
-      allSystemDraftFiles.every((f) => !!expandedSystemFiles[`${f.repoName}:${f.path}`]);
-    const nextState = !areAllExpanded;
-    const nextMap: Record<string, boolean> = {};
-    allSystemDraftFiles.forEach((f) => {
-      const key = `${f.repoName}:${f.path}`;
-      nextMap[key] = nextState;
-      if (nextState) fetchSystemDiff(f.path, f.repoName);
-    });
-    setExpandedSystemFiles(nextMap);
   };
 
   const handleSync = async () => {
@@ -598,9 +525,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     setSelectedRepoFilter,
     repoEditsCounts,
     allReposDrafts,
-    allReposSystemDrafts,
     allDraftFiles,
-    allSystemDraftFiles,
     changedFiles,
     isClean,
     isLoadingChanges,
@@ -651,12 +576,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     handleCreateProposal,
     handleGenerateSummaryAI,
     isGeneratingAI,
-    // System
-    expandedSystemFiles,
-    systemDiffs,
-    loadingSystemDiffs,
-    toggleSystemFile,
-    toggleAllSystemFiles,
     // Proposal Modal
     isProposalModalOpen,
     setIsProposalModalOpen,

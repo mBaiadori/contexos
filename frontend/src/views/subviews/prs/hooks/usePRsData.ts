@@ -4,7 +4,6 @@ import { useAuth } from "../../../../context/AuthContext";
 import { useWorkspace } from "../../../../context/WorkspaceContext";
 import { API } from "../../../../services/api";
 import type { PR, Repo } from "../../../../types";
-import { isPathHidden, isSystemPath } from "../../../../utils/hidden-files";
 import type {
   PRStatusFilter,
   MergeabilityInfo,
@@ -444,8 +443,7 @@ export function usePRsData() {
         fetchMergeability(pr);
       }
       const visibleFiles = pr.files.filter(
-        (file) =>
-          file?.path && !isSystemPath(file.path) && !isPathHidden(file.path),
+        (file) => file?.path && file.path !== ".docs.metadata.json",
       );
       for (const file of visibleFiles) {
         if (!file.restricted) {

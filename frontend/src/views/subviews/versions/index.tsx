@@ -4,7 +4,6 @@ import { useVersionsData } from "./hooks/useVersionsData";
 import { VersionsHeader } from "./components/VersionsHeader";
 import { WhatsNewTab } from "./components/WhatsNewTab";
 import { DraftsTab } from "./components/DraftsTab";
-import { SystemDraftsTab } from "./components/SystemDraftsTab";
 import { ProposalModal } from "./components/ProposalModal";
 import type { VersionsSubViewProps } from "./types";
 
@@ -34,7 +33,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
         handleTabChange={versions.handleTabChange}
         whatsNewFilesCount={versions.whatsNewFiles.length}
         changedFilesCount={versions.changedFiles.length}
-        systemFilesCount={versions.allSystemDraftFiles.length}
       />
 
       {/* Main Content Area */}
@@ -110,19 +108,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               prDescription={versions.prDescription}
               setPrDescription={versions.setPrDescription}
               isCreatingPR={versions.isCreatingPR}
-            />
-          )}
-
-          {/* TAB 3: SISTEMA & TEMPLATES */}
-          {versions.activeTab === "system" && (
-            <SystemDraftsTab
-              allSystemDraftFiles={versions.allSystemDraftFiles}
-              toggleAllSystemFiles={versions.toggleAllSystemFiles}
-              expandedSystemFiles={versions.expandedSystemFiles}
-              toggleSystemFile={versions.toggleSystemFile}
-              systemDiffs={versions.systemDiffs}
-              loadingSystemDiffs={versions.loadingSystemDiffs}
-              handleDiscard={versions.handleDiscard}
             />
           )}
         </div>

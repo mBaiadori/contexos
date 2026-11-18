@@ -2,7 +2,6 @@ import React from "react";
 import {
   Sparkles,
   FileEdit,
-  Settings,
   RefreshCw,
   CloudUpload,
 } from "lucide-react";
@@ -27,7 +26,6 @@ interface VersionsHeaderProps {
   handleTabChange: (newTab: TabType) => void;
   whatsNewFilesCount: number;
   changedFilesCount: number;
-  systemFilesCount: number;
 }
 
 export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
@@ -47,7 +45,6 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
   handleTabChange,
   whatsNewFilesCount,
   changedFilesCount,
-  systemFilesCount,
 }) => {
   return (
     <PageHeader
@@ -161,13 +158,6 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
             icon: <FileEdit size={16} />,
             count: changedFilesCount > 0 ? changedFilesCount : undefined,
             badgeVariant: "warning",
-          },
-          {
-            id: "system",
-            label: "Sistema",
-            icon: <Settings size={16} />,
-            count: systemFilesCount > 0 ? systemFilesCount : undefined,
-            badgeVariant: "info",
           },
         ]}
       />

@@ -1,4 +1,4 @@
-export type TabType = "whats-new" | "drafts" | "system";
+export type TabType = "whats-new" | "drafts";
 export type WhatsNewFilterType = "all" | "new" | "modified" | "proposals";
 
 export interface DraftItem {

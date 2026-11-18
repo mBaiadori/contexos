@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { isPathHidden, loadHiddenFiles, isSystemPath } from "./hidden-files.js";
+import { isPathHidden, loadHiddenFiles } from "./hidden-files.js";
 import {
   assertCommitish,
   assertBranchName,
@@ -155,9 +155,14 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
     });
   }
 
-  const hiddenList = loadHiddenFiles(repoDir);
-  const visibleFiles = files.filter((f) => !isPathHidden(f.path, hiddenList));
-  const systemFiles = files.filter((f) => isSystemPath(f.path));
+  const visibleFiles = files.filter((f) => {
+    const clean = f.path.replace(/\\/g, "/");
+    return (
+      clean !== ".docs.metadata.json" &&
+      !clean.endsWith("/.DS_Store") &&
+      clean !== ".DS_Store"
+    );
+  });
 
   return {
     isRepo: true,
@@ -167,7 +172,7 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
     behind,
     isClean: visibleFiles.length === 0,
     files: visibleFiles,
-    systemFiles,
+    systemFiles: [],
     remoteUrl,
   };
 }

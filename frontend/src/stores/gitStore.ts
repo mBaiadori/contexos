@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { API } from "../services/api";
 import { DraftStore } from "../services/draft-store";
-import { isPathHidden, isSystemPath } from "../utils/hidden-files";
 import type { GitCommitInfo, GitStatus, WhatsNewSummary, WorkspaceChange, VersionGraphData, SafeSwitchResult } from "../types";
 import { useRepoStore } from "./repoStore";
 import { useEditorStore } from "./editorStore";
@@ -85,26 +84,19 @@ export const useGitStore = create<GitState>((set, get) => ({
     try {
       const res = await API.getGitStatus(repo);
       if (res.ok && res.data) {
-        const filteredFiles = (res.data.files || []).filter((f) => f?.path && !isPathHidden(f.path));
-        const sysFiles = [
-          ...(res.data.systemFiles || []),
-          ...(res.data.files || []).filter((f) => f?.path && isSystemPath(f.path)),
-        ];
-        const sysMap = new Map<string, any>();
-        for (const sf of sysFiles) {
-          if (sf?.path) sysMap.set(sf.path, sf);
-        }
-        const uniqueSysFiles = Array.from(sysMap.values());
+        const filteredFiles = (res.data.files || []).filter(
+          (f) => f?.path && f.path !== ".docs.metadata.json",
+        );
 
         if (!targetRepoName || useRepoStore.getState().activeRepo?.name === repo) {
           set({
             gitStatus: {
               ...res.data,
               files: filteredFiles,
-              systemFiles: uniqueSysFiles,
-              isClean: filteredFiles.length === 0 && uniqueSysFiles.length === 0,
+              systemFiles: [],
+              isClean: filteredFiles.length === 0,
             },
-            systemPendingChanges: uniqueSysFiles,
+            systemPendingChanges: [],
           });
         }
       }
@@ -134,16 +126,13 @@ export const useGitStore = create<GitState>((set, get) => ({
     try {
       const data = await API.getWorkspaceChanges(repo);
       const filtered = (data.changes || []).filter(
-        (c: any) => c?.path && !isPathHidden(c.path),
-      );
-      const sysFiltered = (data.system_changes || []).filter(
-        (c: any) => c?.path && isSystemPath(c.path),
+        (c: any) => c?.path && c.path !== ".docs.metadata.json",
       );
       pendingChangesByRepo[repo] = filtered;
       if (!targetRepoName || useRepoStore.getState().activeRepo?.name === repo) {
         set({
           pendingChanges: filtered,
-          systemPendingChanges: sysFiltered,
+          systemPendingChanges: [],
         });
         useGovernanceStore.getState().setGuardrailStatus(
           filtered.length === 0 ? "CLEAN" : data.guardrail || "CLEAN",

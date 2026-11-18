@@ -2,7 +2,6 @@ import React from "react";
 import { FolderGit2 } from "lucide-react";
 import { Card, Button, Badge } from "../../../../components/ui";
 import type { PR } from "../../../../types";
-import { isSystemPath, isPathHidden } from "../../../../utils/hidden-files";
 import { formatPRDate, renderMarkdownDescription, cleanSemanticTitle } from "../utils/prFormatters";
 import { PRFileList } from "./PRFileList";
 import type {
@@ -71,10 +70,8 @@ export const PRCard: React.FC<PRCardProps> = ({
   const isOpen = !isMerged && !isClosed;
   const rawFiles = Array.isArray(pr.files) ? pr.files : [];
   const prFiles = rawFiles.filter(
-    (f: any) =>
-      f?.path && !isSystemPath(f.path) && !isPathHidden(f.path),
+    (f: any) => f?.path && f.path !== ".docs.metadata.json",
   );
-  const systemFilesCount = rawFiles.length - prFiles.length;
   const isDirectCommit = !!pr.is_direct_commit;
 
   const statusBadgeText =
@@ -289,11 +286,7 @@ export const PRCard: React.FC<PRCardProps> = ({
                   alignItems: "center",
                   gap: "4px",
                 }}
-                title={
-                  systemFilesCount > 0
-                    ? `Dos ${rawFiles.length} arquivos editados no total, ${systemFilesCount} ${systemFilesCount === 1 ? "é arquivo" : "são arquivos"} de sistema (ocultos).`
-                    : `${prFiles.length} ${prFiles.length === 1 ? "arquivo alterado" : "arquivos alterados"}`
-                }
+                title={`${prFiles.length} ${prFiles.length === 1 ? "arquivo alterado" : "arquivos alterados"}`}
               >
                 <span
                   className="material-symbols-outlined"
@@ -303,17 +296,6 @@ export const PRCard: React.FC<PRCardProps> = ({
                 </span>
                 {prFiles.length}{" "}
                 {prFiles.length === 1 ? "documento" : "documentos"}
-                {systemFilesCount > 0 && (
-                  <span
-                    style={{
-                      opacity: 0.8,
-                      fontSize: "11.5px",
-                      fontWeight: 400,
-                    }}
-                  >
-                    ({systemFilesCount} de sistema)
-                  </span>
-                )}
               </span>
 
               {/* Quorum indicator only for active/open reviews */}
@@ -839,8 +821,6 @@ export const PRCard: React.FC<PRCardProps> = ({
             pr={pr}
             isOpen={isOpen}
             prFiles={prFiles}
-            rawFiles={rawFiles}
-            systemFilesCount={systemFilesCount}
             collapsedFiles={collapsedFiles}
             toggleFileCollapse={toggleFileCollapse}
             handleExpandAllFiles={handleExpandAllFiles}

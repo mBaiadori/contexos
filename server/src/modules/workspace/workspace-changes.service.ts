@@ -11,11 +11,6 @@ import { computeDiff } from "../../utils/diff.js";
 import { isGitRepo, executeGit, getGitStatus } from "../../utils/git.js";
 import { assertGitPath } from "../../utils/git-validate.js";
 import {
-  loadHiddenFiles,
-  isPathHidden,
-  isSystemPath,
-} from "../../utils/hidden-files.js";
-import {
   docsMetadataService,
   extractDocLinksFromMarkdown,
   type DocumentMetadataItem,
@@ -34,7 +29,6 @@ export class WorkspaceChangesService {
         : { name: repoName, full_name: repoName, is_local: true });
 
     const repoDir = getRepoDir(repoName);
-    const hiddenList = loadHiddenFiles(repoDir);
     const storedChanges =
       cfg.workspace_changes?.[repoName] || loadRepoWorkspaceChanges(repoName);
 
@@ -103,9 +97,7 @@ export class WorkspaceChangesService {
 
         for (const gf of allGitFiles) {
           const cleanPath = gf.path.trim().replace(/^\/+/, "");
-          if (!cleanPath) continue;
-          const isSys = isSystemPath(cleanPath);
-          if (!isSys && isPathHidden(cleanPath, hiddenList)) continue;
+          if (!cleanPath || cleanPath === ".docs.metadata.json") continue;
 
           // Se já está no map de alterações da UI, mantém os dados originais preservados
           if (mergedMap.has(cleanPath)) continue;
@@ -166,12 +158,21 @@ export class WorkspaceChangesService {
     }
 
     const allRaw = Array.from(mergedMap.values());
-    const rawDocChanges = allRaw.filter(
-      (c) => !isPathHidden(c.path, hiddenList) && !isSystemPath(c.path),
-    );
-    const rawSystemChanges = allRaw.filter(
-      (c) => isSystemPath(c.path),
-    );
+    const rawDocChanges = allRaw.filter((c) => {
+      const clean = (c.path || "").trim().replace(/^\/+/, "").replace(/\\/g, "/");
+      if (!clean) return false;
+      const base = path.basename(clean);
+      return (
+        clean !== ".docs.metadata.json" &&
+        base !== ".DS_Store" &&
+        base !== ".env" &&
+        !base.endsWith(".log") &&
+        !clean.startsWith(".git/") &&
+        clean !== ".git" &&
+        !clean.includes("/node_modules/") &&
+        !clean.startsWith("node_modules/")
+      );
+    });
 
     const detailedChanges = [];
     let totalAdditions = 0;
@@ -197,25 +198,6 @@ export class WorkspaceChangesService {
       });
     }
 
-    const detailedSystemChanges = [];
-    for (const c of rawSystemChanges) {
-      const diffData = computeDiff(
-        c.old_content || "",
-        c.new_content || "",
-        c.path,
-      );
-      detailedSystemChanges.push({
-        path: c.path,
-        type: c.type,
-        timestamp: c.timestamp,
-        additions: diffData.additions,
-        deletions: diffData.deletions,
-        diff_text: diffData.diff_text,
-        old_content: c.old_content,
-        new_content: c.new_content,
-      });
-    }
-
     const totalLines = totalAdditions + totalDeletions;
     const guardrail =
       totalLines < 120
@@ -227,11 +209,11 @@ export class WorkspaceChangesService {
     return {
       repo: activeRepo,
       changes: detailedChanges,
-      system_changes: detailedSystemChanges,
+      system_changes: [],
       total_additions: totalAdditions,
       total_deletions: totalDeletions,
       total_files: detailedChanges.length,
-      total_system_files: detailedSystemChanges.length,
+      total_system_files: 0,
       guardrail,
     };
   }

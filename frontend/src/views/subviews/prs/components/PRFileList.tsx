@@ -8,8 +8,6 @@ interface PRFileListProps {
   pr: PR;
   isOpen: boolean;
   prFiles: any[];
-  rawFiles: any[];
-  systemFilesCount: number;
   collapsedFiles: Record<string, boolean>;
   toggleFileCollapse: (key: string) => void;
   handleExpandAllFiles: (prId: number | string, files: any[]) => void;
@@ -24,8 +22,6 @@ export const PRFileList: React.FC<PRFileListProps> = ({
   pr,
   isOpen,
   prFiles,
-  rawFiles,
-  systemFilesCount,
   collapsedFiles,
   toggleFileCollapse,
   handleExpandAllFiles,
@@ -77,20 +73,6 @@ export const PRFileList: React.FC<PRFileListProps> = ({
               <span>
                 Documentos Alterados ({prFiles.length}):
               </span>
-              {systemFilesCount > 0 && (
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 400,
-                    color: "var(--color-text-muted, #64748b)",
-                  }}
-                >
-                  (dos {rawFiles.length} arquivos editados no
-                  total, {systemFilesCount}{" "}
-                  {systemFilesCount === 1 ? "é" : "são"} de
-                  sistema)
-                </span>
-              )}
             </div>
 
             {prFiles.length > 1 && (
