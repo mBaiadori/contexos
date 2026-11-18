@@ -84,11 +84,6 @@ interface AIContextType {
   docPrompt: string | null;
   isDocPromptEnabled: boolean;
   toggleDocPrompt: () => void;
-
-  // Template Creator Mode & Project Level Prompts
-  isTemplateEditorMode: boolean;
-  setIsTemplateEditorMode: (val: boolean) => void;
-  projectTemplatePrompt: string;
 }
 
 const generateUniqueMessageId = (prefix: string): string => {
@@ -125,9 +120,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   } = useWorkspace();
   
   // Zustand Stores
-  const activeEditingTemplate = useTemplateStore((s) => s.activeEditingTemplate);
-  const isTemplateEditorMode = useTemplateStore((s) => s.isTemplateEditorMode);
-  const setIsTemplateEditorMode = useTemplateStore((s) => s.setIsTemplateEditorMode);
   const resolveTemplate = useTemplateStore((s) => s.resolveTemplate);
 
   const messages = useCopilotStore((s) => s.messages);
@@ -175,24 +167,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const docTemplateId = fileMetadata?.templateId || null;
   const [docTemplateSkills, setDocTemplateSkills] = useState<string[]>([]);
 
-  const projectTemplatePrompt = projectConfig?.ai_template_prompt || 'Você é o Arquiteto Especialista em Criação e Padronização de Templates de Engenharia.\nAjude o usuário a definir uma estrutura lógica e rigorosa de seções (H1, H2, H3), criar placeholders dinâmicos {{CAMPO}} e redigir o system instruction do Copilot para este novo template.';
-
-  // Real-time Template Context: If user is actively editing a template in TemplatesSubView, use activeEditingTemplate
-  const templatePrompt = isTemplateEditorMode && activeEditingTemplate
-    ? (activeEditingTemplate.prompt || activeEditingTemplate.systemPrompt || null)
-    : docTemplatePrompt;
-
-  const templateTitle = isTemplateEditorMode && activeEditingTemplate
-    ? (activeEditingTemplate.title || activeEditingTemplate.templateName || activeEditingTemplate.id || 'Template')
-    : docTemplateTitle;
-
-  const templateId = isTemplateEditorMode && activeEditingTemplate
-    ? (activeEditingTemplate.id || null)
-    : docTemplateId;
-
-  const effectiveTemplateSkills = isTemplateEditorMode && activeEditingTemplate
-    ? (Array.isArray(activeEditingTemplate.skills) ? activeEditingTemplate.skills : [])
-    : docTemplateSkills;
+  const templatePrompt = docTemplatePrompt;
+  const templateTitle = docTemplateTitle;
+  const templateId = docTemplateId;
+  const effectiveTemplateSkills = docTemplateSkills;
 
   // Document Prompt State
   const docPrompt = fileMetadata?.prompt || null;
@@ -230,14 +208,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       isCancelled = true;
     };
   }, [fileMetadata?.templateId, fileMetadata?.skills, activeRepo?.name, resolveTemplate, setTemplateSkills]);
-
-  // Sync template skills when in Template Editor mode
-  useEffect(() => {
-    if (isTemplateEditorMode && activeEditingTemplate) {
-      const skills = Array.isArray(activeEditingTemplate.skills) ? activeEditingTemplate.skills : [];
-      setTemplateSkills(skills);
-    }
-  }, [isTemplateEditorMode, activeEditingTemplate, setTemplateSkills]);
 
   // Keep activeFile referenced when not in global scope and no custom references set yet
   useEffect(() => {
@@ -427,18 +397,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const sendMessage = async (prompt: string, contextBadges?: string[]) => {
     if (!prompt.trim()) return;
 
-    const inTemplateMode = Boolean(isTemplateEditorMode);
-    const currentTemplate = activeEditingTemplate || {};
-
     let effectivePath = 'Global';
     let effectiveContent = '';
     let effectiveBadges = contextBadges || [];
 
-    if (inTemplateMode) {
-      effectivePath = currentTemplate.templateName || currentTemplate.title || 'Novo Template';
-      effectiveContent = currentTemplate.content || '';
-      effectiveBadges = ['Modo Template'];
-    } else if (isGlobalScope || referencedDocs.length === 0) {
+    if (isGlobalScope || referencedDocs.length === 0) {
       effectivePath = 'Global (Sem Documento)';
       effectiveContent = '';
       effectiveBadges = ['Modo Global'];
@@ -579,18 +542,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       // Combine active prompts based on context and user toggles
       const promptInstructions: string[] = [];
 
-      if (inTemplateMode) {
-        promptInstructions.push(`[Instruções do Especialista em Criação de Templates (ai_template_prompt)]:\n${projectTemplatePrompt}`);
-        if (currentTemplate.prompt && currentTemplate.prompt.trim()) {
-          promptInstructions.push(`[Instruções do Template em Edição "${currentTemplate.title || 'Template'}"]:\n${currentTemplate.prompt.trim()}`);
-        }
-      } else {
-        if (isTemplatePromptEnabled && templatePrompt && templatePrompt.trim()) {
-          promptInstructions.push(`[Instruções do Template "${templateTitle || 'Template'}"]:\n${templatePrompt.trim()}`);
-        }
-        if (isDocPromptEnabled && docPrompt && docPrompt.trim()) {
-          promptInstructions.push(`[Instruções Específicas deste Documento]:\n${docPrompt.trim()}`);
-        }
+      if (isTemplatePromptEnabled && templatePrompt && templatePrompt.trim()) {
+        promptInstructions.push(`[Instruções do Template "${templateTitle || 'Template'}"]:\n${templatePrompt.trim()}`);
+      }
+      if (isDocPromptEnabled && docPrompt && docPrompt.trim()) {
+        promptInstructions.push(`[Instruções Específicas deste Documento]:\n${docPrompt.trim()}`);
       }
 
       // Injeção de Fragmentos RAG Anexados pelo Usuário
@@ -999,10 +955,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         docPrompt,
         isDocPromptEnabled,
         toggleDocPrompt,
-
-        isTemplateEditorMode,
-        setIsTemplateEditorMode,
-        projectTemplatePrompt,
       }}
     >
       {children}

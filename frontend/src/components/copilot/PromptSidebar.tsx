@@ -2,12 +2,10 @@
 // COMPONENT: PROMPT SIDEBAR (HIERARQUIA & PARÂMETROS DA IA)
 // Exibe com clareza as camadas de instrução:
 // - Modo Documento: Prompt do Documento e Template Vinculado.
-// - Modo Template: Prompt Criador de Templates (ai_template_prompt) e Prompt deste Template.
 // =============================================================================
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAI } from "../../context/AIContext";
-import { useWorkspace } from "../../context/WorkspaceContext";
 import { Button, IconButton } from "../ui";
 
 interface PromptSidebarProps {
@@ -30,8 +28,6 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
   agentName = "Agent",
 }) => {
   const {
-    projectTemplatePrompt,
-    isTemplateEditorMode,
     templatePrompt,
     templateTitle,
     templateId,
@@ -42,49 +38,12 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
     toggleDocPrompt,
   } = useAI();
 
-  const { saveProjectConfig, projectConfig } = useWorkspace();
-
   // Mode specific tabs
   const [docTab, setDocTab] = useState<"doc_prompt" | "template_linked">(
     "doc_prompt",
   );
-  const [templateTab, setTemplateTab] = useState<
-    "creator_prompt" | "template_prompt"
-  >("creator_prompt");
-
-  const [editedTemplateCreatorPrompt, setEditedTemplateCreatorPrompt] =
-    useState(projectTemplatePrompt || "");
-  const [feedback, setFeedback] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    setEditedTemplateCreatorPrompt(projectTemplatePrompt || "");
-  }, [projectTemplatePrompt]);
 
   if (!isOpen) return null;
-
-  const handleSaveTemplateCreatorPrompt = async () => {
-    setIsSaving(true);
-    try {
-      const updatedConfig = {
-        ...(projectConfig || {}),
-        ai_template_prompt: editedTemplateCreatorPrompt,
-      };
-      const res = await saveProjectConfig(updatedConfig);
-      if (res.success) {
-        setFeedback("Prompt do Arquiteto de Templates salvo no projeto!");
-        setTimeout(() => setFeedback(""), 2500);
-      } else {
-        setFeedback(res.error || "Erro ao salvar.");
-        setTimeout(() => setFeedback(""), 3000);
-      }
-    } catch {
-      setFeedback("Erro de conexão.");
-      setTimeout(() => setFeedback(""), 2500);
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   return (
     <aside
@@ -117,9 +76,7 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
                 whiteSpace: "nowrap",
               }}
             >
-              {isTemplateEditorMode
-                ? "Prompts do Modo Template"
-                : "Instruções do Copilot"}
+              Instruções do Copilot
             </strong>
             <span
               style={{
@@ -130,10 +87,7 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
                 whiteSpace: "nowrap",
               }}
             >
-              {isTemplateEditorMode
-                ? "Arquiteto & Template"
-                : "Documento & Template"}{" "}
-              &bull;{" "}
+              Documento & Template &bull;{" "}
               <span className="ai-copilot-prompt-agent-tag">{agentName}</span>
             </span>
           </div>
@@ -204,225 +158,8 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
           )}
         </div>
 
-        {/* ========================================================================= */}
-        {/* CENÁRIO 1: MODO CRIADOR / EDITOR DE TEMPLATE                              */}
-        {/* ========================================================================= */}
-        {isTemplateEditorMode ? (
-          <>
-            {/* Tabs do Modo Template */}
-            <div
-              style={{
-                display: "flex",
-                gap: "4px",
-                background: "var(--bg-hover, #f1f5f9)",
-                padding: "3px",
-                borderRadius: "8px",
-                flexShrink: 0,
-              }}
-            >
-              <button
-                type="button"
-                className={`notion-tab-btn ${templateTab === "creator_prompt" ? "active" : ""}`}
-                onClick={() => setTemplateTab("creator_prompt")}
-                style={{
-                  flex: 1,
-                  padding: "5px 8px",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  fontWeight: templateTab === "creator_prompt" ? 600 : 500,
-                  background:
-                    templateTab === "creator_prompt"
-                      ? "#ffffff"
-                      : "transparent",
-                  color:
-                    templateTab === "creator_prompt"
-                      ? "var(--primary, #2563eb)"
-                      : "var(--text-muted, #64748b)",
-                  boxShadow:
-                    templateTab === "creator_prompt"
-                      ? "0 1px 2px rgba(0,0,0,0.08)"
-                      : "none",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                🛠️ Arquiteto de Templates
-              </button>
-              <button
-                type="button"
-                className={`notion-tab-btn ${templateTab === "template_prompt" ? "active" : ""}`}
-                onClick={() => setTemplateTab("template_prompt")}
-                style={{
-                  flex: 1,
-                  padding: "5px 8px",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  fontWeight: templateTab === "template_prompt" ? 600 : 500,
-                  background:
-                    templateTab === "template_prompt"
-                      ? "#ffffff"
-                      : "transparent",
-                  color:
-                    templateTab === "template_prompt"
-                      ? "var(--primary, #2563eb)"
-                      : "var(--text-muted, #64748b)",
-                  boxShadow:
-                    templateTab === "template_prompt"
-                      ? "0 1px 2px rgba(0,0,0,0.08)"
-                      : "none",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                🤖 Prompt deste Template
-              </button>
-            </div>
-
-            {/* Tab 1: Prompt do Arquiteto (ai_template_prompt) */}
-            {templateTab === "creator_prompt" && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: 1,
-                  minHeight: 0,
-                  gap: "6px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <strong
-                    style={{
-                      fontSize: "11.5px",
-                      color: "var(--text-heading, #0f172a)",
-                    }}
-                  >
-                    Prompt do Arquiteto (Mestre):
-                  </strong>
-                  <span
-                    className="badge badge-success"
-                    style={{ fontSize: "9.5px" }}
-                  >
-                    ● ATIVO NO COPILOT
-                  </span>
-                </div>
-                <p
-                  style={{
-                    fontSize: "11px",
-                    color: "var(--text-muted, #64748b)",
-                    margin: 0,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  Instrução que o Copilot utiliza agora para ajudar a estruturar
-                  este novo template:
-                </p>
-                <textarea
-                  style={{
-                    width: "100%",
-                    flex: 1,
-                    minHeight: "140px",
-                    padding: "10px",
-                    border: "1px solid var(--border-color, #cbd5e1)",
-                    borderRadius: "8px",
-                    fontSize: "11.5px",
-                    lineHeight: 1.4,
-                    fontFamily: "var(--font-mono, monospace)",
-                    background: "#f0fdf4",
-                    resize: "none",
-                    outline: "none",
-                  }}
-                  spellCheck="false"
-                  value={editedTemplateCreatorPrompt}
-                  onChange={(e) =>
-                    setEditedTemplateCreatorPrompt(e.target.value)
-                  }
-                />
-              </div>
-            )}
-
-            {/* Tab 2: Prompt do Template em Edição */}
-            {templateTab === "template_prompt" && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: 1,
-                  minHeight: 0,
-                  gap: "10px",
-                }}
-              >
-                <div
-                  style={{
-                    padding: "12px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color, #e2e8f0)",
-                    background: "var(--bg-hover, #f8fafc)",
-                  }}
-                >
-                  <strong
-                    style={{
-                      fontSize: "12px",
-                      color: "var(--text-heading, #0f172a)",
-                      display: "block",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Instrução que acompanhará este template:
-                  </strong>
-                  <p
-                    style={{
-                      fontSize: "11px",
-                      color: "var(--text-muted, #64748b)",
-                      margin: "0 0 8px 0",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    Quando usuários criarem documentos usando este template,
-                    esta será a instrução especializada fornecida ao Copilot.
-                  </p>
-                  <div
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "6px",
-                      background: "#ffffff",
-                      border: "1px solid var(--border-color, #cbd5e1)",
-                      fontSize: "11px",
-                      fontFamily: "var(--font-mono, monospace)",
-                      whiteSpace: "pre-wrap",
-                      maxHeight: "150px",
-                      overflowY: "auto",
-                    }}
-                  >
-                    {templatePrompt ||
-                      "(Nenhum prompt definido ainda no editor)"}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      fontSize: "10.5px",
-                      color: "var(--primary, #2563eb)",
-                    }}
-                  >
-                    💡 Dica: Para editar este prompt, use a aba{" "}
-                    <strong>Prompt do Copilot</strong> no editor principal.
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          /* ========================================================================= */
-          /* CENÁRIO 2: MODO DOCUMENTO REGULAR                                         */
-          /* ========================================================================= */
-          <>
+        {/* MODO DOCUMENTO REGULAR */}
+        <>
             {/* Tabs do Modo Documento */}
             <div
               style={{
@@ -703,53 +440,7 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
               </div>
             )}
           </>
-        )}
       </div>
-
-      {/* Footer: Salvar Prompt do Arquiteto (apenas no modo de template na aba creator_prompt) */}
-      {isTemplateEditorMode && templateTab === "creator_prompt" && (
-        <div
-          className="ai-prompt-sidebar-footer"
-          style={{
-            padding: "10px 14px",
-            borderTop: "1px solid var(--border-color, #e2e8f0)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "var(--bg-hover, #f8fafc)",
-          }}
-        >
-          {feedback ? (
-            <span
-              style={{ fontSize: "11px", color: "var(--primary, #2563eb)" }}
-            >
-              {feedback}
-            </span>
-          ) : (
-            <span
-              style={{
-                fontSize: "10.5px",
-                color: "var(--text-muted, #64748b)",
-              }}
-            >
-              Salvo no .project.config.json
-            </span>
-          )}
-          <Button
-            variant="primary"
-            size="xs"
-            isLoading={isSaving}
-            onClick={handleSaveTemplateCreatorPrompt}
-            icon={
-              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                save
-              </span>
-            }
-          >
-            {isSaving ? "Salvando..." : "Salvar no Projeto"}
-          </Button>
-        </div>
-      )}
     </aside>
   );
 };

@@ -153,4 +153,42 @@ Você é o Guardião da Continuidade Cognitiva do projeto.
    - Seja conciso e focado em fatos estruturados para não desperdiçar janela de contexto.
 `,
   },
+  {
+    id: 'skill-creator',
+    name: 'skill-creator',
+    title: 'Criador de Skills (Agent Skills)',
+    description: 'Padroniza a criação de novas skills (SKILL.md) para harnesses de IA e projetos no Contexos, com gatilhos claros, ferramentas e instruções concisas.',
+    category: 'engineering',
+    version: '1.0.0',
+    source: 'system',
+    author: 'Context-OS (Core)',
+    license: 'Built-in',
+    tools: ['docs_read_file', 'docs_propose_diff'],
+    suggested_templates: [],
+    tags: ['skills', 'harness', 'automação', 'padronização'],
+    icon: 'Wand2',
+    content: `# Criador de Skills (Agent Skills)
+
+Você é o Especialista em Design e Criação de Skills para agentes e harnesses de IA.
+
+## Quando Usar Esta Skill:
+- Sempre que o usuário pedir para criar, refatorar ou padronizar uma nova skill (\`SKILL.md\`) no projeto ou no workspace do harness (\`.skills/\` ou \`.agents/skills/\`).
+
+## Estrutura Padrão de uma Skill (\`SKILL.md\`):
+1. **Frontmatter YAML obrigatório:**
+   - \`name\`: identificador curto em kebab-case (ex: \`api-contract-review\`).
+   - \`description\`: descrição objetiva de **o que faz** e **quando acionar** (gatilhos claros para o modelo decidir carregar a skill).
+2. **Corpo Markdown enxuto e acionável:**
+   - **Objetivo / Papel:** 1–2 frases definindo a responsabilidade.
+   - **Quando Acionar / Pré-condições:** critérios objetivos.
+   - **Fluxo de Execução:** passos numerados, diretos e verificáveis.
+   - **Restrições e Guardrails:** o que não fazer e critérios de qualidade.
+   - **Exemplos (opcional):** apenas quando reduzir ambiguidade.
+
+## Boas Práticas:
+- Mantenha a skill focada em **uma única responsabilidade**; evite instruções genéricas ou longas demais para economizar janela de contexto.
+- Prefira referenciar ferramentas, scripts ou arquivos existentes no repositório em vez de duplicar conteúdo.
+- Valide se já existe uma skill semelhante antes de criar uma nova.
+`,
+  },
 ];

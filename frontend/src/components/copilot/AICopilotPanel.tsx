@@ -47,7 +47,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     docPrompt,
     isDocPromptEnabled,
     toggleDocPrompt,
-    isTemplateEditorMode,
     activeSkillIds,
     templateSkills,
     setActiveSkillId,
@@ -717,8 +716,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
       <CopilotContextBar
         referencedDocs={referencedDocs}
         isGlobalScope={isGlobalScope}
-        isTemplateEditorMode={isTemplateEditorMode}
-        templateTitle={templateTitle}
         tree={tree}
         onOpenContext={onOpenContext}
         onRemoveDoc={removeReferencedDoc}
@@ -777,11 +774,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         <div className="chat-bubble ai">
           <div className="ai-reply-content">
             <p style={{ margin: 0 }}>
-              {isTemplateEditorMode
-                ? "🛠️ Modo Criador de Templates Ativo (ai_template_prompt). Posso sugerir seções, formatar placeholders {{CAMPO}} e redigir o prompt do Copilot para este template. Como posso ajudar?"
-                : isGlobalScope || referencedDocs.length === 0
-                  ? "🌐 Operando em Modo Global. Posso responder sobre todo o repositório, cruzar arquivos ou criar novas especificações. Para focar em um arquivo específico, anexe-o na barra acima!"
-                  : `Pareando com você em ${referencedDocs.length > 1 ? `${referencedDocs.length} documentos` : referencedDocs[0]}. Pergunte, solicite refatorações ou use o alvo (🎯) para capturar trechos da tela!`}
+              {isGlobalScope || referencedDocs.length === 0
+                ? "🌐 Operando em Modo Global. Posso responder sobre todo o repositório, cruzar arquivos ou criar novas especificações. Para focar em um arquivo específico, anexe-o na barra acima!"
+                : `Pareando com você em ${referencedDocs.length > 1 ? `${referencedDocs.length} documentos` : referencedDocs[0]}. Pergunte, solicite refatorações ou use o alvo (🎯) para capturar trechos da tela!`}
             </p>
           </div>
         </div>

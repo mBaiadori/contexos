@@ -629,33 +629,4 @@ export async function aiRoutes(fastify: FastifyInstance) {
     const repoName = body?.repo || cfg.active_repo?.name || 'local';
     return reply.send(aiService.resetMemory(repoName));
   });
-
-  fastify.post('/api/templates/generate-ai', async (request, reply) => {
-    const body = request.body as { description?: string; category?: string };
-    const cfg = loadConfig();
-    const aiSettings = cfg.ai_settings || { provider: 'gemini', model: 'gemini-2.5-flash', api_key: '' };
-
-    const prompt = `Crie um template estruturado em Markdown com frontmatter YAML para a especificação a seguir:
-Categoria: ${body.category || 'Domain-Driven Design'}
-Descrição: ${body.description || 'Template de especificação'}
-
-Retorne apenas o Markdown completo incluindo o frontmatter no formato:
----
-id: "..."
-title: "..."
-category: "..."
-badge: "..."
-description: "..."
-default_filename: "..."
-suggested_folder: "..."
-assistant_prompt: "..."
----
-# Conteúdo...`;
-
-    const result = await aiService.callLLM(aiSettings, prompt);
-    return reply.send({
-      content: result.reply,
-      provider: result.provider,
-    });
-  });
 }

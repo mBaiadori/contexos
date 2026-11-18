@@ -80,8 +80,7 @@ export function useSettingsData() {
     onConfirm: async () => {},
   });
 
-  // AI Template Prompt State
-  const [projectTemplatePrompt, setProjectTemplatePrompt] = useState<string>("");
+  // Governance Rules State
   const [minApprovals, setMinApprovals] = useState<number>(1);
 
   // Language & SSOT Translation Governance State
@@ -140,23 +139,6 @@ export function useSettingsData() {
   // Status feedback
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isSavingAll, setIsSavingAll] = useState<boolean>(false);
-  const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(false);
-  const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<string | null>(null);
-
-  const handleCopyDiagnostics = async () => {
-    try {
-      const res = await API.getDiagnostics();
-      if (res.ok && res.data) {
-        const json = JSON.stringify(res.data, null, 2);
-        await navigator.clipboard.writeText(json);
-        setDiagnosticsFeedback("Diagnóstico sanitizado copiado para a área de transferência!");
-        setTimeout(() => setDiagnosticsFeedback(null), 4000);
-      }
-    } catch {
-      setDiagnosticsFeedback("Falha ao coletar diagnóstico do sistema.");
-      setTimeout(() => setDiagnosticsFeedback(null), 4000);
-    }
-  };
 
   const fetchModelsForProvider = useCallback(
     async (provId: string, customKey?: string, customEp?: string) => {
@@ -384,10 +366,6 @@ export function useSettingsData() {
           setStatuses(parsedStatuses);
         }
 
-        if (pCfg.ai_template_prompt) {
-          setProjectTemplatePrompt(pCfg.ai_template_prompt);
-        }
-
         if (pCfg.governance_rules?.min_approvals_default !== undefined) {
           setMinApprovals(pCfg.governance_rules.min_approvals_default);
         }
@@ -492,13 +470,59 @@ export function useSettingsData() {
     }
   };
 
+  const persistTaxonomy = useCallback(
+    async (overrides: {
+      categories?: TaxonomyItem[];
+      badges?: TaxonomyItem[];
+      tags?: TaxonomyItem[];
+      statuses?: TaxonomyItem[];
+    }) => {
+      try {
+        const res = await saveProjectConfig({
+          categories: overrides.categories ?? categories,
+          badges: overrides.badges ?? badges,
+          tags: overrides.tags ?? tags,
+          statuses: overrides.statuses ?? statuses,
+          governance_rules: {
+            min_approvals_default: minApprovals,
+          },
+          default_language: defaultLanguage,
+          supported_languages: supportedLanguages,
+          translation_engine: translationEngine,
+        });
+        if (!res.success) {
+          setSaveStatus(res.error || "Erro ao salvar taxonomia.");
+          return;
+        }
+        setSaveStatus("Taxonomia atualizada e salva!");
+        setTimeout(() => setSaveStatus(null), 2500);
+      } catch (err) {
+        console.error("[SettingsSubView] Erro ao salvar taxonomia:", err);
+        setSaveStatus("Erro ao salvar taxonomia.");
+      }
+    },
+    [
+      saveProjectConfig,
+      categories,
+      badges,
+      tags,
+      statuses,
+      minApprovals,
+      defaultLanguage,
+      supportedLanguages,
+      translationEngine,
+    ],
+  );
+
   // Handlers Categories
   const handleAddCategory = () => {
     const trimmed = newCatName.trim().toLowerCase();
     if (!trimmed || categories.some((c) => c.name.toLowerCase() === trimmed)) return;
-    setCategories([...categories, { name: trimmed, color: newCatColor }]);
+    const next = [...categories, { name: trimmed, color: newCatColor }];
+    setCategories(next);
     setNewCatName("");
     setIsAddingCategory(false);
+    void persistTaxonomy({ categories: next });
   };
 
   const handleRequestRemoveCategory = (index: number) => {
@@ -525,13 +549,17 @@ export function useSettingsData() {
               });
             } catch {}
           }
-          setCategories((prev) => prev.filter((_, i) => i !== index));
+          const next = categories.filter((_, i) => i !== index);
+          setCategories(next);
           setDeleteDialog((d) => ({ ...d, isOpen: false }));
+          await persistTaxonomy({ categories: next });
         },
       });
     } else {
-      setCategories(categories.filter((_, i) => i !== index));
+      const next = categories.filter((_, i) => i !== index);
+      setCategories(next);
       if (editingCatIndex === index) setEditingCatIndex(null);
+      void persistTaxonomy({ categories: next });
     }
   };
 
@@ -555,15 +583,18 @@ export function useSettingsData() {
     if (oldName !== trimmed) {
       await propagateCategoryRename(oldName, trimmed);
     }
+    await persistTaxonomy({ categories: updated });
   };
 
   // Handlers Badges
   const handleAddBadge = () => {
     const trimmed = newBadgeName.trim().toUpperCase();
     if (!trimmed || badges.some((b) => b.name.toUpperCase() === trimmed)) return;
-    setBadges([...badges, { name: trimmed, color: newBadgeColor }]);
+    const next = [...badges, { name: trimmed, color: newBadgeColor }];
+    setBadges(next);
     setNewBadgeName("");
     setIsAddingBadge(false);
+    void persistTaxonomy({ badges: next });
   };
 
   const handleRequestRemoveBadge = (index: number) => {
@@ -592,13 +623,17 @@ export function useSettingsData() {
               });
             } catch {}
           }
-          setBadges((prev) => prev.filter((_, i) => i !== index));
+          const next = badges.filter((_, i) => i !== index);
+          setBadges(next);
           setDeleteDialog((d) => ({ ...d, isOpen: false }));
+          await persistTaxonomy({ badges: next });
         },
       });
     } else {
-      setBadges(badges.filter((_, i) => i !== index));
+      const next = badges.filter((_, i) => i !== index);
+      setBadges(next);
       if (editingBadgeIndex === index) setEditingBadgeIndex(null);
+      void persistTaxonomy({ badges: next });
     }
   };
 
@@ -622,15 +657,18 @@ export function useSettingsData() {
     if (oldName !== trimmed) {
       await propagateBadgeRename(oldName, trimmed);
     }
+    await persistTaxonomy({ badges: updated });
   };
 
   // Handlers Tags
   const handleAddTag = () => {
     const trimmed = newTagName.trim().toLowerCase();
     if (!trimmed || tags.some((t) => t.name.toLowerCase() === trimmed)) return;
-    setTags([...tags, { name: trimmed, color: newTagColor }]);
+    const next = [...tags, { name: trimmed, color: newTagColor }];
+    setTags(next);
     setNewTagName("");
     setIsAddingTag(false);
+    void persistTaxonomy({ tags: next });
   };
 
   const handleRequestRemoveTag = (index: number) => {
@@ -658,13 +696,17 @@ export function useSettingsData() {
               });
             } catch {}
           }
-          setTags((prev) => prev.filter((_, i) => i !== index));
+          const next = tags.filter((_, i) => i !== index);
+          setTags(next);
           setDeleteDialog((d) => ({ ...d, isOpen: false }));
+          await persistTaxonomy({ tags: next });
         },
       });
     } else {
-      setTags(tags.filter((_, i) => i !== index));
+      const next = tags.filter((_, i) => i !== index);
+      setTags(next);
       if (editingTagIndex === index) setEditingTagIndex(null);
+      void persistTaxonomy({ tags: next });
     }
   };
 
@@ -688,15 +730,18 @@ export function useSettingsData() {
     if (oldName !== trimmed) {
       await propagateTagRename(oldName, trimmed);
     }
+    await persistTaxonomy({ tags: updated });
   };
 
   // Handlers Statuses
   const handleAddStatus = () => {
     const formatted = formatStatusName(newStatusName);
     if (!formatted || statuses.some((s) => s.name === formatted)) return;
-    setStatuses([...statuses, { name: formatted, color: newStatusColor }]);
+    const next = [...statuses, { name: formatted, color: newStatusColor }];
+    setStatuses(next);
     setNewStatusName("");
     setIsAddingStatus(false);
+    void persistTaxonomy({ statuses: next });
   };
 
   const handleRequestRemoveStatus = (index: number) => {
@@ -721,13 +766,17 @@ export function useSettingsData() {
               });
             } catch {}
           }
-          setStatuses((prev) => prev.filter((_, i) => i !== index));
+          const next = statuses.filter((_, i) => i !== index);
+          setStatuses(next);
           setDeleteDialog((d) => ({ ...d, isOpen: false }));
+          await persistTaxonomy({ statuses: next });
         },
       });
     } else {
-      setStatuses(statuses.filter((_, i) => i !== index));
+      const next = statuses.filter((_, i) => i !== index);
+      setStatuses(next);
       if (editingStatusIndex === index) setEditingStatusIndex(null);
+      void persistTaxonomy({ statuses: next });
     }
   };
 
@@ -751,6 +800,7 @@ export function useSettingsData() {
     if (oldName !== formatted) {
       await propagateStatusRename(oldName, formatted);
     }
+    await persistTaxonomy({ statuses: updated });
   };
 
   const handleSaveAISettings = async () => {
@@ -786,7 +836,6 @@ export function useSettingsData() {
         badges,
         tags,
         statuses,
-        ai_template_prompt: projectTemplatePrompt,
         governance_rules: {
           min_approvals_default: minApprovals,
         },
@@ -813,7 +862,6 @@ export function useSettingsData() {
         badges,
         tags,
         statuses,
-        ai_template_prompt: projectTemplatePrompt,
         governance_rules: {
           min_approvals_default: minApprovals,
         },
@@ -915,8 +963,6 @@ export function useSettingsData() {
     handleSaveEditStatus,
     deleteDialog,
     setDeleteDialog,
-    projectTemplatePrompt,
-    setProjectTemplatePrompt,
     minApprovals,
     setMinApprovals,
     defaultLanguage,
@@ -948,11 +994,6 @@ export function useSettingsData() {
     saveStatus,
     setSaveStatus,
     isSavingAll,
-    showOnboardingModal,
-    setShowOnboardingModal,
-    diagnosticsFeedback,
-    setDiagnosticsFeedback,
-    handleCopyDiagnostics,
     handleSaveAISettings,
     handleSaveAllSettings,
     handleSaveLanguages,

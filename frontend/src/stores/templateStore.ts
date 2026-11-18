@@ -10,17 +10,10 @@ export interface TemplateStoreState {
   importingId: string | null;
   error: string | null;
 
-  // Active template currently being edited in TemplatesSubView
-  activeEditingTemplate: Partial<TemplateItem> | null;
-  isTemplateEditorMode: boolean;
-
   // Actions
   fetchTemplates: () => Promise<void>;
   fetchCommunityTemplates: () => Promise<void>;
   resolveTemplate: (id: string) => Promise<TemplateItem | null>;
-  setActiveEditingTemplate: (tpl: Partial<TemplateItem> | null) => void;
-  updateActiveEditingTemplate: (partial: Partial<TemplateItem>) => void;
-  setIsTemplateEditorMode: (val: boolean) => void;
   createTemplate: (data: Partial<TemplateItem>) => Promise<{ success: boolean; message?: string; template?: TemplateItem }>;
   updateTemplate: (id: string, data: Partial<TemplateItem>) => Promise<{ success: boolean; message?: string; template?: TemplateItem }>;
   importFromCommunity: (id: string) => Promise<{ success: boolean; message: string }>;
@@ -34,8 +27,6 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
   loading: false,
   importingId: null,
   error: null,
-  activeEditingTemplate: null,
-  isTemplateEditorMode: false,
 
   fetchTemplates: async () => {
     set({ loading: true, error: null });
@@ -86,22 +77,6 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
     } catch {
       return null;
     }
-  },
-
-  setActiveEditingTemplate: (tpl) => {
-    set({ activeEditingTemplate: tpl, isTemplateEditorMode: !!tpl });
-  },
-
-  updateActiveEditingTemplate: (partial) => {
-    set((state) => ({
-      activeEditingTemplate: state.activeEditingTemplate
-        ? { ...state.activeEditingTemplate, ...partial }
-        : partial,
-    }));
-  },
-
-  setIsTemplateEditorMode: (val) => {
-    set({ isTemplateEditorMode: val });
   },
 
   createTemplate: async (data: Partial<TemplateItem>) => {

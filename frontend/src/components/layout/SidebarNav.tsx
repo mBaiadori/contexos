@@ -1,6 +1,5 @@
 import {
   BookOpen,
-  BookTemplate,
   ChevronLeft,
   Cpu,
   FileText,
@@ -19,7 +18,6 @@ export type SubViewType =
   | "versions"
   | "dictionary"
   | "wiki"
-  | "templates"
   | "skills"
   | "aicenter"
   | "prs"
@@ -74,12 +72,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       label: "Edições",
       icon: <History size={19} />,
       title: "Edições",
-    },
-    {
-      id: "templates" as SubViewType,
-      label: "Templates",
-      icon: <BookTemplate size={19} />,
-      title: "Templates & Assistentes de Documentos",
     },
     {
       id: "aicenter" as SubViewType,

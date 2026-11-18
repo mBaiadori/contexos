@@ -5,8 +5,6 @@ import { Button, Chip } from "../ui";
 interface CopilotContextBarProps {
   referencedDocs: string[];
   isGlobalScope: boolean;
-  isTemplateEditorMode?: boolean;
-  templateTitle?: string | null;
   tree: TreeNode[];
   onOpenContext: () => void;
   onRemoveDoc: (docPath: string) => void;
@@ -16,8 +14,6 @@ interface CopilotContextBarProps {
 export const CopilotContextBar: React.FC<CopilotContextBarProps> = ({
   referencedDocs,
   isGlobalScope,
-  isTemplateEditorMode = false,
-  templateTitle,
   tree,
   onOpenContext,
   onRemoveDoc,
@@ -59,9 +55,7 @@ export const CopilotContextBar: React.FC<CopilotContextBarProps> = ({
               } vinculado${
                 referencedDocs.length === 1 ? "" : "s"
               } ao Copilot. Clique para gerenciar.`
-            : isTemplateEditorMode
-              ? `Modo Template Ativo: ${templateTitle || "Novo"}`
-              : "Nenhum contexto vinculado (Modo Global). Clique para anexar pastas ou arquivos."
+            : "Nenhum contexto vinculado (Modo Global). Clique para anexar pastas ou arquivos."
         }
       >
         <span
@@ -69,8 +63,7 @@ export const CopilotContextBar: React.FC<CopilotContextBarProps> = ({
           style={{
             fontSize: "16px",
             color:
-              (referencedDocs.length > 0 && !isGlobalScope) ||
-              isTemplateEditorMode
+              referencedDocs.length > 0 && !isGlobalScope
                 ? "var(--color-primary, #2563eb)"
                 : "var(--text-muted, #94a3b8)",
             transition: "color 0.15s ease",
@@ -81,26 +74,8 @@ export const CopilotContextBar: React.FC<CopilotContextBarProps> = ({
       </button>
 
       {/* Global Scope Mode Badge */}
-      {(isGlobalScope || referencedDocs.length === 0) &&
-      !isTemplateEditorMode ? (
+      {isGlobalScope || referencedDocs.length === 0 ? (
         <></>
-      ) : isTemplateEditorMode ? (
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            padding: "2px 8px",
-            borderRadius: "12px",
-            background: "var(--color-tertiary-container, #fae8ff)",
-            border: "1px solid var(--color-tertiary, #a855f7)",
-            fontSize: "10.5px",
-            color: "var(--color-on-tertiary-container, #581c87)",
-            fontWeight: 600,
-          }}
-        >
-          <span>🛠️ Modo Template: {templateTitle || "Novo"}</span>
-        </div>
       ) : (
         /* Multi-Document & Folder Attached Chips */
         referencedDocs.map((docPath) => {
@@ -149,28 +124,26 @@ export const CopilotContextBar: React.FC<CopilotContextBarProps> = ({
       )}
 
       {/* Action: Open Advanced Context Selector Sidebar */}
-      {!isTemplateEditorMode && (
-        <Button
-          type="button"
-          size="xs"
-          variant="outline"
-          onClick={onOpenContext}
-          icon={
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "13px" }}
-            >
-              folder_managed
-            </span>
-          }
-          title="Abrir Seletor de Contexto no painel lateral"
-        >
-          {referencedDocs.length === 0 ? "Anexar Contexto" : "Gerenciar"}
-        </Button>
-      )}
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        onClick={onOpenContext}
+        icon={
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "13px" }}
+          >
+            folder_managed
+          </span>
+        }
+        title="Abrir Seletor de Contexto no painel lateral"
+      >
+        {referencedDocs.length === 0 ? "Anexar Contexto" : "Gerenciar"}
+      </Button>
 
       {/* Action: Switch to Global Scope Button if has references */}
-      {referencedDocs.length > 0 && !isTemplateEditorMode && (
+      {referencedDocs.length > 0 && (
         <button
           type="button"
           onClick={() => onSetGlobalScope(true)}

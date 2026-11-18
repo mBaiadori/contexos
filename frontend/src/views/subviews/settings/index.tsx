@@ -5,11 +5,9 @@ import { TaxonomySection } from "./components/TaxonomySection";
 import { LanguagesSection } from "./components/LanguagesSection";
 import { AgentHarnessSection } from "./components/AgentHarnessSection";
 import { AIEngineSection } from "./components/AIEngineSection";
-import { TemplatePromptSection } from "./components/TemplatePromptSection";
 import { UserSessionSection } from "./components/UserSessionSection";
 import { DeleteTaxonomyModal } from "./components/DeleteTaxonomyModal";
 import { LanguageModals } from "./components/LanguageModals";
-import { FirstRunWizard } from "../../../components/onboarding/FirstRunWizard";
 import { useSettingsData } from "./hooks/useSettingsData";
 
 export const SettingsSubView: React.FC = () => {
@@ -21,8 +19,6 @@ export const SettingsSubView: React.FC = () => {
         activeRepoName={data.activeRepo?.name}
         isSavingAll={data.isSavingAll}
         handleSaveAllSettings={data.handleSaveAllSettings}
-        handleCopyDiagnostics={data.handleCopyDiagnostics}
-        setShowOnboardingModal={data.setShowOnboardingModal}
       />
 
       <PageBody>
@@ -41,14 +37,6 @@ export const SettingsSubView: React.FC = () => {
               type={data.saveStatus.includes("Erro") ? "error" : "success"}
               title={data.saveStatus}
               onClose={() => data.setSaveStatus(null)}
-            />
-          )}
-
-          {data.diagnosticsFeedback && (
-            <AlertBanner
-              type={data.diagnosticsFeedback.includes("Falha") ? "error" : "success"}
-              title={data.diagnosticsFeedback}
-              onClose={() => data.setDiagnosticsFeedback(null)}
             />
           )}
 
@@ -178,15 +166,7 @@ export const SettingsSubView: React.FC = () => {
             />
           </section>
 
-          {/* 3. SEÇÃO: CRIADOR DE TEMPLATES */}
-          <TemplatePromptSection
-            activeRepoName={data.activeRepo?.name}
-            onNavigateToTemplates={() =>
-              data.navigate(`/projects/${data.activeRepo?.name || "default"}/templates`)
-            }
-          />
-
-          {/* 4. SEÇÃO: SESSÃO & GITHUB */}
+          {/* 3. SEÇÃO: SESSÃO & GITHUB */}
           <UserSessionSection
             user={data.user}
             onLogout={data.logout}
@@ -212,16 +192,6 @@ export const SettingsSubView: React.FC = () => {
         setIsAddLanguageModalOpen={data.setIsAddLanguageModalOpen}
         languageSearchFilter={data.languageSearchFilter}
         setLanguageSearchFilter={data.setLanguageSearchFilter}
-      />
-
-      <FirstRunWizard
-        isOpen={data.showOnboardingModal}
-        onCancel={() => data.setShowOnboardingModal(false)}
-        onComplete={async (repoName: string) => {
-          data.setShowOnboardingModal(false);
-          await data.loadProjectConfig();
-          data.navigate(`/repo/${encodeURIComponent(repoName)}/editor`);
-        }}
       />
     </PageContainer>
   );

@@ -11,7 +11,6 @@ const VALID_SUBVIEWS = [
   "versions",
   "dictionary",
   "wiki",
-  "templates",
   "skills",
   "aicenter",
   "prs",

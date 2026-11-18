@@ -1,19 +1,15 @@
 import React from "react";
-import { Sparkles, Copy, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { PageHeader, Badge, Button } from "../../../../components/ui";
 
 interface SettingsHeaderProps {
   activeRepoName?: string;
-  setShowOnboardingModal: (val: boolean) => void;
-  handleCopyDiagnostics: () => void;
   handleSaveAllSettings: () => void;
   isSavingAll: boolean;
 }
 
 export const SettingsHeader: React.FC<SettingsHeaderProps> = ({
   activeRepoName,
-  setShowOnboardingModal,
-  handleCopyDiagnostics,
   handleSaveAllSettings,
   isSavingAll,
 }) => {
@@ -27,24 +23,6 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({
       }
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Button
-            id="btn-reopen-onboarding"
-            variant="subtle"
-            size="sm"
-            leftIcon={<Sparkles size={13} />}
-            onClick={() => setShowOnboardingModal(true)}
-          >
-            Assistente / Tour
-          </Button>
-          <Button
-            id="btn-copy-diagnostics"
-            variant="subtle"
-            size="sm"
-            leftIcon={<Copy size={13} />}
-            onClick={handleCopyDiagnostics}
-          >
-            Diagnóstico Suporte
-          </Button>
           <Button
             id="btn-save-top-all-settings"
             variant="primary"
