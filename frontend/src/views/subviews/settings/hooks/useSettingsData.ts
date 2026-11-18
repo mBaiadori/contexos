@@ -470,13 +470,19 @@ export function useSettingsData() {
     }
   };
 
-  const persistTaxonomy = useCallback(
-    async (overrides: {
-      categories?: TaxonomyItem[];
-      badges?: TaxonomyItem[];
-      tags?: TaxonomyItem[];
-      statuses?: TaxonomyItem[];
-    }) => {
+  const persistProjectConfig = useCallback(
+    async (
+      overrides: {
+        categories?: TaxonomyItem[];
+        badges?: TaxonomyItem[];
+        tags?: TaxonomyItem[];
+        statuses?: TaxonomyItem[];
+        defaultLanguage?: string;
+        supportedLanguages?: SupportedLanguage[];
+        translationEngine?: string;
+      },
+      successMessage: string,
+    ) => {
       try {
         const res = await saveProjectConfig({
           categories: overrides.categories ?? categories,
@@ -486,19 +492,19 @@ export function useSettingsData() {
           governance_rules: {
             min_approvals_default: minApprovals,
           },
-          default_language: defaultLanguage,
-          supported_languages: supportedLanguages,
-          translation_engine: translationEngine,
+          default_language: overrides.defaultLanguage ?? defaultLanguage,
+          supported_languages: overrides.supportedLanguages ?? supportedLanguages,
+          translation_engine: overrides.translationEngine ?? translationEngine,
         });
         if (!res.success) {
-          setSaveStatus(res.error || "Erro ao salvar taxonomia.");
+          setSaveStatus(res.error || "Erro ao salvar configurações do projeto.");
           return;
         }
-        setSaveStatus("Taxonomia atualizada e salva!");
+        setSaveStatus(successMessage);
         setTimeout(() => setSaveStatus(null), 2500);
       } catch (err) {
-        console.error("[SettingsSubView] Erro ao salvar taxonomia:", err);
-        setSaveStatus("Erro ao salvar taxonomia.");
+        console.error("[SettingsSubView] Erro ao salvar configurações:", err);
+        setSaveStatus("Erro ao salvar configurações do projeto.");
       }
     },
     [
@@ -512,6 +518,18 @@ export function useSettingsData() {
       supportedLanguages,
       translationEngine,
     ],
+  );
+
+  const persistTaxonomy = useCallback(
+    async (overrides: {
+      categories?: TaxonomyItem[];
+      badges?: TaxonomyItem[];
+      tags?: TaxonomyItem[];
+      statuses?: TaxonomyItem[];
+    }) => {
+      await persistProjectConfig(overrides, "Taxonomia atualizada e salva!");
+    },
+    [persistProjectConfig],
   );
 
   // Handlers Categories
@@ -855,28 +873,19 @@ export function useSettingsData() {
     }
   };
 
-  const handleSaveLanguages = async () => {
-    try {
-      await saveProjectConfig({
-        categories,
-        badges,
-        tags,
-        statuses,
-        governance_rules: {
-          min_approvals_default: minApprovals,
-        },
-        default_language: defaultLanguage,
-        supported_languages: supportedLanguages,
-        translation_engine: translationEngine,
-      });
-      setSaveStatus(
-        "Configurações de Idiomas & Governança salvas com sucesso!",
+  const handleSaveLanguages = useCallback(
+    async (overrides?: {
+      defaultLanguage?: string;
+      supportedLanguages?: SupportedLanguage[];
+      translationEngine?: string;
+    }) => {
+      await persistProjectConfig(
+        overrides ?? {},
+        "Configurações de Idiomas & Governança salvas!",
       );
-      setTimeout(() => setSaveStatus(null), 3500);
-    } catch {
-      setSaveStatus("Erro ao salvar configurações de idiomas.");
-    }
-  };
+    },
+    [persistProjectConfig],
+  );
 
   return {
     navigate,

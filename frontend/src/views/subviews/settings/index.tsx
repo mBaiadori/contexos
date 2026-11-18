@@ -192,6 +192,7 @@ export const SettingsSubView: React.FC = () => {
         setIsAddLanguageModalOpen={data.setIsAddLanguageModalOpen}
         languageSearchFilter={data.languageSearchFilter}
         setLanguageSearchFilter={data.setLanguageSearchFilter}
+        handleSaveLanguages={data.handleSaveLanguages}
       />
     </PageContainer>
   );

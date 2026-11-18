@@ -18,6 +18,11 @@ interface LanguageModalsProps {
   setIsAddLanguageModalOpen: (val: boolean) => void;
   languageSearchFilter: string;
   setLanguageSearchFilter: (val: string) => void;
+  handleSaveLanguages: (overrides?: {
+    defaultLanguage?: string;
+    supportedLanguages?: SupportedLanguage[];
+    translationEngine?: string;
+  }) => void;
 }
 
 export const LanguageModals: React.FC<LanguageModalsProps> = ({
@@ -31,6 +36,7 @@ export const LanguageModals: React.FC<LanguageModalsProps> = ({
   setIsAddLanguageModalOpen,
   languageSearchFilter,
   setLanguageSearchFilter,
+  handleSaveLanguages,
 }) => {
   return (
     <>
@@ -68,6 +74,7 @@ export const LanguageModals: React.FC<LanguageModalsProps> = ({
                 const target = languageChangeDialog.targetLang;
                 if (target) {
                   setDefaultLanguage(target);
+                  handleSaveLanguages({ defaultLanguage: target });
                 }
                 setLanguageChangeDialog({ isOpen: false, targetLang: "" });
               }}
@@ -190,8 +197,10 @@ export const LanguageModals: React.FC<LanguageModalsProps> = ({
                 key={lang.code}
                 type="button"
                 onClick={() => {
-                  setSupportedLanguages([...supportedLanguages, lang]);
+                  const updated = [...supportedLanguages, lang];
+                  setSupportedLanguages(updated);
                   setIsAddLanguageModalOpen(false);
+                  handleSaveLanguages({ supportedLanguages: updated });
                 }}
                 style={{
                   display: "flex",

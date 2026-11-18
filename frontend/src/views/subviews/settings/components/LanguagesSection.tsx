@@ -1,6 +1,6 @@
 import React from "react";
-import { Globe, Zap, Sparkles, Save } from "lucide-react";
-import { Card, CardHeader, CardContent, CardFooter, Stack, Divider, Button, Badge } from "../../../../components/ui";
+import { Globe, Zap, Sparkles } from "lucide-react";
+import { Card, CardHeader, CardContent, Stack, Divider, Badge } from "../../../../components/ui";
 import type { SupportedLanguage } from "../../../../types";
 
 interface LanguagesSectionProps {
@@ -14,7 +14,11 @@ interface LanguagesSectionProps {
   setLanguageChangeDialog: (val: { isOpen: boolean; targetLang: string }) => void;
   setIsAddLanguageModalOpen: (val: boolean) => void;
   setLanguageSearchFilter: (val: string) => void;
-  handleSaveLanguages: () => void;
+  handleSaveLanguages: (overrides?: {
+    defaultLanguage?: string;
+    supportedLanguages?: SupportedLanguage[];
+    translationEngine?: string;
+  }) => void;
 }
 
 export const LanguagesSection: React.FC<LanguagesSectionProps> = ({
@@ -96,6 +100,7 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({
                           });
                         } else {
                           setDefaultLanguage(lang.code);
+                          handleSaveLanguages({ defaultLanguage: lang.code });
                         }
                       }}
                       onKeyDown={(e) => {
@@ -108,6 +113,7 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({
                             });
                           } else {
                             setDefaultLanguage(lang.code);
+                            handleSaveLanguages({ defaultLanguage: lang.code });
                           }
                         }
                       }}
@@ -165,13 +171,19 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({
                                 l.code.toLowerCase() !== lang.code.toLowerCase(),
                             );
                             setSupportedLanguages(updated);
+                            let nextDefault = defaultLanguage;
                             if (
                               defaultLanguage.toLowerCase() ===
                                 lang.code.toLowerCase() &&
                               updated.length > 0
                             ) {
-                              setDefaultLanguage(updated[0].code);
+                              nextDefault = updated[0].code;
+                              setDefaultLanguage(nextDefault);
                             }
+                            handleSaveLanguages({
+                              defaultLanguage: nextDefault,
+                              supportedLanguages: updated,
+                            });
                           }}
                           style={{
                             display: "inline-flex",
@@ -253,7 +265,10 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({
                 }}
               >
                 <div
-                  onClick={() => setTranslationEngine("lightweight-local")}
+                  onClick={() => {
+                    setTranslationEngine("lightweight-local");
+                    handleSaveLanguages({ translationEngine: "lightweight-local" });
+                  }}
                   style={{
                     padding: "12px",
                     borderRadius: "8px",
@@ -293,7 +308,10 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({
                 </div>
 
                 <div
-                  onClick={() => setTranslationEngine("ai-contextual")}
+                  onClick={() => {
+                    setTranslationEngine("ai-contextual");
+                    handleSaveLanguages({ translationEngine: "ai-contextual" });
+                  }}
                   style={{
                     padding: "12px",
                     borderRadius: "8px",
@@ -335,17 +353,6 @@ export const LanguagesSection: React.FC<LanguagesSectionProps> = ({
             </Stack>
           </Stack>
         </CardContent>
-
-        <CardFooter>
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Save size={13} />}
-            onClick={handleSaveLanguages}
-          >
-            Salvar Idiomas & Governança
-          </Button>
-        </CardFooter>
       </Card>
     </section>
   );
