@@ -703,7 +703,11 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                   {/* Hitbox precisa clicável no nó e no texto */}
                   {(() => {
                     const hasBadge = br.commitCount > 0;
-                    const badgeW = hasBadge ? (br.commitCount > 9 ? 22 : 18) : 0;
+                    const badgeW = hasBadge
+                      ? br.commitCount > 9
+                        ? 22
+                        : 18
+                      : 0;
                     const textW = Math.min(displayName.length * 7.2, 130);
                     const totalW =
                       (hasBadge ? 8 + badgeW + 6 : 10) +
@@ -852,7 +856,11 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                   {/* Nome da Branch com halo protetor contra a linha que passa por trás */}
                   {(() => {
                     const hasBadge = br.commitCount > 0;
-                    const badgeW = hasBadge ? (br.commitCount > 9 ? 22 : 18) : 0;
+                    const badgeW = hasBadge
+                      ? br.commitCount > 9
+                        ? 22
+                        : 18
+                      : 0;
                     const textX =
                       br.side === 1
                         ? hasBadge

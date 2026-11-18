@@ -195,6 +195,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
               {effectivePermission.roleName}
             </span>
           )}
+          <OrgSelectorDropdown />
         </div>
 
         {/* Centro absoluto da barra de navegação: SOMENTE o nome do repositório e atualização remota */}
@@ -273,8 +274,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
             minHeight: "36px",
           }}
         >
-          <OrgSelectorDropdown />
-
           {filteredPendingChanges.length > 0 && (
             <Button
               id="btn-open-workspace-diff"

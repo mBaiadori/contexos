@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { IconButton } from "./IconButton";
 import { X } from "lucide-react";
 
@@ -53,7 +54,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
       className="ui-modal__backdrop"
       onClick={(e) => {
@@ -89,6 +90,7 @@ export const Modal: React.FC<ModalProps> = ({
         <div className="ui-modal__body">{children}</div>
         {footer && <div className="ui-modal__footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

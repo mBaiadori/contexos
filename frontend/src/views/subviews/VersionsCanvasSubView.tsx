@@ -9,7 +9,6 @@ import {
 } from "../../components/ui";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import type { GitFileStatus, GitGraphCommit } from "../../types";
-import { GitGraphTimeline } from "./versions/components/GitGraphTimeline";
 import { VersionCanvasView } from "./versions/components/VersionCanvasView";
 import { CommitPanel } from "./versions/components/CommitPanel";
 
@@ -33,7 +32,6 @@ export const VersionsCanvasSubView: React.FC<
     refreshPendingChanges,
   } = useWorkspace();
 
-  const [viewMode, setViewMode] = useState<"canvas" | "timeline">("canvas");
   const [search, setSearch] = useState("");
   const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(
     null,
@@ -457,78 +455,6 @@ export const VersionsCanvasSubView: React.FC<
             flexShrink: 0,
           }}
         >
-          {/* Alternador de Visualização: Mapa (Canvas) vs Linha do Tempo (Timeline) */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              background: "var(--bg-main)",
-              padding: "2px",
-              borderRadius: "6px",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setViewMode("canvas")}
-              style={{
-                border: "none",
-                background:
-                  viewMode === "canvas" ? "var(--bg-surface)" : "transparent",
-                color:
-                  viewMode === "canvas"
-                    ? "var(--text-heading)"
-                    : "var(--text-secondary)",
-                padding: "4px 10px",
-                borderRadius: "4px",
-                fontSize: "12px",
-                fontWeight: viewMode === "canvas" ? 600 : 300,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                transition: "all 0.12s ease",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "16px" }}
-              >
-                alt_route
-              </span>
-              <span>Mapa</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("timeline")}
-              style={{
-                border: "none",
-                background:
-                  viewMode === "timeline" ? "var(--bg-surface)" : "transparent",
-                color:
-                  viewMode === "timeline"
-                    ? "var(--text-heading)"
-                    : "var(--text-secondary)",
-                padding: "4px 10px",
-                borderRadius: "4px",
-                fontSize: "12px",
-                fontWeight: viewMode === "timeline" ? 600 : 300,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                transition: "all 0.12s ease",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "16px" }}
-              >
-                timeline
-              </span>
-              <span>Linha</span>
-            </button>
-          </div>
-
           <Input
             type="text"
             placeholder="Buscar por mensagem, autor ou versão..."
@@ -596,74 +522,41 @@ export const VersionsCanvasSubView: React.FC<
           overflow: "hidden",
         }}
       >
-        {/* Grafo: Canvas 2D ou Linha do Tempo */}
+        {/* Grafo: Mapa (Canvas 2D) */}
         <div style={{ flex: 1, height: "100%", overflow: "hidden" }}>
-          {viewMode === "canvas" ? (
-            <VersionCanvasView
-              commits={commits}
-              nodes={versionGraph?.nodes || []}
-              defaultBranch={defaultBranch}
-              currentBranch={currentBranch}
-              isDetached={isDetached}
-              headHash={headHash}
-              selectedCommitHash={selectedCommitHash}
-              selectedBranchName={selectedTargetBranch}
-              onSelectCommit={(commit: GitGraphCommit, branchName?: string) => {
-                setSelectedCommitHash(commit.hash);
-                setSelectedTargetBranch(branchName || null);
-                setIsDrawerOpen(true);
-              }}
-              onSwitchCommit={(
-                commit: GitGraphCommit,
-                targetBranch?: string,
-              ) => {
-                if (targetBranch) {
-                  handleSwitchTarget({ branch: targetBranch });
+          <VersionCanvasView
+            commits={commits}
+            nodes={versionGraph?.nodes || []}
+            defaultBranch={defaultBranch}
+            currentBranch={currentBranch}
+            isDetached={isDetached}
+            headHash={headHash}
+            selectedCommitHash={selectedCommitHash}
+            selectedBranchName={selectedTargetBranch}
+            onSelectCommit={(commit: GitGraphCommit, branchName?: string) => {
+              setSelectedCommitHash(commit.hash);
+              setSelectedTargetBranch(branchName || null);
+              setIsDrawerOpen(true);
+            }}
+            onSwitchCommit={(
+              commit: GitGraphCommit,
+              targetBranch?: string,
+            ) => {
+              if (targetBranch) {
+                handleSwitchTarget({ branch: targetBranch });
+              } else {
+                const b = commit.branches?.find(
+                  (x) => x.name !== currentBranch,
+                );
+                if (b) {
+                  handleSwitchTarget({ branch: b.name });
                 } else {
-                  const b = commit.branches?.find(
-                    (x) => x.name !== currentBranch,
-                  );
-                  if (b) {
-                    handleSwitchTarget({ branch: b.name });
-                  } else {
-                    handleSwitchTarget({ commitHash: commit.hash });
-                  }
+                  handleSwitchTarget({ commitHash: commit.hash });
                 }
-              }}
-              searchQuery={search}
-            />
-          ) : (
-            <GitGraphTimeline
-              commits={commits}
-              selectedHash={selectedCommitHash}
-              onSelectCommit={(commit: GitGraphCommit) => {
-                setSelectedCommitHash(commit.hash);
-                const b =
-                  commit.branches?.find((x) => !x.isDefault) ||
-                  commit.branches?.[0];
-                setSelectedTargetBranch(b?.name || defaultBranch);
-                setIsDrawerOpen(true);
-              }}
-              onSwitchCommit={(
-                commit: GitGraphCommit,
-                targetBranch?: string,
-              ) => {
-                if (targetBranch) {
-                  handleSwitchTarget({ branch: targetBranch });
-                } else {
-                  const b = commit.branches?.find(
-                    (x) => x.name !== currentBranch,
-                  );
-                  if (b) {
-                    handleSwitchTarget({ branch: b.name });
-                  } else {
-                    handleSwitchTarget({ commitHash: commit.hash });
-                  }
-                }
-              }}
-              searchQuery={search}
-            />
-          )}
+              }
+            }}
+            searchQuery={search}
+          />
         </div>
 
         {/* Painel Lateral de Detalhes e Ações do Commit */}
