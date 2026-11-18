@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { API } from "../services/api";
 import { DraftStore } from "../services/draft-store";
-import type { GitCommitInfo, GitStatus, WhatsNewSummary, WorkspaceChange, VersionGraphData, SafeSwitchResult } from "../types";
+import type { GitCommitInfo, GitStatus, WorkspaceChange, VersionGraphData, SafeSwitchResult } from "../types";
 import { useRepoStore } from "./repoStore";
 import { useEditorStore } from "./editorStore";
 import { useGovernanceStore } from "./governanceStore";
@@ -11,8 +11,6 @@ interface GitState {
   gitLog: GitCommitInfo[];
   pendingChanges: WorkspaceChange[];
   systemPendingChanges: WorkspaceChange[];
-  whatsNewSummary: WhatsNewSummary | null;
-  hasUnreadWhatsNew: boolean;
   hasRemoteUpdates: boolean;
   remoteUpdateInfo: { localHash: string; remoteHash?: string; branch?: string } | null;
   versionGraph: VersionGraphData | null;
@@ -22,8 +20,6 @@ interface GitState {
   setGitLog: (log: GitCommitInfo[]) => void;
   setPendingChanges: (changes: WorkspaceChange[]) => void;
   setSystemPendingChanges: (changes: WorkspaceChange[]) => void;
-  setWhatsNewSummary: (summary: WhatsNewSummary | null) => void;
-  setHasUnreadWhatsNew: (hasUnread: boolean) => void;
   setHasRemoteUpdates: (hasUpdates: boolean) => void;
   setRemoteUpdateInfo: (info: { localHash: string; remoteHash?: string; branch?: string } | null) => void;
 
@@ -32,8 +28,6 @@ interface GitState {
   refreshPendingChanges: (targetRepoName?: string) => Promise<void>;
   discardChanges: (path?: string, targetRepo?: string) => Promise<void>;
   checkRemoteUpdates: (targetRepoName?: string) => Promise<boolean>;
-  refreshWhatsNew: () => Promise<void>;
-  markWhatsNewAsSeen: () => void;
   commitGit: (message: string, files?: string[]) => Promise<{ success: boolean; message: string; commitHash?: string }>;
   syncGit: (branch?: string) => Promise<{ success: boolean; message: string }>;
   createOrSwitchBranch: (
@@ -62,8 +56,6 @@ export const useGitStore = create<GitState>((set, get) => ({
   gitLog: [],
   pendingChanges: [],
   systemPendingChanges: [],
-  whatsNewSummary: null,
-  hasUnreadWhatsNew: false,
   hasRemoteUpdates: false,
   remoteUpdateInfo: null,
   versionGraph: null,
@@ -73,8 +65,6 @@ export const useGitStore = create<GitState>((set, get) => ({
   setGitLog: (gitLog) => set({ gitLog }),
   setPendingChanges: (pendingChanges) => set({ pendingChanges }),
   setSystemPendingChanges: (systemPendingChanges) => set({ systemPendingChanges }),
-  setWhatsNewSummary: (whatsNewSummary) => set({ whatsNewSummary }),
-  setHasUnreadWhatsNew: (hasUnreadWhatsNew) => set({ hasUnreadWhatsNew }),
   setHasRemoteUpdates: (hasRemoteUpdates) => set({ hasRemoteUpdates }),
   setRemoteUpdateInfo: (remoteUpdateInfo) => set({ remoteUpdateInfo }),
 
@@ -162,7 +152,6 @@ export const useGitStore = create<GitState>((set, get) => ({
       get().refreshPendingChanges(repoName),
       get().refreshGitStatus(repoName),
       useRepoStore.getState().loadTree(repoName),
-      get().refreshWhatsNew(),
     ]);
 
     const activeClean = activeFile ? activeFile.replace(/^\/+/, "") : null;
@@ -207,43 +196,6 @@ export const useGitStore = create<GitState>((set, get) => ({
     return false;
   },
 
-  refreshWhatsNew: async () => {
-    const repoName = useRepoStore.getState().activeRepo?.name || "default";
-    const lastSeenKey = `spec_whats_new_seen_${repoName}`;
-    const lastSeenHash = localStorage.getItem(lastSeenKey) || undefined;
-
-    try {
-      const res = await API.getWhatsNew(lastSeenHash);
-      if (res.ok && res.data) {
-        const filteredFiles = (res.data.files || []).filter((f) => f?.path && !isPathHidden(f.path));
-        const filteredSummary: WhatsNewSummary = {
-          ...res.data,
-          files: filteredFiles,
-        };
-        const hasNew = Boolean(
-          res.data.hasNewUpdates && res.data.latestHash && res.data.latestHash !== lastSeenHash,
-        );
-        set({
-          whatsNewSummary: filteredSummary,
-          hasUnreadWhatsNew: hasNew,
-        });
-      }
-    } catch (e) {
-      console.warn("[gitStore] Erro ao carregar novidades:", e);
-    }
-  },
-
-  markWhatsNewAsSeen: () => {
-    const repoName = useRepoStore.getState().activeRepo?.name || "default";
-    const lastSeenKey = `spec_whats_new_seen_${repoName}`;
-    const summary = get().whatsNewSummary;
-    if (summary?.latestHash) {
-      localStorage.setItem(lastSeenKey, summary.latestHash);
-    }
-    set({ hasUnreadWhatsNew: false });
-    get().refreshWhatsNew();
-  },
-
   commitGit: async (message: string, files?: string[]) => {
     const repo = useRepoStore.getState().activeRepo;
     const res = await API.commitGitChanges({ message, files, repo: repo?.name });
@@ -251,7 +203,6 @@ export const useGitStore = create<GitState>((set, get) => ({
       await get().refreshPendingChanges();
       await get().refreshGitStatus();
       await get().refreshGitLog(15);
-      await get().refreshWhatsNew();
     }
     return res.data;
   },
@@ -264,7 +215,6 @@ export const useGitStore = create<GitState>((set, get) => ({
       await get().refreshPendingChanges();
       await get().refreshGitStatus();
       await get().refreshGitLog(15);
-      await get().refreshWhatsNew();
       if (repo) await useRepoStore.getState().loadTree(repo.name);
     }
     return res.data;
@@ -285,7 +235,6 @@ export const useGitStore = create<GitState>((set, get) => ({
     if (res.ok) {
       await get().refreshGitStatus();
       await get().refreshGitLog(15);
-      await get().refreshWhatsNew();
       await get().refreshVersionGraph();
       if (repo) await useRepoStore.getState().loadTree(repo.name);
     }
@@ -324,7 +273,6 @@ export const useGitStore = create<GitState>((set, get) => ({
         await get().refreshGitStatus();
         await get().refreshPendingChanges();
         await get().refreshGitLog(15);
-        await get().refreshWhatsNew();
         await get().refreshVersionGraph();
         if (repo) await useRepoStore.getState().loadTree(repo.name);
       }
@@ -373,7 +321,6 @@ export const useGitStore = create<GitState>((set, get) => ({
     if (res.ok && res.data?.success) {
       await get().refreshGitStatus();
       await get().refreshGitLog(15);
-      await get().refreshWhatsNew();
       await get().refreshVersionGraph();
       if (repo) await useRepoStore.getState().loadTree(repo.name);
     }

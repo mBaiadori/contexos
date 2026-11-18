@@ -10,7 +10,6 @@ import type {
   Repo,
   RepoDiagnosis,
   TreeNode,
-  WhatsNewSummary,
   WorkspaceChange,
   PendingInvitationsResult,
   VersionGraphData,
@@ -50,13 +49,9 @@ export interface WorkspaceContextType {
   hasUnsavedChanges: boolean;
   gitStatus: GitStatus | null;
   gitLog: GitCommitInfo[];
-  whatsNewSummary: WhatsNewSummary | null;
-  hasUnreadWhatsNew: boolean;
   hasRemoteUpdates: boolean;
   remoteUpdateInfo: { localHash: string; remoteHash?: string; branch?: string } | null;
   checkRemoteUpdates: (targetRepoName?: string) => Promise<boolean>;
-  refreshWhatsNew: () => Promise<void>;
-  markWhatsNewAsSeen: () => void;
   loadRepos: (targetOrg?: string) => Promise<void>;
   selectRepo: (
     repo: Repo,

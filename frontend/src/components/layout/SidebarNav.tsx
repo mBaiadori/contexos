@@ -31,13 +31,11 @@ export const MODULES_SIDEBAR_COLLAPSED_KEY = "spec_modules_sidebar_collapsed";
 interface SidebarNavProps {
   activeView: SubViewType;
   onSelectView: (view: SubViewType) => void;
-  hasUnreadWhatsNew?: boolean;
 }
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({
   activeView,
   onSelectView,
-  hasUnreadWhatsNew = false,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
@@ -76,7 +74,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       label: "Edições",
       icon: <History size={19} />,
       title: "Edições",
-      hasBadge: hasUnreadWhatsNew,
     },
     {
       id: "templates" as SubViewType,

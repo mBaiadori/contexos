@@ -2,7 +2,6 @@ import React from "react";
 import { PageContainer, PageBody, AlertBanner } from "../../../components/ui";
 import { useVersionsData } from "./hooks/useVersionsData";
 import { VersionsHeader } from "./components/VersionsHeader";
-import { WhatsNewTab } from "./components/WhatsNewTab";
 import { DraftsTab } from "./components/DraftsTab";
 import { ProposalModal } from "./components/ProposalModal";
 import type { VersionsSubViewProps } from "./types";
@@ -24,15 +23,10 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
         openProposalModalWithRepo={versions.openProposalModalWithRepo}
         refreshGitStatus={versions.refreshGitStatus}
         refreshPendingChanges={versions.refreshPendingChanges}
-        refreshWhatsNew={versions.refreshWhatsNew}
         isLoadingChanges={versions.isLoadingChanges}
         handleSync={versions.handleSync}
         isSyncing={versions.isSyncing}
         providerLabel={versions.providerLabel}
-        activeTab={versions.activeTab}
-        handleTabChange={versions.handleTabChange}
-        whatsNewFilesCount={versions.whatsNewFiles.length}
-        changedFilesCount={versions.changedFiles.length}
       />
 
       {/* Main Content Area */}
@@ -56,39 +50,8 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
             />
           )}
 
-          {/* TAB 1: NOVIDADES DA EQUIPE */}
-          {versions.activeTab === "whats-new" && (
-            <WhatsNewTab
-              whatsNewSummary={versions.whatsNewSummary}
-              handleSync={versions.handleSync}
-              isSyncing={versions.isSyncing}
-              handleMarkAsSeen={versions.handleMarkAsSeen}
-              whatsNewFilter={versions.whatsNewFilter}
-              setWhatsNewFilter={versions.setWhatsNewFilter}
-              whatsNewFiles={versions.whatsNewFiles}
-              newFilesCount={versions.newFilesCount}
-              modFilesCount={versions.modFilesCount}
-              whatsNewProposals={versions.whatsNewProposals}
-              isWhatsNewProposalsExpanded={versions.isWhatsNewProposalsExpanded}
-              setIsWhatsNewProposalsExpanded={versions.setIsWhatsNewProposalsExpanded}
-              selectedRepoFilter={versions.selectedRepoFilter}
-              activeRepoName={versions.activeRepo?.name}
-              filteredWhatsNewFiles={versions.filteredWhatsNewFiles}
-              expandedWhatsNewFiles={versions.expandedWhatsNewFiles}
-              toggleAllWhatsNewFiles={versions.toggleAllWhatsNewFiles}
-              toggleWhatsNewFile={versions.toggleWhatsNewFile}
-              whatsNewDiffs={versions.whatsNewDiffs}
-              loadingWhatsNewDiffs={versions.loadingWhatsNewDiffs}
-              handleOpenFileClick={versions.handleOpenFileClick}
-              whatsNewCommits={versions.whatsNewCommits}
-              isWhatsNewCommitsExpanded={versions.isWhatsNewCommitsExpanded}
-              setIsWhatsNewCommitsExpanded={versions.setIsWhatsNewCommitsExpanded}
-            />
-          )}
-
-          {/* TAB 2: MINHAS EDIÇÕES & RASCUNHOS */}
-          {versions.activeTab === "drafts" && (
-            <DraftsTab
+          {/* MINHAS EDIÇÕES & RASCUNHOS */}
+          <DraftsTab
               allDraftFiles={versions.allDraftFiles}
               selectedRepoFilter={versions.selectedRepoFilter}
               handleDiscardAll={versions.handleDiscardAll}
@@ -109,7 +72,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               setPrDescription={versions.setPrDescription}
               isCreatingPR={versions.isCreatingPR}
             />
-          )}
         </div>
       </PageBody>
 

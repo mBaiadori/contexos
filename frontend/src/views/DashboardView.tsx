@@ -87,7 +87,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     activeRepo,
     selectRepoByName,
     loadFile,
-    hasUnreadWhatsNew,
     activeOrg,
     orgs,
     selectOrg,
@@ -312,20 +311,19 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     if (view === "editor" && activeFile) {
       navigate(`${base}?file=${encodeURIComponent(activeFile)}`);
     } else if (view === "edits") {
-      const defaultTab = hasUnreadWhatsNew ? "whats-new" : "drafts";
-      navigate(`${buildRepoBaseUrl("edits")}?tab=${defaultTab}`);
+      navigate(`${buildRepoBaseUrl("edits")}?tab=drafts`);
     } else {
       navigate(base);
     }
   };
 
   const handleNavigateToEdits = useCallback(
-    (tab?: "drafts" | "whats-new") => {
+    (tab?: "drafts") => {
       const base = buildRepoBaseUrl("edits");
-      const targetTab = tab || (hasUnreadWhatsNew ? "whats-new" : "drafts");
+      const targetTab = tab || "drafts";
       navigate(`${base}?tab=${targetTab}`);
     },
-    [buildRepoBaseUrl, hasUnreadWhatsNew, navigate],
+    [buildRepoBaseUrl, navigate],
   );
 
   const handleOpenDiffModal = useCallback(() => {
@@ -376,7 +374,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
         <SidebarNav
           activeView={activeSubView}
           onSelectView={handleSelectView}
-          hasUnreadWhatsNew={hasUnreadWhatsNew}
         />
 
         {/* Main Views Container */}

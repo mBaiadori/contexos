@@ -1,13 +1,7 @@
 import React from "react";
-import {
-  Sparkles,
-  FileEdit,
-  RefreshCw,
-  CloudUpload,
-} from "lucide-react";
-import { PageHeader, Row, Button, Tabs } from "../../../../components/ui";
+import { RefreshCw, CloudUpload } from "lucide-react";
+import { PageHeader, Row, Button } from "../../../../components/ui";
 import { RepoSelectorDropdown } from "../../../../components/layout/RepoSelectorDropdown";
-import type { TabType } from "../types";
 
 interface VersionsHeaderProps {
   selectedRepoFilter: string;
@@ -17,15 +11,10 @@ interface VersionsHeaderProps {
   openProposalModalWithRepo: () => void;
   refreshGitStatus?: (repo?: string) => Promise<any> | void;
   refreshPendingChanges?: (repo?: string) => Promise<any> | void;
-  refreshWhatsNew?: () => Promise<any> | void;
   isLoadingChanges: boolean;
   handleSync: () => void;
   isSyncing: boolean;
   providerLabel: string;
-  activeTab: TabType;
-  handleTabChange: (newTab: TabType) => void;
-  whatsNewFilesCount: number;
-  changedFilesCount: number;
 }
 
 export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
@@ -36,15 +25,10 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
   openProposalModalWithRepo,
   refreshGitStatus,
   refreshPendingChanges,
-  refreshWhatsNew,
   isLoadingChanges,
   handleSync,
   isSyncing,
   providerLabel,
-  activeTab,
-  handleTabChange,
-  whatsNewFilesCount,
-  changedFilesCount,
 }) => {
   return (
     <PageHeader
@@ -116,7 +100,6 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
             onClick={() => {
               if (refreshGitStatus) refreshGitStatus();
               if (refreshPendingChanges) refreshPendingChanges();
-              if (refreshWhatsNew) refreshWhatsNew();
               loadAllEdits();
             }}
             title="Atualizar dados e status"
@@ -139,28 +122,6 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
           </Button>
         </Row>
       }
-    >
-      <Tabs<TabType>
-        activeTab={activeTab}
-        onChange={handleTabChange}
-        variant="underline"
-        tabs={[
-          {
-            id: "whats-new",
-            label: "Novidades da Equipe",
-            icon: <Sparkles size={16} />,
-            count: whatsNewFilesCount > 0 ? whatsNewFilesCount : undefined,
-            badgeVariant: "success",
-          },
-          {
-            id: "drafts",
-            label: "Minhas Edições",
-            icon: <FileEdit size={16} />,
-            count: changedFilesCount > 0 ? changedFilesCount : undefined,
-            badgeVariant: "warning",
-          },
-        ]}
-      />
-    </PageHeader>
+    />
   );
 };

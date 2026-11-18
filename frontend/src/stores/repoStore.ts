@@ -471,7 +471,6 @@ export const useRepoStore = create<RepoState>((set, get) => ({
           useGovernanceStore.getState().loadProjectConfig(repo.name),
           useGitStore.getState().refreshPendingChanges(repo.name),
           useGitStore.getState().refreshGitLog(15, repo.name),
-          useGitStore.getState().refreshWhatsNew(),
           useGitStore.getState().checkRemoteUpdates(repo.name),
           useGovernanceStore.getState().loadDictionaryTerms(),
         ]).catch(() => {});

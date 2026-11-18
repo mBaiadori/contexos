@@ -6,7 +6,6 @@ import { isPathHidden } from "../../utils/hidden-files";
 import { GitBranchesTab } from "./git/GitBranchesTab";
 import { GitHistoryTab } from "./git/GitHistoryTab";
 import { GitStatusTab } from "./git/GitStatusTab";
-import { GitWhatsNewTab, type WhatsNewFilterType } from "./git/GitWhatsNewTab";
 
 interface GitModalProps {
   isOpen: boolean;
@@ -14,7 +13,7 @@ interface GitModalProps {
   onOpenDiffModal?: () => void;
 }
 
-type TabType = "status" | "whats-new" | "history" | "branches";
+type TabType = "status" | "history" | "branches";
 
 export const GitModal: React.FC<GitModalProps> = ({
   isOpen,
@@ -26,13 +25,9 @@ export const GitModal: React.FC<GitModalProps> = ({
     gitStatus,
     gitLog = [],
     pendingChanges = [],
-    whatsNewSummary,
-    hasUnreadWhatsNew,
     refreshGitStatus,
     refreshGitLog,
     refreshPendingChanges,
-    refreshWhatsNew,
-    markWhatsNewAsSeen,
     commitGit,
     syncGit,
     createOrSwitchBranch,
@@ -40,8 +35,6 @@ export const GitModal: React.FC<GitModalProps> = ({
   } = useWorkspace();
 
   const [activeTab, setActiveTab] = useState<TabType>("status");
-  const [whatsNewFilter, setWhatsNewFilter] =
-    useState<WhatsNewFilterType>("all");
   const [commitMsg, setCommitMsg] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -72,20 +65,13 @@ export const GitModal: React.FC<GitModalProps> = ({
       if (refreshGitStatus) refreshGitStatus();
       if (refreshGitLog) refreshGitLog(25);
       if (refreshPendingChanges) refreshPendingChanges();
-      if (refreshWhatsNew) refreshWhatsNew();
       setFeedback(null);
-      if (hasUnreadWhatsNew && isClean) {
-        setActiveTab("whats-new");
-      }
     }
   }, [
     isOpen,
-    hasUnreadWhatsNew,
-    isClean,
     refreshGitStatus,
     refreshGitLog,
     refreshPendingChanges,
-    refreshWhatsNew,
   ]);
 
   // Fetch diff on demand if not available in pendingChanges
@@ -146,14 +132,6 @@ export const GitModal: React.FC<GitModalProps> = ({
     }
   };
 
-  const handleMarkAsSeen = () => {
-    if (markWhatsNewAsSeen) markWhatsNewAsSeen();
-    setFeedback({
-      type: "success",
-      message: "Todas as novidades foram marcadas como visualizadas!",
-    });
-  };
-
   const handleCommit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commitMsg.trim()) return;
@@ -196,10 +174,6 @@ export const GitModal: React.FC<GitModalProps> = ({
           message: `Sincronização com  concluída: ${res.message || "Atualizado"}`,
         });
         if (refreshPendingChanges) await refreshPendingChanges();
-        if (refreshWhatsNew) await refreshWhatsNew();
-        if (hasUnreadWhatsNew) {
-          setActiveTab("whats-new");
-        }
       } else {
         setFeedback({
           type: "error",
@@ -399,27 +373,6 @@ export const GitModal: React.FC<GitModalProps> = ({
     changedFiles.length > 0 &&
     changedFiles.every((f) => expandedFiles[f?.path]);
 
-  // Whats New computed list with safety fallbacks
-  const whatsNewFiles = useMemo(() => {
-    return (whatsNewSummary?.files || []).filter(
-      (f) => f?.path && !isPathHidden(f.path),
-    );
-  }, [whatsNewSummary?.files]);
-  const whatsNewProposals = whatsNewSummary?.proposals || [];
-  const whatsNewCommits = whatsNewSummary?.commits || [];
-
-  const newFilesCount = whatsNewFiles.filter((f) => f?.status === "A").length;
-  const modFilesCount = whatsNewFiles.filter((f) => f?.status === "M").length;
-
-  const filteredWhatsNewFiles = useMemo(() => {
-    if (whatsNewFilter === "new")
-      return whatsNewFiles.filter((f) => f?.status === "A");
-    if (whatsNewFilter === "modified")
-      return whatsNewFiles.filter((f) => f?.status === "M");
-    if (whatsNewFilter === "proposals") return [];
-    return whatsNewFiles;
-  }, [whatsNewFiles, whatsNewFilter]);
-
   if (!isOpen) return null;
 
   return (
@@ -573,76 +526,6 @@ export const GitModal: React.FC<GitModalProps> = ({
             )}
           </button>
 
-          {/* Tab 2: Novidades d (What's New) */}
-          <button
-            type="button"
-            className={`btn-tab ${activeTab === "whats-new" ? "active" : ""}`}
-            onClick={() => setActiveTab("whats-new")}
-            style={{
-              height: "42px",
-              padding: "0 16px",
-              borderRadius: "8px",
-              border:
-                activeTab === "whats-new"
-                  ? "1px solid #22c55e"
-                  : "1px solid transparent",
-              background:
-                activeTab === "whats-new"
-                  ? "rgba(34, 197, 94, 0.12)"
-                  : "transparent",
-              color:
-                activeTab === "whats-new" ? "#16a34a" : "var(--text-muted)",
-              fontWeight: 600,
-              fontSize: "13px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              position: "relative",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "18px", color: "#22c55e" }}
-            >
-              auto_awesome
-            </span>
-            <span>Novidades d</span>
-            {whatsNewFiles.length > 0 && (
-              <span
-                style={{
-                  padding: "2px 7px",
-                  borderRadius: "10px",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  background:
-                    activeTab === "whats-new"
-                      ? "#16a34a"
-                      : "rgba(34, 197, 94, 0.2)",
-                  color: activeTab === "whats-new" ? "#ffffff" : "#16a34a",
-                }}
-              >
-                {whatsNewFiles.length}
-              </span>
-            )}
-            {hasUnreadWhatsNew && (
-              <span
-                style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  backgroundColor: "#22c55e",
-                  boxShadow: "0 0 6px #22c55e",
-                  position: "absolute",
-                  top: "6px",
-                  right: "6px",
-                }}
-                title="Novidades não visualizadas!"
-              />
-            )}
-          </button>
-
           {/* Tab 3: Histórico de Publicações */}
           <button
             type="button"
@@ -767,7 +650,6 @@ export const GitModal: React.FC<GitModalProps> = ({
                 if (refreshGitStatus) refreshGitStatus();
                 if (refreshGitLog) refreshGitLog();
                 if (refreshPendingChanges) refreshPendingChanges();
-                if (refreshWhatsNew) refreshWhatsNew();
               }}
               onSync={handleSync}
               isSyncing={isSyncing}
@@ -783,29 +665,6 @@ export const GitModal: React.FC<GitModalProps> = ({
               onCommitMsgChange={setCommitMsg}
               isCommitting={isCommitting}
               onCommit={handleCommit}
-            />
-          )}
-
-          {/* TAB 2: NOVIDADES D (WHAT'S NEW) */}
-          {activeTab === "whats-new" && (
-            <GitWhatsNewTab
-              whatsNewSummary={whatsNewSummary}
-              whatsNewFilter={whatsNewFilter}
-              onWhatsNewFilterChange={setWhatsNewFilter}
-              whatsNewFiles={whatsNewFiles}
-              whatsNewProposals={whatsNewProposals}
-              whatsNewCommits={whatsNewCommits}
-              newFilesCount={newFilesCount}
-              modFilesCount={modFilesCount}
-              filteredWhatsNewFiles={filteredWhatsNewFiles}
-              isSyncing={isSyncing}
-              onSync={handleSync}
-              onMarkAsSeen={handleMarkAsSeen}
-              expandedFiles={expandedFiles}
-              getFileDiffInfo={getFileDiffInfo}
-              onToggleFileExpand={toggleFileExpand}
-              onOpenFile={handleOpenFile}
-              renderDiffViewer={renderDiffViewer}
             />
           )}
 

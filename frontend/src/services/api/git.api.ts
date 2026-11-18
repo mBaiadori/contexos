@@ -1,4 +1,4 @@
-import type { GitStatus, GitCommitInfo, WhatsNewSummary, VersionGraphData, SafeSwitchResult, StashDetails, DiscardedDraftItem } from '../../types';
+import type { GitStatus, GitCommitInfo, VersionGraphData, SafeSwitchResult, StashDetails, DiscardedDraftItem } from '../../types';
 import type { ApiResponse } from './client';
 
 export const gitApi = {
@@ -146,24 +146,6 @@ export const gitApi = {
 
   async getGitDiagnostic(): Promise<ApiResponse<{ version: string; installed: boolean }>> {
     const res = await fetch('/api/git/diagnostic');
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async getWhatsNew(lastSeenHash?: string, repo?: string): Promise<ApiResponse<WhatsNewSummary>> {
-    const params = new URLSearchParams();
-    if (lastSeenHash) params.set('lastSeenHash', lastSeenHash);
-    if (repo) params.set('repo', repo);
-    const query = params.toString();
-    const url = query ? `/api/git/whats-new?${query}` : '/api/git/whats-new';
-    const res = await fetch(url);
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async getWhatsNewFileDiff(path: string, lastSeenHash?: string, repo?: string): Promise<ApiResponse<{ diff: string }>> {
-    const query = new URLSearchParams({ path });
-    if (lastSeenHash) query.set('lastSeenHash', lastSeenHash);
-    if (repo) query.set('repo', repo);
-    const res = await fetch(`/api/git/whats-new-diff?${query.toString()}`);
     return { ok: res.ok, data: await res.json() };
   },
 

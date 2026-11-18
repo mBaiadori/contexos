@@ -18,8 +18,6 @@ import {
   getGitLog,
   getGitStatus,
   GitFileStatus,
-  getWhatsNewFileDiff,
-  getWhatsNewSummary,
   isGitRepo,
   mergeGitBranch,
   pullGitRepo,
@@ -352,35 +350,6 @@ export class GitService {
       return { lines: [] };
     }
     return await getFileBlameDetails(repoDir, filePath);
-  }
-
-  async getWhatsNew(
-    lastSeenHash?: string,
-    repoNameParam?: string,
-    ownerParam?: string,
-  ) {
-    const cfg = loadConfig();
-    const repoName = repoNameParam || cfg.active_repo?.name || "local";
-    const repoDir = this.getRepoDir(repoName, ownerParam);
-    if (!(await isGitRepo(repoDir))) {
-      return { hasNewUpdates: false, files: [] };
-    }
-    return await getWhatsNewSummary(repoDir, lastSeenHash);
-  }
-
-  async getWhatsNewDiff(
-    filePath: string,
-    lastSeenHash?: string,
-    repoNameParam?: string,
-    ownerParam?: string,
-  ) {
-    const cfg = loadConfig();
-    const repoName = repoNameParam || cfg.active_repo?.name || "local";
-    const repoDir = this.getRepoDir(repoName, ownerParam);
-    if (!(await isGitRepo(repoDir))) {
-      return { diff: "" };
-    }
-    return await getWhatsNewFileDiff(repoDir, filePath, lastSeenHash);
   }
 
   async mergeBranch(payload: {

@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../../../context/WorkspaceContext";
 import { useAuth } from "../../../../context/AuthContext";
 import { API } from "../../../../services/api";
-import type { DraftItem, TabType, WhatsNewFilterType } from "../types";
+import type { DraftItem } from "../types";
 
 export function useVersionsData(onOpenFile?: (path: string) => void) {
   const { provider } = useAuth();
@@ -13,52 +12,12 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     repos,
     gitStatus,
     pendingChanges = [],
-    whatsNewSummary,
-    hasUnreadWhatsNew,
     refreshGitStatus,
     refreshPendingChanges,
-    refreshWhatsNew,
-    markWhatsNewAsSeen,
     syncGit,
     discardChanges,
     loadFile,
   } = useWorkspace();
-
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get("tab") as TabType | null;
-
-  const activeTab: TabType = useMemo(() => {
-    if (tabParam && ["whats-new", "drafts"].includes(tabParam)) {
-      return tabParam;
-    }
-    return hasUnreadWhatsNew ? "whats-new" : "drafts";
-  }, [tabParam, hasUnreadWhatsNew]);
-
-  // Synchronize URL search params
-  useEffect(() => {
-    if (!tabParam || !["whats-new", "drafts"].includes(tabParam)) {
-      const defaultTab = hasUnreadWhatsNew ? "whats-new" : "drafts";
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.set("tab", defaultTab);
-          return next;
-        },
-        { replace: true },
-      );
-    }
-  }, [tabParam, hasUnreadWhatsNew, setSearchParams]);
-
-  const handleTabChange = (newTab: TabType) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("tab", newTab);
-        return next;
-      },
-      { replace: true },
-    );
-  };
 
   // Repository selection state
   const [selectedRepoFilter, setSelectedRepoFilter] = useState<string>(
@@ -80,7 +39,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     activeRepo?.name || (repos && repos[0]?.name) || "local"
   );
 
-  const [whatsNewFilter, setWhatsNewFilter] = useState<WhatsNewFilterType>("all");
   const [prTitle, setPrTitle] = useState("");
   const [prDescription, setPrDescription] = useState("");
   const [isCreatingPR, setIsCreatingPR] = useState(false);
@@ -93,17 +51,9 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   } | null>(null);
 
   // File diff state
-  const [expandedWhatsNewFiles, setExpandedWhatsNewFiles] = useState<Record<string, boolean>>({});
-  const [whatsNewDiffs, setWhatsNewDiffs] = useState<Record<string, string>>({});
-  const [loadingWhatsNewDiffs, setLoadingWhatsNewDiffs] = useState<Record<string, boolean>>({});
-
   const [expandedDraftFiles, setExpandedDraftFiles] = useState<Record<string, boolean>>({});
   const [draftDiffs, setDraftDiffs] = useState<Record<string, string>>({});
   const [loadingDraftDiffs, setLoadingDraftDiffs] = useState<Record<string, boolean>>({});
-
-  // Collapsible cards state
-  const [isWhatsNewProposalsExpanded, setIsWhatsNewProposalsExpanded] = useState(false);
-  const [isWhatsNewCommitsExpanded, setIsWhatsNewCommitsExpanded] = useState(false);
 
   // Load changes for all repos or active repos
   const loadAllEdits = useCallback(async (targetRepo?: string) => {
@@ -167,9 +117,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   // Reset local state when active repo changes
   useEffect(() => {
     setExpandedDraftFiles({});
-    setExpandedWhatsNewFiles({});
     setDraftDiffs({});
-    setWhatsNewDiffs({});
     setPrTitle("");
     setPrDescription("");
     setCreatedPRUrl(null);
@@ -183,32 +131,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   useEffect(() => {
     if (refreshGitStatus) refreshGitStatus();
     if (refreshPendingChanges) refreshPendingChanges();
-    if (refreshWhatsNew) refreshWhatsNew();
-  }, [refreshGitStatus, refreshPendingChanges, refreshWhatsNew]);
-
-  const fetchWhatsNewDiff = useCallback(
-    async (filePath: string) => {
-      if (!filePath || whatsNewDiffs[filePath]) return;
-      setLoadingWhatsNewDiffs((prev) => ({ ...prev, [filePath]: true }));
-      try {
-        const res = await API.getWhatsNewFileDiff(
-          filePath,
-          whatsNewSummary?.lastSeenHash,
-        );
-        if (res?.ok && res?.data?.diff) {
-          setWhatsNewDiffs((prev) => ({ ...prev, [filePath]: res.data.diff }));
-        }
-      } catch (err) {
-        console.error(
-          `[VersionsSubView] Erro ao buscar comparativo de novidades de ${filePath}:`,
-          err,
-        );
-      } finally {
-        setLoadingWhatsNewDiffs((prev) => ({ ...prev, [filePath]: false }));
-      }
-    },
-    [whatsNewDiffs, whatsNewSummary?.lastSeenHash],
-  );
+  }, [refreshGitStatus, refreshPendingChanges]);
 
   const fetchDraftDiff = useCallback(
     async (filePath: string, targetRepo?: string) => {
@@ -232,17 +155,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     [draftDiffs],
   );
 
-  const toggleWhatsNewFile = (filePath: string) => {
-    const isNowExpanded = !expandedWhatsNewFiles[filePath];
-    setExpandedWhatsNewFiles((prev) => ({
-      ...prev,
-      [filePath]: isNowExpanded,
-    }));
-    if (isNowExpanded) {
-      fetchWhatsNewDiff(filePath);
-    }
-  };
-
   const toggleDraftFile = (filePath: string, repoName?: string) => {
     const key = `${repoName || "local"}:${filePath}`;
     const isNowExpanded = !expandedDraftFiles[key];
@@ -250,19 +162,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     if (isNowExpanded) {
       fetchDraftDiff(filePath, repoName);
     }
-  };
-
-  const toggleAllWhatsNewFiles = (filteredFiles: Array<{ path: string }>) => {
-    const areAllExpanded =
-      filteredFiles.length > 0 &&
-      filteredFiles.every((f) => !!expandedWhatsNewFiles[f.path]);
-    const nextState = !areAllExpanded;
-    const nextMap: Record<string, boolean> = {};
-    filteredFiles.forEach((f) => {
-      nextMap[f.path] = nextState;
-      if (nextState) fetchWhatsNewDiff(f.path);
-    });
-    setExpandedWhatsNewFiles(nextMap);
   };
 
   const toggleAllDraftFiles = () => {
@@ -287,7 +186,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
         await syncGit();
         if (refreshGitStatus) await refreshGitStatus();
         if (refreshPendingChanges) await refreshPendingChanges();
-        if (refreshWhatsNew) await refreshWhatsNew();
         await loadAllEdits();
         setFeedback({
           type: "success",
@@ -301,16 +199,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
       });
     } finally {
       setIsSyncing(false);
-    }
-  };
-
-  const handleMarkAsSeen = async () => {
-    if (markWhatsNewAsSeen) {
-      await markWhatsNewAsSeen();
-      setFeedback({
-        type: "success",
-        message: "Todas as novidades foram marcadas como lidas.",
-      });
     }
   };
 
@@ -490,22 +378,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     };
   };
 
-  const whatsNewFiles = useMemo(() => {
-    return (whatsNewSummary?.files || []).filter((f) => f?.path && !isPathHidden(f.path));
-  }, [whatsNewSummary?.files]);
-  const whatsNewProposals = whatsNewSummary?.proposals || [];
-  const whatsNewCommits = whatsNewSummary?.commits || [];
-
-  const newFilesCount = whatsNewFiles.filter((f) => f?.status === "A").length;
-  const modFilesCount = whatsNewFiles.filter((f) => f?.status === "M").length;
-
-  const filteredWhatsNewFiles = useMemo(() => {
-    if (whatsNewFilter === "new") return whatsNewFiles.filter((f) => f?.status === "A");
-    if (whatsNewFilter === "modified") return whatsNewFiles.filter((f) => f?.status === "M");
-    if (whatsNewFilter === "proposals") return [];
-    return whatsNewFiles;
-  }, [whatsNewFiles, whatsNewFilter]);
-
   // Modal target files
   const modalDraftFiles = useMemo(() => {
     return allDraftFiles.filter((f) => f.repoName === modalTargetRepo);
@@ -519,8 +391,6 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
 
   return {
     providerLabel,
-    activeTab,
-    handleTabChange,
     selectedRepoFilter,
     setSelectedRepoFilter,
     repoEditsCounts,
@@ -536,28 +406,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     loadAllEdits,
     refreshGitStatus,
     refreshPendingChanges,
-    refreshWhatsNew,
     openProposalModalWithRepo,
-    // WhatsNew
-    whatsNewFilter,
-    setWhatsNewFilter,
-    whatsNewFiles,
-    filteredWhatsNewFiles,
-    newFilesCount,
-    modFilesCount,
-    whatsNewProposals,
-    whatsNewCommits,
-    whatsNewSummary,
-    isWhatsNewProposalsExpanded,
-    setIsWhatsNewProposalsExpanded,
-    isWhatsNewCommitsExpanded,
-    setIsWhatsNewCommitsExpanded,
-    expandedWhatsNewFiles,
-    whatsNewDiffs,
-    loadingWhatsNewDiffs,
-    toggleWhatsNewFile,
-    toggleAllWhatsNewFiles,
-    handleMarkAsSeen,
     handleOpenFileClick,
     // Drafts
     expandedDraftFiles,

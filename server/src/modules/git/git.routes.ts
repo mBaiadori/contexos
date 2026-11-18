@@ -351,44 +351,7 @@ export async function gitRoutes(app: FastifyInstance) {
     }
   });
 
-  // 11. Get Whats New Summary
-  app.get("/api/git/whats-new", async (req, reply) => {
-    try {
-      const { lastSeenHash, repo } = req.query as { lastSeenHash?: string; repo?: string };
-      const data = await gitService.getWhatsNew(lastSeenHash, repo);
-      return data;
-    } catch (err: any) {
-      return reply
-        .status(500)
-        .send({ error: err.message || "Erro ao obter novidades d" });
-    }
-  });
-
-  // 12. Get Whats New Single File Diff
-  app.get("/api/git/whats-new-diff", async (req, reply) => {
-    try {
-      const { path: filePath, lastSeenHash, repo } = req.query as {
-        path: string;
-        lastSeenHash?: string;
-        repo?: string;
-      };
-      if (!filePath) {
-        return reply
-          .status(400)
-          .send({ error: "Parâmetro path é obrigatório" });
-      }
-      const data = await gitService.getWhatsNewDiff(filePath, lastSeenHash, repo);
-      return data;
-    } catch (err: any) {
-      return reply
-        .status(500)
-        .send({
-          error: err.message || "Erro ao obter comparativo do documento",
-        });
-    }
-  });
-
-  // 13. Get Git Diagnostic / Version
+  // 11. Get Git Diagnostic / Version
   app.get("/api/git/diagnostic", async (req, reply) => {
     try {
       const res = await gitService.getGitVersion();

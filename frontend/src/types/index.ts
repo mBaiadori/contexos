@@ -724,45 +724,6 @@ export interface ConflictingProposal {
   matchingFiles: string[];
 }
 
-export interface WhatsNewItem {
-  hash: string;
-  shortHash: string;
-  author: string;
-  date: string;
-  message: string;
-}
-
-export interface WhatsNewFile {
-  path: string;
-  status: 'A' | 'M' | 'D';
-  statusLabel: string;
-  additions: number;
-  deletions: number;
-  repo_name?: string;
-  repoName?: string;
-}
-
-export interface WhatsNewProposal {
-  id: string | number;
-  title: string;
-  author?: string;
-  commitHash?: string;
-  status?: string;
-  repo_name?: string;
-  repoName?: string;
-}
-
-export interface WhatsNewSummary {
-  hasNewUpdates: boolean;
-  latestHash: string;
-  lastSeenHash?: string;
-  totalNewCommits: number;
-  commits: WhatsNewItem[];
-  files: WhatsNewFile[];
-  proposals: WhatsNewProposal[];
-  summaryMessage: string;
-}
-
 export interface SkillItem {
   id: string;
   name: string;

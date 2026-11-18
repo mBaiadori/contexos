@@ -25,7 +25,7 @@ interface TopHeaderProps {
   onToggleCopilot: () => void;
   onOpenGitModal?: () => void;
   onOpenVersionGraph?: () => void;
-  onNavigateToEdits?: (tab?: "drafts" | "whats-new") => void;
+  onNavigateToEdits?: (tab?: "drafts") => void;
   onOpenTour?: () => void;
 }
 
@@ -62,7 +62,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
       );
     }, [pendingChanges]);
 
-    const handleGoToEdits = (tab?: "drafts" | "whats-new") => {
+    const handleGoToEdits = (tab?: "drafts") => {
       if (onNavigateToEdits) {
         onNavigateToEdits(tab);
       } else if (tab === "drafts" && onOpenDiffModal) {
