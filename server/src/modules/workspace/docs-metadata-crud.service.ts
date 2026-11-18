@@ -227,7 +227,6 @@ export class DocsMetadataCrudService {
                 entry.name === "dist" ||
                 entry.name === "build" ||
                 entry.name === "coverage" ||
-                entry.name === ".spec-memory" ||
                 entry.name === "templates"
               )
                 continue;

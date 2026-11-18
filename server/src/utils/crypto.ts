@@ -99,7 +99,6 @@ export function scanContentForSecrets(content: string, filePath: string): Secret
   // Ignore internal system memory, caches, dependencies and build artifacts
   const cleanPath = (filePath || '').replace(/\\/g, '/');
   const isSystemFile = 
-    cleanPath.includes('.spec-memory') ||
     cleanPath.includes('.git/') ||
     cleanPath.includes('/node_modules/') ||
     cleanPath.includes('/dist/') ||

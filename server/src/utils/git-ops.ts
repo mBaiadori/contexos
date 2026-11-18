@@ -196,8 +196,7 @@ export async function commitChanges(
     for (const file of files) {
       if (
         file.includes(".docs.metadata.json") ||
-        file.includes("workspace_changes.json") ||
-        file.includes(".spec-memory/sessions")
+        file.includes("workspace_changes.json")
       ) {
         continue;
       }
@@ -218,8 +217,6 @@ export async function commitChanges(
         "--cached",
         "-r",
         "--ignore-unmatch",
-        ".spec-memory/workspace_changes.json",
-        ".spec-memory/sessions",
         ".docs.metadata.json",
       ],
       repoDir,
@@ -254,17 +251,6 @@ export async function createAndCheckoutBranch(
     return { success: false, message: "Diretório não é um repositório Git." };
 
   const safeName = assertBranchName(branchName.trim().replace(/\s+/g, "-"));
-
-  // Destrava arquivos transitórios de controle interno (.spec-memory/workspace_changes.json)
-  // que possam colidir durante o checkout se já tiverem sido commitados em alguma branch
-  const wsChangesPath = path.join(repoDir, ".spec-memory", "workspace_changes.json");
-  let wsChangesBackup: string | null = null;
-  if (fs.existsSync(wsChangesPath)) {
-    try {
-      wsChangesBackup = fs.readFileSync(wsChangesPath, "utf-8");
-      fs.unlinkSync(wsChangesPath);
-    } catch {}
-  }
 
   try {
     // Verifica se a branch já existe localmente
@@ -382,12 +368,11 @@ export async function createAndCheckoutBranch(
       success: false,
       message: createRes.stderr || "Erro ao criar branch.",
     };
-  } finally {
-    if (wsChangesBackup && !fs.existsSync(wsChangesPath)) {
-      try {
-        fs.writeFileSync(wsChangesPath, wsChangesBackup, "utf-8");
-      } catch {}
-    }
+  } catch (e: any) {
+    return {
+      success: false,
+      message: e?.message || "Erro ao criar branch.",
+    };
   }
 }
 

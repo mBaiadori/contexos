@@ -123,7 +123,7 @@ export class RagIndexer {
   ): string {
     const projectRoot =
       explicitProjectRoot || resolveRepoDir(repoName || "local");
-    const memoryDir = path.join(projectRoot, ".spec-memory");
+    const memoryDir = path.join(projectRoot, ".rag");
     if (!fs.existsSync(memoryDir)) {
       try {
         fs.mkdirSync(memoryDir, { recursive: true });

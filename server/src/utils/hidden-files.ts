@@ -11,7 +11,6 @@ export const DEFAULT_HIDDEN_FILES = [
   ".dictionary.json",
   ".templates.json",
   ".templates.metadata.json",
-  ".spec-memory",
   ".skills",
   ".agents",
   ".tools",
@@ -112,7 +111,6 @@ export const KNOWN_SYSTEM_FILES = [
   ".project.config.json",
   ".hidden_files.json",
   ".mcp.json",
-  ".spec-memory",
   ".skills",
   ".agents",
   ".tools",
@@ -161,7 +159,6 @@ export function getSystemFileFriendlyName(filePath: string): string {
   if (cleanPath.startsWith(".translations")) return `Arquivo de Tradução (${path.basename(cleanPath)})`;
   if (cleanPath.startsWith(".skills")) return `Habilidade do Projeto (${path.basename(cleanPath)})`;
   if (cleanPath.startsWith(".agents")) return `Agente do Projeto (${path.basename(cleanPath)})`;
-  if (cleanPath.startsWith(".spec-memory")) return "Memória de Contexto & IA";
   return cleanPath;
 }
 

@@ -98,13 +98,7 @@ export class ReposDiagnosisService {
     const pTemplatesPath = path.join(repoDir, ".templates.json");
     const hasTemplates = fs.existsSync(pTemplatesPath);
 
-    // 7. Check .spec-memory/
-    const pSpecMemoryPath = path.join(repoDir, ".spec-memory");
-    const hasSpecMemory =
-      fs.existsSync(pSpecMemoryPath) &&
-      fs.statSync(pSpecMemoryPath).isDirectory();
-
-    // 8. Check Branch Protection (only if checkRemote is explicitly requested)
+    // 7. Check Branch Protection (only if checkRemote is explicitly requested)
     let branchProtectionSupported = !isLocal && Boolean(cfg.token) && canAdmin;
     let branchProtectionActive = false;
     let branchProtectionDetails = isLocal
@@ -188,13 +182,6 @@ export class ReposDiagnosisService {
           path: ".templates.json",
           label: "Modelos de Documento (.templates.json)",
           details: hasTemplates ? "Configurado" : "Opcional",
-        },
-        spec_memory: {
-          exists: hasSpecMemory,
-          valid: hasSpecMemory,
-          path: ".spec-memory/",
-          label: "Memória Persistente de IA (.spec-memory/)",
-          details: hasSpecMemory ? "Configurada" : "Opcional",
         },
         branch_protection: {
           supported: branchProtectionSupported,

@@ -20,7 +20,6 @@ export interface RepoDiagnosis {
     codeowners: RepoDiagnosisCheckItem;
     dictionary: RepoDiagnosisCheckItem;
     templates: RepoDiagnosisCheckItem;
-    spec_memory: RepoDiagnosisCheckItem;
     branch_protection: {
       supported: boolean;
       active: boolean;
@@ -55,5 +54,4 @@ export interface RepoInitializePayload {
     create_codeowners?: boolean;
   };
   folders?: string[];
-  include_spec_memory?: boolean;
 }

@@ -24,7 +24,7 @@ export interface DiscardedDraftItem {
 
 export class DraftsTrashService {
   private getTrashDir(repoDir: string): string {
-    const trashDir = path.join(repoDir, ".spec-memory", "drafts-trash");
+    const trashDir = path.join(repoDir, ".drafts-trash");
     if (!fs.existsSync(trashDir)) {
       fs.mkdirSync(trashDir, { recursive: true });
     }

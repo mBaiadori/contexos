@@ -203,7 +203,6 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
           required_approvals: requiredApprovals,
           create_codeowners: true,
         },
-        include_spec_memory: true,
       };
 
       const res = await API.initializeRepo(payload);

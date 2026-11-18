@@ -53,26 +53,7 @@ export async function healRepositoryState(
     actions.push("aborted_in_progress_cherry_pick");
   }
 
-  // 4. Remove arquivos transitórios de controle que possam ter sido adicionados ao index
-  const workspaceChangesPath = path.join(repoDir, ".spec-memory", "workspace_changes.json");
-  if (fs.existsSync(workspaceChangesPath)) {
-    try {
-      fs.unlinkSync(workspaceChangesPath);
-      actions.push("cleaned_transient_workspace_changes");
-    } catch {}
-  }
-
-  try {
-    const rmRes = await executeGit(
-      ["rm", "--cached", "-r", "--ignore-unmatch", ".spec-memory/workspace_changes.json", ".spec-memory/sessions/"],
-      repoDir,
-    );
-    if (rmRes.success && rmRes.stdout.trim().length > 0) {
-      actions.push("unindexed_transient_files");
-    }
-  } catch {}
-
-  // 5. Verifica e limpa caminhos não mesclados (unmerged paths) que travam checkout
+  // 4. Verifica e limpa caminhos não mesclados (unmerged paths) que travam checkout
   try {
     const unmergedRes = await executeGit(["diff", "--name-only", "--diff-filter=U"], repoDir);
     if (unmergedRes.success && unmergedRes.stdout.trim().length > 0) {
@@ -83,7 +64,7 @@ export async function healRepositoryState(
         .filter(Boolean);
 
       for (const f of conflictingFiles) {
-        if (f.startsWith(".spec-memory/") || f === ".docs.metadata.json" || f === ".gitignore") {
+        if (f === ".docs.metadata.json" || f === ".gitignore") {
           const safeF = assertGitPath(f);
           await executeGit(["checkout", "--ours", "--", safeF], repoDir).catch(() => {});
           await executeGit(["add", "--", safeF], repoDir).catch(() => {});

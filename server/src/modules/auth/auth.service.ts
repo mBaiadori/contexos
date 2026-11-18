@@ -178,7 +178,7 @@ export class AuthService {
         for (const entry of entries) {
           if (entry.isDirectory()) {
             const folderName = entry.name;
-            const skip = ['default', '_default', 'local', '.spec-memory', 'node_modules', '.git'];
+            const skip = ['default', '_default', 'local', 'node_modules', '.git'];
             if (!skip.includes(folderName) && !folderName.startsWith('.')) {
               if (!orgsMap.has(folderName.toLowerCase())) {
                 orgsMap.set(folderName.toLowerCase(), {

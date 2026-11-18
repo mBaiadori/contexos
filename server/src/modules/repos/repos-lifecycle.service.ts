@@ -407,7 +407,6 @@ export class ReposLifecycleService {
       project_config,
       security,
       folders,
-      include_spec_memory,
     } = payload;
     if (!name) {
       throw new Error("Nome do repositório é obrigatório para inicialização");
@@ -431,7 +430,6 @@ export class ReposLifecycleService {
       ".dictionary.json",
       ".templates.json",
       ".templates.metadata.json",
-      ".spec-memory",
       ".skills",
       ".agents",
       ".tools",
@@ -573,18 +571,7 @@ export class ReposLifecycleService {
       }
     }
 
-    // 7. .spec-memory
-    const shouldIncludeSpecMemory =
-      include_spec_memory ?? preset === "recommended";
-    if (shouldIncludeSpecMemory) {
-      const specMemoryDir = path.join(repoDir, ".spec-memory");
-      if (!fs.existsSync(specMemoryDir)) {
-        fs.mkdirSync(specMemoryDir, { recursive: true });
-        fs.writeFileSync(path.join(specMemoryDir, ".gitkeep"), "", "utf-8");
-      }
-    }
-
-    // 8. Git Add, Commit e Push inicial (cria e publica a branch padrão no GitHub)
+    // 7. Git Add, Commit e Push inicial (cria e publica a branch padrão no GitHub)
     const isGit = await isGitRepo(repoDir);
     const defaultBranch = assertBranchName(cfg.active_repo?.default_branch || "main");
     if (isGit) {

@@ -96,7 +96,7 @@ export class PRsStorageService {
             const repoDir = path.join(ownerDir, sub.name);
             const isRepo =
               fs.existsSync(path.join(repoDir, ".git")) ||
-              fs.existsSync(path.join(repoDir, ".spec-memory")) ||
+              fs.existsSync(path.join(repoDir, ".prs.json")) ||
               fs.existsSync(path.join(repoDir, ".project.config.json"));
             if (isRepo) {
               const repoName = sub.name;
@@ -108,7 +108,7 @@ export class PRsStorageService {
           }
           const isOwnerRepo =
             fs.existsSync(path.join(ownerDir, ".git")) ||
-            fs.existsSync(path.join(ownerDir, ".spec-memory")) ||
+            fs.existsSync(path.join(ownerDir, ".prs.json")) ||
             fs.existsSync(path.join(ownerDir, ".project.config.json"));
           if (isOwnerRepo) {
             const repoName = entry.name;
@@ -203,7 +203,7 @@ export class PRsStorageService {
 
   getRepoPRsPath(repoName: string): string {
     const repoDir = this.getRepoDir(repoName);
-    return path.join(repoDir, ".spec-memory", "prs.json");
+    return path.join(repoDir, ".prs.json");
   }
 
   loadRepoPRs(repoName: string): any[] {

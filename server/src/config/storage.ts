@@ -94,19 +94,8 @@ export function loadProjectsMasterConfig(): Record<string, any> {
         "domains",
         "engenharia",
         "templates",
-        ".spec-memory/_rules",
-        ".spec-memory/concepts",
-        ".spec-memory/decisions",
-        ".spec-memory/gotchas",
-        ".spec-memory/handoffs",
-        ".spec-memory/sessions",
       ],
-      essential_files: [
-        {
-          path: ".spec-memory/_meta.yaml",
-          content: "version: 1.0\ninitialized: true\n",
-        },
-      ],
+      essential_files: [],
     },
     project_defaults: {
       version: "1.0.0",

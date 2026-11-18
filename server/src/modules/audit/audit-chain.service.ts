@@ -46,7 +46,7 @@ function getAuditFilePath(projectRootOrName: string): string {
   if (!projectDir || !path.isAbsolute(projectDir)) {
     projectDir = resolveRepoDir(projectRootOrName || "local");
   }
-  const memoryDir = path.join(projectDir, ".spec-memory");
+  const memoryDir = path.join(projectDir, ".audit");
   if (!fs.existsSync(memoryDir)) {
     fs.mkdirSync(memoryDir, { recursive: true });
   }

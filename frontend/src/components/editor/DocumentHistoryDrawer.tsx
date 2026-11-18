@@ -59,13 +59,15 @@ export const DocumentHistoryDrawer: React.FC<DocumentHistoryDrawerProps> = ({
       className="document-history-drawer"
       style={{
         width: "320px",
+        flexShrink: 0,
+        position: "relative",
         borderLeft: "1px solid var(--border-color, #e2e8f0)",
         background: "var(--bg-surface, #ffffff)",
         display: "flex",
         flexDirection: "column",
         height: "100%",
         boxShadow: "-2px 0 8px rgba(0,0,0,0.03)",
-        zIndex: 20,
+        zIndex: 50,
       }}
     >
       {/* Header */}

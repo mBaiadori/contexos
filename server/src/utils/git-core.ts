@@ -464,8 +464,6 @@ export function ensureGitIgnore(repoDir: string): void {
     "*.log",
     ".env",
     ".docs.metadata.json",
-    ".spec-memory/workspace_changes.json",
-    ".spec-memory/sessions/",
   ];
 
   const systemPatternsToUnignore = [
@@ -475,7 +473,6 @@ export function ensureGitIgnore(repoDir: string): void {
     ".templates.json",
     ".templates.metadata.json",
     ".project.config.json",
-    ".spec-memory/",
     ".skills/",
     ".agents/",
     ".tools/",

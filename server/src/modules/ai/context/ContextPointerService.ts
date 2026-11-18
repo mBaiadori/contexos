@@ -70,7 +70,7 @@ export class ContextPointerService {
     }
 
     // Memória, Wiki e Handoffs
-    const memoryDir = path.join(projectRoot, '.spec-memory');
+    const memoryDir = path.join(projectRoot, '.ai-memory');
     if (fs.existsSync(memoryDir)) {
       pointers.push(`- Memória viva e histórico de decisões: ${memoryDir}`);
       const wikiDir = path.join(memoryDir, 'wiki');

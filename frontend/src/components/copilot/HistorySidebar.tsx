@@ -201,7 +201,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   const handleResetMemory = async () => {
     if (
       !window.confirm(
-        "Tem certeza que deseja limpar a memória consolidada (.spec-memory/)?",
+        "Tem certeza que deseja limpar a memória consolidada?",
       )
     )
       return;
@@ -658,9 +658,6 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 <div
                   style={{ display: "flex", alignItems: "center", gap: "4px" }}
                 >
-                  <Badge variant="primary" size="sm">
-                    .spec-memory
-                  </Badge>
                   <span
                     className="material-symbols-outlined"
                     style={{

@@ -28,7 +28,7 @@ export class WikiService {
     const cfg = loadConfig();
     const effectiveOwner = cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined;
     const repoDir = resolveRepoDir(repoName || 'local', effectiveOwner);
-    return path.join(repoDir, '.spec-memory', 'wiki');
+    return path.join(repoDir, '.wiki');
   }
 
   private getCategoryDir(repoName: string, category: string): string {
@@ -199,7 +199,7 @@ export class WikiService {
 
     writeTextAtomic(fullPath, finalContent);
 
-    const relWikiPath = `.spec-memory/wiki/${cleanCat}/${cleanSlug}.md`;
+    const relWikiPath = `.wiki/${cleanCat}/${cleanSlug}.md`;
     recordChange(repoName, relWikiPath, isNew ? 'ADDED' : 'MODIFIED', oldContent, finalContent);
 
     return {
@@ -229,7 +229,7 @@ export class WikiService {
         oldContent = fs.readFileSync(fullPath, 'utf-8');
       } catch {}
       fs.unlinkSync(fullPath);
-      const relWikiPath = `.spec-memory/wiki/${cleanCat}/${cleanSlug}.md`;
+      const relWikiPath = `.wiki/${cleanCat}/${cleanSlug}.md`;
       recordChange(repoName, relWikiPath, 'DELETED', oldContent, '');
       return { success: true };
     }
