@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { marked } from 'marked';
 import { useCopilotStore } from '../../stores/copilotStore';
 import { ragService } from '../../services/ragService';
 import type { RagSearchResult, RagStats } from '../../services/ragService';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { sanitizeHtml } from '../../utils/sanitize';
 
 export const RagSearchModal: React.FC = () => {
   const isRagModalOpen = useCopilotStore((s) => s.isRagModalOpen);
@@ -435,24 +437,24 @@ export const RagSearchModal: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Snippet Preview */}
+                {/* Snippet Preview (Markdown) */}
                 <div
+                  className="rag-snippet-markdown"
                   style={{
                     background: '#f8fafc',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
-                    padding: '8px 12px',
-                    fontSize: '11.5px',
-                    fontFamily: 'monospace',
+                    padding: '10px 12px',
+                    fontSize: '12px',
                     color: '#334155',
-                    whiteSpace: 'pre-wrap',
-                    maxHeight: '120px',
+                    maxHeight: '180px',
                     overflowY: 'auto',
-                    lineHeight: '1.45',
+                    lineHeight: '1.5',
                   }}
-                >
-                  {res.snippet}
-                </div>
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeHtml(marked.parse(res.snippet, { breaks: true, gfm: true }) as string),
+                  }}
+                />
 
                 {/* Actions Bottom */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2px' }}>
