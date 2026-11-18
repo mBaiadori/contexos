@@ -10,7 +10,6 @@ import { SkillsSidebar } from "../components/copilot/SkillsSidebar";
 import { DiffModal } from "../components/modals/DiffModal";
 import { ScaffoldModal } from "../components/modals/ScaffoldModal";
 import { AISettingsModal } from "../components/modals/AISettingsModal";
-import { OnboardingModal } from "../components/modals/OnboardingModal";
 import { SelectOrgModal } from "../components/modals/SelectOrgModal";
 import { AlertBanner } from "../components/ui/AlertBanner";
 import { useWorkspace } from "../context/WorkspaceContext";
@@ -79,7 +78,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   >(null);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isSelectOrgModalOpen, setIsSelectOrgModalOpen] = useState(false);
 
   const {
@@ -334,10 +332,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     handleNavigateToEdits();
   }, [handleNavigateToEdits]);
 
-  const handleOpenTour = useCallback(() => {
-    setIsOnboardingOpen(true);
-  }, []);
-
   const handleOpenFile = (rawPath: string) => {
     const base = buildRepoBaseUrl("editor");
     if (!rawPath) {
@@ -365,7 +359,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
         onOpenGitModal={handleOpenGitModal}
         onOpenVersionGraph={() => handleSelectView("versions")}
         onNavigateToEdits={handleNavigateToEdits}
-        onOpenTour={handleOpenTour}
       />
 
       {/* Main Workspace Layout */}
@@ -622,14 +615,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             handleSelectView("editor");
           }
         }}
-      />
-
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={() => setIsOnboardingOpen(false)}
-        onNavigateView={handleSelectView}
-        onToggleCopilot={toggleCopilot}
-        onOpenGitModal={() => handleNavigateToEdits()}
       />
 
       <SelectOrgModal

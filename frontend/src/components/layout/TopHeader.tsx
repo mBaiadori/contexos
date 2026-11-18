@@ -6,7 +6,6 @@ import { isPathHidden } from "../../utils/hidden-files";
 import { IconButton, Button, Badge } from "../ui";
 import {
   Sparkles,
-  HelpCircle,
   User,
   Shield,
   CloudDownload,
@@ -26,7 +25,6 @@ interface TopHeaderProps {
   onOpenGitModal?: () => void;
   onOpenVersionGraph?: () => void;
   onNavigateToEdits?: (tab?: "drafts") => void;
-  onOpenTour?: () => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = React.memo(
@@ -36,7 +34,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
     onOpenGitModal = () => {},
     onOpenVersionGraph = () => {},
     onNavigateToEdits,
-    onOpenTour = () => {},
   }) => {
     const {
       activeRepo,
@@ -298,18 +295,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
               </span>
             </Button>
           )}
-
-          <IconButton
-            id="btn-open-onboarding-tour"
-            size="md"
-            tooltip="Guia Rápido & Funcionalidades do Sistema"
-            onClick={onOpenTour}
-          >
-            <HelpCircle
-              size={18}
-              style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}
-            />
-          </IconButton>
 
           {updateInfo?.status === "available-manual" && (
             <Button
