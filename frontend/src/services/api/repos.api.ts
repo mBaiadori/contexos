@@ -238,7 +238,11 @@ export const reposApi = {
     if (org) params.set('org', org);
     const qs = params.toString() ? `?${params.toString()}` : '';
     const res = await fetch(`/api/project/tree${qs}`);
-    return res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error || `Erro ao carregar árvore (${res.status})`);
+    }
+    return data;
   },
 
   async getProjectMetadata(repo?: string): Promise<ApiResponse<DocumentMetadataItem[]>> {

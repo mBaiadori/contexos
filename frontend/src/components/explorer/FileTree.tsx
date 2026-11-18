@@ -220,10 +220,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
       const willBeExpanded = isCurrentlyCollapsed;
       setCollapsedRepos((prev) => ({ ...prev, [r.name]: !willBeExpanded }));
 
-      if (
-        willBeExpanded &&
-        (!treesByRepo[r.name] || treesByRepo[r.name].length === 0)
-      ) {
+      const matchedKey = Object.keys(treesByRepo).find(
+        (k) => k.toLowerCase() === r.name.toLowerCase(),
+      );
+      const existingNodes = matchedKey ? treesByRepo[matchedKey] : undefined;
+
+      if (willBeExpanded && (!existingNodes || existingNodes.length === 0)) {
         if (!r.is_cloned_locally) {
           await handleSelectRepo(r, e);
         } else {
@@ -913,6 +915,46 @@ export const FileTree: React.FC<FileTreeProps> = ({
     return getDisplayNodesForRepo(activeRepo?.name || repoName);
   }, [getDisplayNodesForRepo, activeRepo?.name, repoName]);
 
+  const attemptedAutoLoadsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    attemptedAutoLoadsRef.current.clear();
+  }, [currentOrgLogin]);
+
+  // Garante carregamento automático se um repositório local expandido ainda não tiver árvore buscada
+  useEffect(() => {
+    if (isTreeLoading) return;
+    for (const r of orgRepos) {
+      if (!r.is_cloned_locally) continue;
+      const isActive = r.name.toLowerCase() === activeRepo?.name.toLowerCase();
+      const isRepoCollapsed = collapsedRepos[r.name] ?? !isActive;
+      if (isRepoCollapsed) continue;
+
+      const hasTreeEntry = Object.keys(treesByRepo).some(
+        (k) => k.toLowerCase() === r.name.toLowerCase(),
+      );
+      const attemptKey = `${currentOrgLogin}:${r.name.toLowerCase()}`;
+      if (!hasTreeEntry && !loadingRepos[r.name] && !attemptedAutoLoadsRef.current.has(attemptKey)) {
+        attemptedAutoLoadsRef.current.add(attemptKey);
+        setLoadingRepos((prev) => ({ ...prev, [r.name]: true }));
+        loadTree(r.name)
+          .catch(() => {})
+          .finally(() => {
+            setLoadingRepos((prev) => ({ ...prev, [r.name]: false }));
+          });
+      }
+    }
+  }, [
+    isTreeLoading,
+    orgRepos,
+    activeRepo?.name,
+    collapsedRepos,
+    treesByRepo,
+    loadingRepos,
+    currentOrgLogin,
+    loadTree,
+  ]);
+
   // Restaura posição do scroll após montar nós
   useEffect(() => {
     if (!isTreeLoading && displayNodes.length > 0) {
@@ -922,6 +964,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
   const handleRefreshAll = useCallback(async () => {
     showToast("Atualizando arquivos...", "info");
+    attemptedAutoLoadsRef.current.clear();
     await Promise.all([
       refreshGitStatus(),
       refreshPendingChanges(),
@@ -929,7 +972,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     ]);
     const openRepos = orgRepos.filter(
       (r) =>
-        !collapsedRepos[r.name] &&
+        collapsedRepos[r.name] === false &&
         r.name.toLowerCase() !== activeRepo?.name.toLowerCase(),
     );
     if (openRepos.length > 0) {

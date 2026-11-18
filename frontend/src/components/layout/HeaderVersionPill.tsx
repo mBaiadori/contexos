@@ -22,6 +22,34 @@ export const HeaderVersionPill: React.FC<HeaderVersionPillProps> = ({ onClick })
   const label =
     semanticName.length > 30 ? `${semanticName.slice(0, 29)}…` : semanticName;
 
+  const pillTheme = isMain
+    ? {
+        bg: "rgba(37, 99, 235, 0.12)",
+        border: "rgba(37, 99, 235, 0.3)",
+        color: "#2563eb",
+        dot: "#2563eb",
+      }
+    : activeNode?.isMerged
+      ? {
+          bg: "rgba(5, 150, 105, 0.12)",
+          border: "rgba(5, 150, 105, 0.3)",
+          color: "#059669",
+          dot: "#059669",
+        }
+      : activeNode?.type === "draft" || activeProposal
+        ? {
+            bg: "rgba(217, 119, 6, 0.12)",
+            border: "rgba(217, 119, 6, 0.3)",
+            color: "#d97706",
+            dot: "#d97706",
+          }
+        : {
+            bg: "rgba(124, 58, 237, 0.12)",
+            border: "rgba(124, 58, 237, 0.3)",
+            color: "#7c3aed",
+            dot: "#7c3aed",
+          };
+
   return (
     <button
       id="header-version-pill"
@@ -36,23 +64,9 @@ export const HeaderVersionPill: React.FC<HeaderVersionPillProps> = ({ onClick })
         fontWeight: 500,
         padding: "3px 10px",
         borderRadius: "9999px",
-        backgroundColor: isMain
-          ? "var(--bg-surface, rgba(0, 0, 0, 0.05))"
-          : activeProposal
-            ? "rgba(245, 158, 11, 0.12)"
-            : "rgba(139, 92, 246, 0.12)",
-        color: isMain
-          ? "var(--text-secondary)"
-          : activeProposal
-            ? "#d97706"
-            : "#7c3aed",
-        border: `1px solid ${
-          isMain
-            ? "var(--border-color, rgba(0, 0, 0, 0.1))"
-            : activeProposal
-              ? "rgba(245, 158, 11, 0.3)"
-              : "rgba(139, 92, 246, 0.3)"
-        }`,
+        backgroundColor: pillTheme.bg,
+        color: pillTheme.color,
+        border: `1px solid ${pillTheme.border}`,
         cursor: "pointer",
         transition: "all 0.15s ease",
         whiteSpace: "nowrap",
@@ -63,11 +77,7 @@ export const HeaderVersionPill: React.FC<HeaderVersionPillProps> = ({ onClick })
           width: "6px",
           height: "6px",
           borderRadius: "50%",
-          backgroundColor: isMain
-            ? "var(--color-primary, #2563eb)"
-            : activeProposal
-              ? "#f59e0b"
-              : "#8b5cf6",
+          backgroundColor: pillTheme.dot,
         }}
       />
       <span>{label}</span>

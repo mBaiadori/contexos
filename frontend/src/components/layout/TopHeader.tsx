@@ -1,8 +1,7 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
-import { isPathHidden } from "../../utils/hidden-files";
 import { Button, Badge } from "../ui";
 import {
   Sparkles,
@@ -28,16 +27,12 @@ interface TopHeaderProps {
 
 export const TopHeader: React.FC<TopHeaderProps> = React.memo(
   ({
-    onOpenDiffModal,
     onToggleCopilot,
-    onOpenGitModal = () => {},
     onOpenVersionGraph = () => {},
-    onNavigateToEdits,
   }) => {
     const {
       activeRepo,
       activeOrg,
-      pendingChanges,
       effectivePermission,
       isLoadingPermission,
       hasRemoteUpdates,
@@ -51,22 +46,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [isInvitationsOpen, setIsInvitationsOpen] = React.useState(false);
-
-    const filteredPendingChanges = useMemo(() => {
-      return (pendingChanges || []).filter(
-        (c) => c?.path && !isPathHidden(c.path),
-      );
-    }, [pendingChanges]);
-
-    const handleGoToEdits = (tab?: "drafts") => {
-      if (onNavigateToEdits) {
-        onNavigateToEdits(tab);
-      } else if (tab === "drafts" && onOpenDiffModal) {
-        onOpenDiffModal();
-      } else {
-        onOpenGitModal();
-      }
-    };
 
     const [avatarError, setAvatarError] = React.useState(false);
     const updateInfo = useUpdaterStore((s) => s.updateInfo);
@@ -269,31 +248,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
             minHeight: "36px",
           }}
         >
-          {filteredPendingChanges.length > 0 && (
-            <Button
-              id="btn-open-workspace-diff"
-              variant="subtle"
-              size="sm"
-              onClick={() => handleGoToEdits("drafts")}
-              title="Ver alterações deste rascunho de versão"
-              leftIcon={
-                <Badge variant="warning" size="sm" hasDot>
-                  {filteredPendingChanges.length}
-                </Badge>
-              }
-              style={{
-                whiteSpace: "nowrap",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <span id="pending-changes-badge-text">
-                {filteredPendingChanges.length === 1
-                  ? "alteração"
-                  : "alterações"}
-              </span>
-            </Button>
-          )}
-
           {updateInfo?.status === "available-manual" && (
             <Button
               id="btn-download-update"

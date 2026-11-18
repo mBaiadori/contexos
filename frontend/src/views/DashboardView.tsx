@@ -77,6 +77,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   const {
     activeFile,
     activeRepo,
+    treesByRepo,
     selectRepoByName,
     loadFile,
     activeOrg,
@@ -143,10 +144,17 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
 
   useEffect(() => {
     if (!repoName) return;
+    if (org && activeOrg?.login?.toLowerCase().trim() !== org.toLowerCase().trim()) {
+      return;
+    }
+
     const currentActive = activeRepo?.name?.toLowerCase();
     const target = repoName.toLowerCase();
+    const hasTreeLoaded =
+      !activeRepo?.is_cloned_locally ||
+      Object.keys(treesByRepo).some((k) => k.toLowerCase() === target);
 
-    if (currentActive === target) {
+    if (currentActive === target && hasTreeLoaded) {
       lastSyncedRepoRef.current = target;
       return;
     }
@@ -178,8 +186,12 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       }
     });
   }, [
+    org,
+    activeOrg?.login,
     repoName,
     activeRepo?.name,
+    activeRepo?.is_cloned_locally,
+    treesByRepo,
     selectRepoByName,
     fileParam,
     navigate,

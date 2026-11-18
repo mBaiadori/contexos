@@ -595,6 +595,8 @@ export async function compareGitBranches(
     additions: number;
     deletions: number;
     diff: string;
+    oldContent: string;
+    newContent: string;
   }>;
 }> {
   const isRepo = await isGitRepo(repoDir);
@@ -606,14 +608,19 @@ export async function compareGitBranches(
   const safeHead = assertBranchName(headBranch.trim(), "Versão comparada");
   const range = `${safeBase}...${safeHead}`;
 
-  const [logRes, numstatRes, nameStatusRes] = await Promise.all([
+  const [logRes, numstatRes, nameStatusRes, mergeBaseRes] = await Promise.all([
     executeGit(
       ["log", `${safeBase}..${safeHead}`, "-n", "100", "--format=%H|%h|%an|%cI|%s"],
       repoDir,
     ),
     executeGit(["diff", "--numstat", range], repoDir),
     executeGit(["diff", "--name-status", range], repoDir),
+    executeGit(["merge-base", safeBase, safeHead], repoDir),
   ]);
+  const baseRef =
+    mergeBaseRes.success && mergeBaseRes.stdout.trim()
+      ? mergeBaseRes.stdout.trim()
+      : safeBase;
 
   const commits: Array<{
     hash: string;
@@ -661,19 +668,38 @@ export async function compareGitBranches(
   const allPaths = Array.from(new Set([...statusMap.keys(), ...statsMap.keys()]));
   const files = await Promise.all(
     allPaths.map(async (filePath) => {
+      const st = statusMap.get(filePath) || "M";
+      const mappedStatus = st.startsWith("A")
+        ? "ADDED"
+        : st.startsWith("D")
+          ? "DELETED"
+          : "MODIFIED";
       let diffText = "";
+      let oldContent = "";
+      let newContent = "";
       try {
-        const diffRes = await executeGit(["diff", range, "--", filePath], repoDir);
+        const [diffRes, oldRes, newRes] = await Promise.all([
+          executeGit(["diff", range, "--", filePath], repoDir),
+          mappedStatus !== "ADDED"
+            ? executeGit(["show", `${baseRef}:${filePath}`], repoDir)
+            : Promise.resolve({ success: false, stdout: "" }),
+          mappedStatus !== "DELETED"
+            ? executeGit(["show", `${safeHead}:${filePath}`], repoDir)
+            : Promise.resolve({ success: false, stdout: "" }),
+        ]);
         if (diffRes.success && diffRes.stdout) diffText = diffRes.stdout;
+        if (oldRes.success && oldRes.stdout) oldContent = oldRes.stdout;
+        if (newRes.success && newRes.stdout) newContent = newRes.stdout;
       } catch {}
       const stats = statsMap.get(filePath) || { additions: 0, deletions: 0 };
-      const st = statusMap.get(filePath) || "M";
       return {
         path: filePath,
-        status: st.startsWith("A") ? "ADDED" : st.startsWith("D") ? "DELETED" : "MODIFIED",
+        status: mappedStatus,
         additions: stats.additions,
         deletions: stats.deletions,
         diff: diffText,
+        oldContent,
+        newContent,
       };
     }),
   );

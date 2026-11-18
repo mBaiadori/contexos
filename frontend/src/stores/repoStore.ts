@@ -126,7 +126,44 @@ function getPermCacheKey(repoName: string, owner?: string): string {
   return `${(o || "local").toLowerCase()}/${repoName.toLowerCase()}`;
 }
 
+function findTreeEntry(
+  map: Record<string, TreeNode[]>,
+  repoName: string,
+): { key: string; tree: TreeNode[] } | null {
+  const target = repoName.toLowerCase();
+  const matchedKey = Object.keys(map).find((k) => k.toLowerCase() === target);
+  return matchedKey ? { key: matchedKey, tree: map[matchedKey] } : null;
+}
+
+function upsertTreeRecord(
+  map: Record<string, TreeNode[]>,
+  repoName: string,
+  tree: TreeNode[],
+): Record<string, TreeNode[]> {
+  const target = repoName.toLowerCase();
+  const next = { ...map };
+  for (const k of Object.keys(next)) {
+    if (k.toLowerCase() === target && k !== repoName) {
+      delete next[k];
+    }
+  }
+  next[repoName] = tree;
+  return next;
+}
+
+function getRepoNameFromPathname(): string | null {
+  if (typeof window === "undefined") return null;
+  const match = window.location.pathname.match(/\/repo\/([^/]+)/);
+  if (!match || !match[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 let inFlightRepo: string | null = null;
+let initializedRepoKey: string | null = null;
 
 const initialOrg = (): Organization | null => {
   try {
@@ -162,8 +199,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   setTreeForRepo: (repoName, tree) => {
     treesByRepoCache[repoName] = tree;
     set((state) => ({
-      treesByRepo: { ...state.treesByRepo, [repoName]: tree },
-      tree: state.activeRepo?.name === repoName ? tree : state.tree,
+      treesByRepo: upsertTreeRecord(state.treesByRepo, repoName, tree),
+      tree: state.activeRepo?.name.toLowerCase() === repoName.toLowerCase() ? tree : state.tree,
     }));
   },
   setRepoProgress: (repoProgress) => set({ repoProgress }),
@@ -268,7 +305,11 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         if (res.data.active_repo) {
           const backendActiveRepo = res.data.active_repo;
           const currentActive = get().activeRepo;
-          if (!currentActive || currentActive.name !== backendActiveRepo.name) {
+          const urlRepoName = getRepoNameFromPathname();
+          const matchesUrlRepo =
+            !urlRepoName || urlRepoName.toLowerCase() === backendActiveRepo.name.toLowerCase();
+
+          if (!currentActive && !inFlightRepo && matchesUrlRepo) {
             set({ activeRepo: backendActiveRepo });
           }
           const repoOwner = backendActiveRepo.owner;
@@ -285,6 +326,15 @@ export const useRepoStore = create<RepoState>((set, get) => ({
               return;
             }
           }
+
+          if (
+            backendActiveRepo.is_cloned_locally &&
+            matchesUrlRepo &&
+            !inFlightRepo &&
+            !findTreeEntry(get().treesByRepo, backendActiveRepo.name)
+          ) {
+            void get().selectRepo(backendActiveRepo);
+          }
         }
       }
     } catch (err) {
@@ -298,10 +348,15 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     if (!orgLogin) return;
     const found = get().orgs.find((o) => o.login.toLowerCase() === orgLogin.toLowerCase());
     const orgToSet = found || { login: orgLogin, full_name: orgLogin };
+    initializedRepoKey = null;
+    for (const k of Object.keys(treesByRepoCache)) {
+      delete treesByRepoCache[k];
+    }
     set({
       activeOrg: orgToSet,
       activeRepo: null,
       tree: [],
+      treesByRepo: {},
       repos: [],
       isLoadingWorkspace: true,
       isLoading: true,
@@ -345,15 +400,22 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     if (!isSilent) set({ isLoadingTree: true });
     try {
       const targetObj = targetRepo
-        ? (get().repos.find((r) => r.name.toLowerCase() === targetRepo.toLowerCase()) || null)
+        ? (get().repos.find((r) => r.name.toLowerCase() === targetRepo.toLowerCase()) ||
+           (get().activeRepo?.name.toLowerCase() === targetRepo.toLowerCase() ? get().activeRepo : null))
         : get().activeRepo;
+      const canonicalName = targetObj?.name || repo;
       const owner = getRepoOwnerOrOrg(targetObj);
-      const data = await API.getProjectTree(repo, owner);
-      treesByRepoCache[repo] = data.tree || [];
-      set((state) => ({
-        treesByRepo: { ...state.treesByRepo, [repo]: data.tree || [] },
-        tree: state.activeRepo?.name === repo ? (data.tree || []) : state.tree,
-      }));
+      const data = await API.getProjectTree(canonicalName, owner);
+      if (Array.isArray(data?.tree)) {
+        treesByRepoCache[canonicalName] = data.tree;
+        set((state) => ({
+          treesByRepo: upsertTreeRecord(state.treesByRepo, canonicalName, data.tree),
+          tree:
+            state.activeRepo?.name.toLowerCase() === canonicalName.toLowerCase()
+              ? data.tree
+              : state.tree,
+        }));
+      }
     } catch (err) {
       console.error("[repoStore] Erro ao buscar árvore:", err);
     } finally {
@@ -366,21 +428,31 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     initialFile?: string,
   ): Promise<{ success: boolean; is_ready?: boolean; diagnosis?: RepoDiagnosis }> => {
     if (!repo || !repo.name) return { success: false, is_ready: false };
-    if (inFlightRepo === repo.name) return { success: true, is_ready: true };
-    if (get().activeRepo?.name.toLowerCase() === repo.name.toLowerCase() && !initialFile) {
+    if (inFlightRepo?.toLowerCase() === repo.name.toLowerCase()) {
       return { success: true, is_ready: true };
-    }
-    inFlightRepo = repo.name;
-
-    const cachedTree = treesByRepoCache[repo.name];
-    const hasCachedTree = Array.isArray(cachedTree) && cachedTree.length > 0;
-
-    if (!hasCachedTree && !repo.is_local) {
-      set({ isLoadingTree: true });
     }
 
     const ownerLogin = getRepoOwnerOrOrg(repo);
     const permKey = getPermCacheKey(repo.name, ownerLogin);
+    const hasLoadedTree = findTreeEntry(get().treesByRepo, repo.name) !== null;
+    const isAlreadyInitialized =
+      initializedRepoKey === permKey &&
+      get().activeRepo?.name.toLowerCase() === repo.name.toLowerCase() &&
+      (!repo.is_cloned_locally || hasLoadedTree);
+
+    if (isAlreadyInitialized && !initialFile) {
+      return { success: true, is_ready: true };
+    }
+    inFlightRepo = repo.name;
+
+    const cachedEntry = findTreeEntry(treesByRepoCache, repo.name);
+    const cachedTree = cachedEntry?.tree;
+    const hasCachedTree = Array.isArray(cachedTree) && cachedTree.length > 0;
+
+    if (!hasCachedTree && repo.is_cloned_locally) {
+      set({ isLoadingTree: true });
+    }
+
     const cachedPerm = effectivePermissionsByRepo[permKey];
     set({
       effectivePermission: cachedPerm || null,
@@ -389,7 +461,11 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     try {
       const prevRepo = get().activeRepo;
-      if (prevRepo?.name) {
+      if (
+        prevRepo?.name &&
+        prevRepo.name.toLowerCase() !== repo.name.toLowerCase() &&
+        (get().tree.length > 0 || findTreeEntry(get().treesByRepo, prevRepo.name) !== null)
+      ) {
         treesByRepoCache[prevRepo.name] = get().tree;
       }
 
@@ -401,21 +477,21 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
       set({
         activeRepo: repo,
-        tree: hasCachedTree ? cachedTree : [],
+        tree: hasCachedTree && cachedTree ? cachedTree : [],
       });
 
       API.getEffectiveUserPermission(repo.name, ownerLogin)
         .then((res) => {
           if (res.ok && res.data) {
             effectivePermissionsByRepo[permKey] = res.data;
-            if (get().activeRepo?.name === repo.name) {
+            if (get().activeRepo?.name.toLowerCase() === repo.name.toLowerCase()) {
               set({ effectivePermission: res.data });
             }
           }
         })
         .catch(() => {})
         .finally(() => {
-          if (get().activeRepo?.name === repo.name) {
+          if (get().activeRepo?.name.toLowerCase() === repo.name.toLowerCase()) {
             set({ isLoadingPermission: false });
           }
         });
@@ -437,19 +513,32 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       const diagnosis = selectRes.data?.diagnosis;
 
       if (!isCloned) {
+        initializedRepoKey = permKey;
         set({ isLoadingTree: false });
         return { success: true, is_ready: false, diagnosis };
       }
 
-      const data = await API.getProjectTree(repo.name, ownerLogin);
-      treesByRepoCache[repo.name] = data.tree || [];
-      set((state) => ({
-        treesByRepo: { ...state.treesByRepo, [repo.name]: data.tree || [] },
-        tree: state.activeRepo?.name === repo.name ? (data.tree || []) : state.tree,
-        isLoadingTree: false,
-      }));
+      let treeNodes: TreeNode[] = [];
+      try {
+        const data = await API.getProjectTree(repo.name, ownerLogin);
+        if (Array.isArray(data?.tree)) {
+          treeNodes = data.tree;
+          treesByRepoCache[repo.name] = treeNodes;
+          set((state) => ({
+            treesByRepo: upsertTreeRecord(state.treesByRepo, repo.name, treeNodes),
+            tree:
+              state.activeRepo?.name.toLowerCase() === repo.name.toLowerCase()
+                ? treeNodes
+                : state.tree,
+            isLoadingTree: false,
+          }));
+        }
+      } catch (treeErr) {
+        console.error("[repoStore] Erro ao carregar árvore do repositório:", treeErr);
+      }
 
-      const treeNodes = data.tree || [];
+      initializedRepoKey = permKey;
+
       const currentActive = useEditorStore.getState().activeFile;
       let fileToOpen: string | null = null;
       if (initialFile && fileExistsInTree(treeNodes, initialFile)) {
@@ -485,29 +574,41 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
   selectRepoByName: async (repoName: string, initialFile?: string): Promise<boolean> => {
     if (!repoName) return false;
-    if (get().activeRepo?.name.toLowerCase() === repoName.toLowerCase()) {
-      if (initialFile && initialFile !== useEditorStore.getState().activeFile) {
-        await useEditorStore.getState().loadFile(initialFile, repoName);
+    const currentActive = get().activeRepo;
+    if (currentActive?.name.toLowerCase() === repoName.toLowerCase()) {
+      const permKey = getPermCacheKey(currentActive.name, getRepoOwnerOrOrg(currentActive));
+      const hasLoadedTree =
+        !currentActive.is_cloned_locally ||
+        findTreeEntry(get().treesByRepo, repoName) !== null;
+      if (initializedRepoKey === permKey && hasLoadedTree) {
+        if (initialFile && initialFile !== useEditorStore.getState().activeFile) {
+          await useEditorStore.getState().loadFile(initialFile, repoName);
+        }
+        return true;
       }
-      return true;
     }
     if (inFlightRepo?.toLowerCase() === repoName.toLowerCase()) return true;
 
     let currentRepos = get().repos;
-    if (currentRepos.length === 0) {
+    let found = currentRepos.find((r) => r.name.toLowerCase() === repoName.toLowerCase());
+    if (!found && currentRepos.length === 0) {
       try {
         const detectedOrg = getRepoOwnerOrOrg();
         const res = await API.getRepos(detectedOrg);
         if (res.ok && res.data.repos) {
           currentRepos = res.data.repos;
           set({ repos: currentRepos });
+          found = currentRepos.find((r) => r.name.toLowerCase() === repoName.toLowerCase());
         }
       } catch (err) {
         console.error("[repoStore] Erro ao carregar repos:", err);
       }
     }
 
-    const found = currentRepos.find((r) => r.name.toLowerCase() === repoName.toLowerCase());
+    if (!found && currentActive?.name.toLowerCase() === repoName.toLowerCase()) {
+      found = currentActive;
+    }
+
     if (found) {
       await get().selectRepo(found, initialFile);
       return true;
@@ -535,11 +636,17 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
         try {
           const treeData = await API.getProjectTree(r.name, owner);
-          treesByRepoCache[r.name] = treeData.tree || [];
-          set((state) => ({
-            treesByRepo: { ...state.treesByRepo, [r.name]: treeData.tree || [] },
-            tree: state.activeRepo?.name.toLowerCase() === r.name.toLowerCase() ? (treeData.tree || []) : state.tree,
-          }));
+          if (Array.isArray(treeData?.tree)) {
+            treesByRepoCache[r.name] = treeData.tree;
+            initializedRepoKey = getPermCacheKey(r.name, owner);
+            set((state) => ({
+              treesByRepo: upsertTreeRecord(state.treesByRepo, r.name, treeData.tree),
+              tree:
+                state.activeRepo?.name.toLowerCase() === r.name.toLowerCase()
+                  ? treeData.tree
+                  : state.tree,
+            }));
+          }
         } catch (treeErr) {
           console.error("[repoStore] Erro ao carregar árvore pós-clone:", treeErr);
         }
@@ -583,6 +690,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   },
 
   resetActiveRepo: () => {
+    initializedRepoKey = null;
     set({
       activeRepo: null,
       tree: [],

@@ -165,6 +165,8 @@ export const gitApi = {
         additions: number;
         deletions: number;
         diff: string;
+        oldContent?: string;
+        newContent?: string;
       }>;
     }>
   > {

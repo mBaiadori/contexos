@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Send, Sparkles, AlertCircle, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { Modal, Button, FormField, Input, Textarea, Spinner } from "../ui";
 import { DiffViewer } from "../common";
+import { VisualMarkdownDiff } from "../editor/VisualMarkdownDiff";
 import { API } from "../../services/api";
 import { isPathHidden } from "../../utils/hidden-files";
-import type { VersionNode } from "../../types";
+import type { VersionNode, WorkspaceChange } from "../../types";
 
 export interface CreatePublicationModalProps {
   isOpen: boolean;
@@ -47,8 +48,17 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [diffFiles, setDiffFiles] = useState<
-    Array<{ path: string; status: string; additions: number; deletions: number; diff: string }>
+    Array<{
+      path: string;
+      status: string;
+      additions: number;
+      deletions: number;
+      diff: string;
+      oldContent?: string;
+      newContent?: string;
+    }>
   >([]);
+  const [workspaceChanges, setWorkspaceChanges] = useState<WorkspaceChange[]>([]);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
 
@@ -68,23 +78,36 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   }, [isOpen, initialSourceBranch, defaultBranch, candidateNodes, nodes]);
 
   useEffect(() => {
-    if (!isOpen || !sourceBranch || sourceBranch === defaultBranch) {
+    if (!isOpen) {
       setDiffFiles([]);
+      setWorkspaceChanges([]);
       return;
     }
     let cancelled = false;
     setIsLoadingDiff(true);
-    API.compareBranches(defaultBranch, sourceBranch, repoName)
-      .then((res) => {
+    const shouldCompare = Boolean(sourceBranch && sourceBranch !== defaultBranch);
+    Promise.all([
+      shouldCompare
+        ? API.compareBranches(defaultBranch, sourceBranch, repoName)
+        : Promise.resolve({ ok: true, data: { files: [] as any[] } }),
+      API.getWorkspaceChanges(repoName).catch(() => ({ changes: [] as WorkspaceChange[] })),
+    ])
+      .then(([compareRes, wsRes]) => {
         if (cancelled) return;
-        if (res.ok && res.data?.files) {
-          setDiffFiles(res.data.files.filter((f) => f?.path && !isPathHidden(f.path)));
+        if (compareRes.ok && compareRes.data?.files) {
+          setDiffFiles(compareRes.data.files.filter((f) => f?.path && !isPathHidden(f.path)));
         } else {
           setDiffFiles([]);
         }
+        setWorkspaceChanges(
+          (wsRes?.changes || []).filter((c) => c?.path && !isPathHidden(c.path)),
+        );
       })
       .catch(() => {
-        if (!cancelled) setDiffFiles([]);
+        if (!cancelled) {
+          setDiffFiles([]);
+          setWorkspaceChanges([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoadingDiff(false);
@@ -97,9 +120,17 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   if (!isOpen) return null;
 
   const selectedNode = nodes.find((n) => n.name === sourceBranch);
-  const uncommittedOnly = (selectedNode?.uncommittedFiles || [])
+  const currentActiveBranch = nodes.find((n) => n.isCurrent)?.name;
+  const isViewingCurrentBranch =
+    !sourceBranch || !currentActiveBranch || sourceBranch === currentActiveBranch;
+  const activeWsChanges = isViewingCurrentBranch ? workspaceChanges : [];
+  const nodeUncommittedPaths = (selectedNode?.uncommittedFiles || [])
     .map((u) => (typeof u === "string" ? u : u?.path))
-    .filter((p): p is string => Boolean(p) && !isPathHidden(p) && !diffFiles.some((f) => f.path === p));
+    .filter((p): p is string => Boolean(p) && !isPathHidden(p));
+  const wsUncommittedPaths = activeWsChanges.map((c) => c.path);
+  const uncommittedOnly = Array.from(new Set([...nodeUncommittedPaths, ...wsUncommittedPaths])).filter(
+    (p) => !diffFiles.some((f) => f.path === p),
+  );
   const totalChangedCount = diffFiles.length + uncommittedOnly.length;
 
   const handleGenerateSummary = async () => {
@@ -157,7 +188,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      size="lg"
+      size="xl"
       title={
         <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Send size={18} color="var(--color-primary, #2563eb)" />
@@ -325,7 +356,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
           </div>
           <Textarea
             id="create-pub-description"
-            rows={3}
+            rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Explique rapidamente o que mudou nesta versão..."
@@ -366,18 +397,22 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "6px",
-                  maxHeight: "220px",
-                  overflowY: "auto",
-                  paddingRight: "2px",
+                  gap: "8px",
                 }}
               >
                 {diffFiles.map((f) => {
                   const isExpanded = expandedFile === f.path;
+                  const wsMatch = activeWsChanges.find((c) => c.path === f.path);
+                  const effectiveOldContent = f.oldContent ?? wsMatch?.old_content;
+                  const effectiveNewContent =
+                    wsMatch?.new_content !== undefined ? wsMatch.new_content : f.newContent;
+                  const hasVisualContent =
+                    effectiveOldContent !== undefined || effectiveNewContent !== undefined;
                   return (
                     <div
                       key={f.path}
                       style={{
+                        flexShrink: 0,
                         border: "1px solid var(--border-color, #e2e8f0)",
                         borderRadius: "8px",
                         overflow: "hidden",
@@ -417,42 +452,136 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                             {f.path}
                           </span>
                         </span>
-                        <span style={{ display: "flex", gap: "8px", fontSize: "11px", flexShrink: 0 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", flexShrink: 0 }}>
+                          {wsMatch && (
+                            <span style={{ color: "#d97706", fontWeight: 600 }}>
+                              + edição local
+                            </span>
+                          )}
                           <span style={{ color: "#16a34a", fontWeight: 600 }}>+{f.additions}</span>
                           <span style={{ color: "#dc2626", fontWeight: 600 }}>-{f.deletions}</span>
                         </span>
                       </button>
                       {isExpanded && (
-                        <div style={{ padding: "8px", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
-                          <DiffViewer diffText={f.diff || "Sem detalhes textuais."} />
+                        <div
+                          style={{
+                            borderTop: "1px solid var(--border-color, #e2e8f0)",
+                            background: "var(--bg-surface, #ffffff)",
+                            maxHeight: "400px",
+                            overflowY: "auto",
+                          }}
+                        >
+                          {hasVisualContent ? (
+                            <VisualMarkdownDiff
+                              oldContent={effectiveOldContent || ""}
+                              newContent={effectiveNewContent || ""}
+                              fileName={f.path}
+                              oldTitle="Versão Oficial"
+                              newTitle="Rascunho Atual"
+                              hideHeader={true}
+                              initialViewMode="split"
+                            />
+                          ) : (
+                            <div style={{ padding: "8px" }}>
+                              <DiffViewer diffText={f.diff || "Sem detalhes textuais."} />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                   );
                 })}
-                {uncommittedOnly.map((filePath) => (
-                  <div
-                    key={filePath}
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color, #e2e8f0)",
-                      background: "var(--bg-main, #f8fafc)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "8px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--text-heading)" }}>
-                      {filePath}
-                    </span>
-                    <span style={{ fontSize: "11px", color: "#d97706", fontWeight: 600 }}>
-                      Alteração local (será incluída)
-                    </span>
-                  </div>
-                ))}
+                {uncommittedOnly.map((filePath) => {
+                  const isExpanded = expandedFile === filePath;
+                  const wsMatch = activeWsChanges.find((c) => c.path === filePath);
+                  const hasVisualContent =
+                    wsMatch &&
+                    (wsMatch.old_content !== undefined || wsMatch.new_content !== undefined);
+                  return (
+                    <div
+                      key={filePath}
+                      style={{
+                        flexShrink: 0,
+                        border: "1px solid var(--border-color, #e2e8f0)",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        background: "var(--bg-surface, #ffffff)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setExpandedFile(isExpanded ? null : filePath)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          background: "var(--bg-main, #f8fafc)",
+                          border: "none",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          textAlign: "left",
+                        }}
+                      >
+                        <span style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          <FileText size={13} style={{ flexShrink: 0, color: "#d97706" }} />
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontWeight: 600,
+                              color: "var(--text-heading)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {filePath}
+                          </span>
+                        </span>
+                        <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", flexShrink: 0 }}>
+                          {wsMatch && (
+                            <>
+                              <span style={{ color: "#16a34a", fontWeight: 600 }}>+{wsMatch.additions}</span>
+                              <span style={{ color: "#dc2626", fontWeight: 600 }}>-{wsMatch.deletions}</span>
+                            </>
+                          )}
+                          <span style={{ color: "#d97706", fontWeight: 600 }}>
+                            Local (será incluída)
+                          </span>
+                        </span>
+                      </button>
+                      {isExpanded && (
+                        <div
+                          style={{
+                            borderTop: "1px solid var(--border-color, #e2e8f0)",
+                            background: "var(--bg-surface, #ffffff)",
+                            maxHeight: "400px",
+                            overflowY: "auto",
+                          }}
+                        >
+                          {hasVisualContent ? (
+                            <VisualMarkdownDiff
+                              oldContent={wsMatch.old_content || ""}
+                              newContent={wsMatch.new_content || ""}
+                              fileName={filePath}
+                              oldTitle="Último Checkpoint / Oficial"
+                              newTitle="Edição Local Atual"
+                              hideHeader={true}
+                              initialViewMode="split"
+                            />
+                          ) : (
+                            <div style={{ padding: "8px" }}>
+                              <DiffViewer diffText={wsMatch?.diff_text || "Sem detalhes textuais."} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
