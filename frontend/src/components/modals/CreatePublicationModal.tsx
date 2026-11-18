@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Send, Sparkles, AlertCircle, ChevronDown, ChevronRight, FileText } from "lucide-react";
-import { Modal, Button, FormField, Input, Textarea, Spinner } from "../ui";
+import { createPortal } from "react-dom";
+import { Send, Sparkles, AlertCircle, ChevronDown, ChevronRight, FileText, X } from "lucide-react";
+import { Button, FormField, Input, Textarea, Spinner } from "../ui";
 import { DiffViewer } from "../common";
 import { VisualMarkdownDiff } from "../editor/VisualMarkdownDiff";
 import { API } from "../../services/api";
@@ -117,6 +118,15 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
     };
   }, [isOpen, sourceBranch, defaultBranch, repoName]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const selectedNode = nodes.find((n) => n.name === sourceBranch);
@@ -151,6 +161,10 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (totalChangedCount === 0) {
+      setErrorMsg("Nenhuma alteração detectada para enviar.");
+      return;
+    }
     if (!title.trim()) {
       setErrorMsg("Informe um título para o pedido de publicação.");
       return;
@@ -184,36 +198,77 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
     }
   };
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      size="xl"
-      title={
-        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Send size={18} color="var(--color-primary, #2563eb)" />
-          <span>Enviar para Publicação</span>
-        </span>
-      }
-      subtitle="Envie seu rascunho de versão para ser integrado na Versão Oficial."
-      footer={
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", width: "100%" }}>
-          <Button variant="secondary" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Cancelar
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleSubmit}
-            isLoading={isSubmitting}
-            disabled={isSubmitting || !title.trim()}
-            icon={<Send size={14} />}
-          >
-            {isSubmitting ? "Enviando..." : "Enviar Pedido de Publicação"}
-          </Button>
-        </div>
-      }
+  return createPortal(
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.45)",
+        backdropFilter: "blur(3px)",
+        zIndex: 1000,
+        display: "flex",
+        justifyContent: "flex-end",
+      }}
+      onClick={onClose}
     >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Enviar para Publicação"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(92vw, 960px)",
+          height: "100%",
+          background: "var(--bg-surface, #ffffff)",
+          borderLeft: "1px solid var(--border-color, #e2e8f0)",
+          boxShadow: "-12px 0 36px rgba(15, 23, 42, 0.16)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "16px 24px",
+            borderBottom: "1px solid var(--border-color, #e2e8f0)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: 700, color: "var(--text-heading)" }}>
+              <Send size={18} color="var(--color-primary, #2563eb)" />
+              <span>Enviar para Publicação</span>
+            </span>
+            <span style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
+              Envie seu rascunho de versão para ser integrado na Versão Oficial.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "32px",
+              height: "32px",
+              borderRadius: "8px",
+              border: "none",
+              background: "transparent",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         {errorMsg && (
           <div
@@ -300,34 +355,6 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
           </div>
         )}
 
-        {selectedNode && (
-          <div
-            style={{
-              fontSize: "12px",
-              color: "var(--text-secondary)",
-              padding: "10px 12px",
-              borderRadius: "8px",
-              background: "var(--bg-main, #f8fafc)",
-              border: "1px solid var(--border-color, #e2e8f0)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "8px",
-              flexWrap: "wrap",
-            }}
-          >
-            <span>
-              Rascunho: <strong style={{ color: "var(--text-heading)" }}>{selectedNode.displayName || selectedNode.name}</strong> → <strong>Versão Oficial</strong>
-            </span>
-            <span>
-              <strong>{selectedNode.ahead}</strong> checkpoint(s)
-              {selectedNode.uncommittedFiles && selectedNode.uncommittedFiles.length > 0
-                ? ` + ${selectedNode.uncommittedFiles.length} alteração(ões) pendente(s)`
-                : ""}
-            </span>
-          </div>
-        )}
-
         <FormField label="Título da Publicação" required>
           <Input
             id="create-pub-title"
@@ -408,6 +435,13 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                     wsMatch?.new_content !== undefined ? wsMatch.new_content : f.newContent;
                   const hasVisualContent =
                     effectiveOldContent !== undefined || effectiveNewContent !== undefined;
+                  const normalizedStatus = (f.status || "MODIFIED").toUpperCase();
+                  const statusMeta =
+                    normalizedStatus === "ADDED"
+                      ? { label: "Novo", color: "#15803d", bg: "rgba(22, 163, 74, 0.12)" }
+                      : normalizedStatus === "DELETED"
+                        ? { label: "Excluído", color: "#b91c1c", bg: "rgba(220, 38, 38, 0.12)" }
+                        : { label: "Modificado", color: "#1d4ed8", bg: "rgba(37, 99, 235, 0.1)" };
                   return (
                     <div
                       key={f.path}
@@ -424,21 +458,22 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                         onClick={() => setExpandedFile(isExpanded ? null : f.path)}
                         style={{
                           width: "100%",
-                          padding: "8px 10px",
+                          minHeight: "44px",
+                          padding: "11px 14px",
                           background: "var(--bg-main, #f8fafc)",
                           border: "none",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          gap: "8px",
+                          gap: "10px",
                           cursor: "pointer",
-                          fontSize: "12px",
+                          fontSize: "13px",
                           textAlign: "left",
                         }}
                       >
-                        <span style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          <FileText size={13} style={{ flexShrink: 0, color: "var(--text-secondary)" }} />
+                        <span style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                          {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                          <FileText size={14} style={{ flexShrink: 0, color: "var(--text-secondary)" }} />
                           <span
                             style={{
                               fontFamily: "monospace",
@@ -451,13 +486,21 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                           >
                             {f.path}
                           </span>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              padding: "2px 7px",
+                              borderRadius: "999px",
+                              color: statusMeta.color,
+                              background: statusMeta.bg,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {statusMeta.label}
+                          </span>
                         </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", flexShrink: 0 }}>
-                          {wsMatch && (
-                            <span style={{ color: "#d97706", fontWeight: 600 }}>
-                              + edição local
-                            </span>
-                          )}
+                        <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", flexShrink: 0 }}>
                           <span style={{ color: "#16a34a", fontWeight: 600 }}>+{f.additions}</span>
                           <span style={{ color: "#dc2626", fontWeight: 600 }}>-{f.deletions}</span>
                         </span>
@@ -497,6 +540,13 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                   const hasVisualContent =
                     wsMatch &&
                     (wsMatch.old_content !== undefined || wsMatch.new_content !== undefined);
+                  const rawType = (wsMatch?.type || "").toUpperCase();
+                  const statusMeta =
+                    rawType === "ADDED" || rawType === "UNTRACKED" || rawType === "CREATE" || (wsMatch && !wsMatch.old_content && wsMatch.new_content)
+                      ? { label: "Novo", color: "#15803d", bg: "rgba(22, 163, 74, 0.12)" }
+                      : rawType === "DELETED" || rawType === "DELETE" || (wsMatch && wsMatch.old_content && !wsMatch.new_content)
+                        ? { label: "Excluído", color: "#b91c1c", bg: "rgba(220, 38, 38, 0.12)" }
+                        : { label: "Modificado", color: "#1d4ed8", bg: "rgba(37, 99, 235, 0.1)" };
                   return (
                     <div
                       key={filePath}
@@ -513,21 +563,22 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                         onClick={() => setExpandedFile(isExpanded ? null : filePath)}
                         style={{
                           width: "100%",
-                          padding: "8px 10px",
+                          minHeight: "44px",
+                          padding: "11px 14px",
                           background: "var(--bg-main, #f8fafc)",
                           border: "none",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          gap: "8px",
+                          gap: "10px",
                           cursor: "pointer",
-                          fontSize: "12px",
+                          fontSize: "13px",
                           textAlign: "left",
                         }}
                       >
-                        <span style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          <FileText size={13} style={{ flexShrink: 0, color: "#d97706" }} />
+                        <span style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                          {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                          <FileText size={14} style={{ flexShrink: 0, color: "var(--text-secondary)" }} />
                           <span
                             style={{
                               fontFamily: "monospace",
@@ -540,17 +591,27 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                           >
                             {filePath}
                           </span>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              padding: "2px 7px",
+                              borderRadius: "999px",
+                              color: statusMeta.color,
+                              background: statusMeta.bg,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {statusMeta.label}
+                          </span>
                         </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", flexShrink: 0 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", flexShrink: 0 }}>
                           {wsMatch && (
                             <>
                               <span style={{ color: "#16a34a", fontWeight: 600 }}>+{wsMatch.additions}</span>
                               <span style={{ color: "#dc2626", fontWeight: 600 }}>-{wsMatch.deletions}</span>
                             </>
                           )}
-                          <span style={{ color: "#d97706", fontWeight: 600 }}>
-                            Local (será incluída)
-                          </span>
                         </span>
                       </button>
                       {isExpanded && (
@@ -587,6 +648,35 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
           </div>
         )}
       </form>
-    </Modal>
+        </div>
+
+        <div
+          style={{
+            padding: "14px 24px",
+            borderTop: "1px solid var(--border-color, #e2e8f0)",
+            background: "var(--bg-surface, #ffffff)",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "8px",
+            flexShrink: 0,
+          }}
+        >
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={isSubmitting}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSubmit}
+            isLoading={isSubmitting}
+            disabled={isSubmitting || isLoadingDiff || !title.trim() || totalChangedCount === 0}
+            icon={<Send size={14} />}
+          >
+            {isSubmitting ? "Enviando..." : "Enviar Pedido de Publicação"}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 };

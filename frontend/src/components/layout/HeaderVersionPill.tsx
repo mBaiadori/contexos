@@ -22,6 +22,14 @@ export const HeaderVersionPill: React.FC<HeaderVersionPillProps> = ({ onClick })
   const label =
     semanticName.length > 30 ? `${semanticName.slice(0, 29)}…` : semanticName;
 
+  const isRemoteOrPublished =
+    Boolean(activeNode?.hasRemote) ||
+    Boolean(activeProposal) ||
+    activeNode?.type === "proposal" ||
+    activeNode?.publicationStatus === "open" ||
+    activeNode?.publicationStatus === "synced" ||
+    activeNode?.publicationStatus === "remote_only";
+
   const pillTheme = isMain
     ? {
         bg: "rgba(37, 99, 235, 0.12)",
@@ -36,18 +44,18 @@ export const HeaderVersionPill: React.FC<HeaderVersionPillProps> = ({ onClick })
           color: "#059669",
           dot: "#059669",
         }
-      : activeNode?.type === "draft" || activeProposal
+      : isRemoteOrPublished
         ? {
-            bg: "rgba(217, 119, 6, 0.12)",
-            border: "rgba(217, 119, 6, 0.3)",
-            color: "#d97706",
-            dot: "#d97706",
-          }
-        : {
             bg: "rgba(124, 58, 237, 0.12)",
             border: "rgba(124, 58, 237, 0.3)",
             color: "#7c3aed",
             dot: "#7c3aed",
+          }
+        : {
+            bg: "rgba(217, 119, 6, 0.12)",
+            border: "rgba(217, 119, 6, 0.3)",
+            color: "#d97706",
+            dot: "#d97706",
           };
 
   return (

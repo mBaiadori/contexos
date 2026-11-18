@@ -385,8 +385,13 @@ export function calculateCanvasLayout({
     const branchY = slotStartY;
     const path = getSankeyHorizontalPath(sourceX, sourceY, entryX, branchY);
 
-    let color = "#7c3aed";
-    if (node.type === "draft") color = "#d97706";
+    const isRemoteOrPublished =
+      Boolean(node.hasRemote) ||
+      node.type === "proposal" ||
+      node.publicationStatus === "open" ||
+      node.publicationStatus === "synced" ||
+      node.publicationStatus === "remote_only";
+    let color = isRemoteOrPublished ? "#7c3aed" : "#d97706";
     if (node.isMerged) color = "#059669";
 
     const bCommits = branchCommitsMap.get(node.name) || [];

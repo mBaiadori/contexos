@@ -38,11 +38,11 @@ export const VersionCanvasLegend: React.FC = () => {
             width: "8px",
             height: "8px",
             borderRadius: "50%",
-            background: "#7c3aed",
+            background: "#d97706",
             flexShrink: 0,
           }}
         />
-        <span>Rascunho Local / Colega</span>
+        <span>Rascunho Local</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <span
@@ -50,11 +50,11 @@ export const VersionCanvasLegend: React.FC = () => {
             width: "8px",
             height: "8px",
             borderRadius: "50%",
-            background: "#d97706",
+            background: "#7c3aed",
             flexShrink: 0,
           }}
         />
-        <span>Em Publicação</span>
+        <span>Remoto / Em Publicação</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <span
