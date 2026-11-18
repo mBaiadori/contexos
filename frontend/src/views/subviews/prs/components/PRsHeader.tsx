@@ -1,5 +1,5 @@
 import React from "react";
-import { GitPullRequest, RefreshCw } from "lucide-react";
+import { GitPullRequest, Plus, RefreshCw } from "lucide-react";
 import { PageHeader, Row, Button } from "../../../../components/ui";
 import { RepoSelectorDropdown } from "../../../../components/layout/RepoSelectorDropdown";
 
@@ -10,6 +10,7 @@ interface PRsHeaderProps {
   isLoading: boolean;
   loadPRs: () => void;
   providerLabel: string;
+  onNewPublication?: () => void;
 }
 
 export const PRsHeader: React.FC<PRsHeaderProps> = ({
@@ -19,10 +20,11 @@ export const PRsHeader: React.FC<PRsHeaderProps> = ({
   isLoading,
   loadPRs,
   providerLabel: _providerLabel,
+  onNewPublication,
 }) => {
   return (
     <PageHeader
-      title="Revisões & Publicações"
+      title="Publicações"
       subtitle={
         <Row gap="sm" align="center" style={{ marginTop: "4px", flexWrap: "wrap" }}>
           <RepoSelectorDropdown
@@ -34,7 +36,7 @@ export const PRsHeader: React.FC<PRsHeaderProps> = ({
             allowAll={true}
           />
           <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
-            Revise propostas de alteração de documentos, aprove versões e controle o histórico de integrações.
+            Envie rascunhos de versão para publicação, resolva edições concorrentes e publique na Versão Oficial.
           </span>
         </Row>
       }
@@ -56,13 +58,24 @@ export const PRsHeader: React.FC<PRsHeaderProps> = ({
       }
       actions={
         <Row gap="xs">
+          {onNewPublication && (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={onNewPublication}
+            >
+              Nova Publicação
+            </Button>
+          )}
           <Button
             type="button"
             variant="secondary"
             size="sm"
             icon={<RefreshCw size={14} />}
             onClick={() => loadPRs()}
-            title="Atualizar lista de propostas"
+            title="Atualizar lista de publicações"
             disabled={isLoading}
           >
             {isLoading ? "Atualizando..." : "Atualizar"}

@@ -351,6 +351,28 @@ export async function gitRoutes(app: FastifyInstance) {
     }
   });
 
+  // 10.1 Compare two versions (branches)
+  app.get("/api/git/compare", async (req, reply) => {
+    try {
+      const { base, head, repo } = req.query as {
+        base?: string;
+        head?: string;
+        repo?: string;
+      };
+      if (!base || !head) {
+        return reply
+          .status(400)
+          .send({ error: "Parâmetros base e head são obrigatórios." });
+      }
+      const data = await gitService.compareBranches(base, head, repo);
+      return data;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao comparar versões" });
+    }
+  });
+
   // 11. Get Git Diagnostic / Version
   app.get("/api/git/diagnostic", async (req, reply) => {
     try {

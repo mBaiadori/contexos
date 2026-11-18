@@ -203,6 +203,7 @@ export const useGitStore = create<GitState>((set, get) => ({
       await get().refreshPendingChanges();
       await get().refreshGitStatus();
       await get().refreshGitLog(15);
+      await get().refreshVersionGraph();
     }
     return res.data;
   },

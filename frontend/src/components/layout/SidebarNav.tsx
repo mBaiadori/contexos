@@ -5,7 +5,6 @@ import {
   FileText,
   GitBranch,
   GitPullRequest,
-  History,
   Settings,
   ShieldCheck,
   SpellCheck,
@@ -14,7 +13,6 @@ import React, { useState } from "react";
 
 export type SubViewType =
   | "editor"
-  | "edits"
   | "versions"
   | "dictionary"
   | "wiki"
@@ -65,13 +63,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       id: "versions" as SubViewType,
       label: "Versões",
       icon: <GitBranch size={19} />,
-      title: "Versões",
-    },
-    {
-      id: "edits" as SubViewType,
-      label: "Edições",
-      icon: <History size={19} />,
-      title: "Edições",
+      title: "Linha do Tempo & Comparação de Versões",
     },
     {
       id: "aicenter" as SubViewType,
@@ -82,9 +74,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     },
     {
       id: "prs" as SubViewType,
-      label: "Revisões",
+      label: "Publicações",
       icon: <GitPullRequest size={19} />,
-      title: "Revisões e Propostas de Evolução da Documentação",
+      title: "Pedidos de Publicação na Versão Oficial",
     },
     {
       id: "governance" as SubViewType,
@@ -163,22 +155,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                 {item.icon}
               </span>
               <span className="nav-label">{item.label}</span>
-              {item.hasBadge && (
-                <span
-                  style={{
-                    width: "7px",
-                    height: "7px",
-                    borderRadius: "50%",
-                    backgroundColor: "#22c55e",
-                    boxShadow: "0 0 6px #22c55e",
-                    position: "absolute",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    right: "14px",
-                  }}
-                  title="Novidades não visualizadas!"
-                />
-              )}
             </button>
           );
         })}

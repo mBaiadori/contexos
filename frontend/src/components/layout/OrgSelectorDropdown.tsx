@@ -7,7 +7,6 @@ import { useOrgUiStore } from "../../stores/orgUiStore";
 
 const VALID_SUBVIEWS = [
   "editor",
-  "edits",
   "versions",
   "dictionary",
   "wiki",

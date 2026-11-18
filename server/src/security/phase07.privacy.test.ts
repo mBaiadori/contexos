@@ -145,8 +145,8 @@ describe("Fase 7: Governança de IA, LGPD, Trilha de Auditoria e Validação de 
 
   describe("7.2: Trilha de Auditoria Criptográfica Encadeada (Hash Chain)", () => {
     test("deve registrar eventos encadeados e validar a integridade da cadeia", async () => {
-      const memoryDir = path.join(tmpDir, ".spec-memory");
-      fs.mkdirSync(memoryDir, { recursive: true });
+      const auditDir = path.join(tmpDir, ".audit");
+      fs.mkdirSync(auditDir, { recursive: true });
 
       const e1 = await recordAuditEvent(tmpDir, {
         eventType: "ai_request",
@@ -179,7 +179,7 @@ describe("Fase 7: Governança de IA, LGPD, Trilha de Auditoria e Validação de 
     });
 
     test("deve detectar adulteração em qualquer registro da trilha", async () => {
-      const chainPath = path.join(tmpDir, ".spec-memory", "audit-chain.jsonl");
+      const chainPath = path.join(tmpDir, ".audit", "audit-chain.jsonl");
       const lines = fs.readFileSync(chainPath, "utf-8").split("\n").filter(Boolean);
       assert.ok(lines.length >= 3);
 

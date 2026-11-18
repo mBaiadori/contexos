@@ -240,6 +240,15 @@ export async function prsRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post("/api/prs/create", async (request, reply) => {
+    try {
+      const result = await prsService.createPR(request.body as any);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
   fastify.post("/api/prs/approve", async (request, reply) => {
     const body = request.body as {
       id?: number | string;

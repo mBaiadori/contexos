@@ -37,14 +37,12 @@ test("GitHealthGuard - Auto-cura preventiva do repositório Git", async (t) => {
     assert.strictEqual(fs.existsSync(mergeHeadPath), false);
   });
 
-  await t.test("Deve limpar workspace_changes.json transitório e desindexar do Git", async () => {
-    const specMemoryDir = path.join(repoDir, ".spec-memory");
-    fs.mkdirSync(specMemoryDir, { recursive: true });
-    const changesFile = path.join(specMemoryDir, "workspace_changes.json");
+  await t.test("Deve limpar .workspace_changes.json transitório e desindexar do Git", async () => {
+    const changesFile = path.join(repoDir, ".workspace_changes.json");
     fs.writeFileSync(changesFile, '{"changes": []}', "utf-8");
 
     // Simula git add no arquivo transitório
-    await executeGit(["add", "-f", ".spec-memory/workspace_changes.json"], repoDir);
+    await executeGit(["add", "-f", ".workspace_changes.json"], repoDir);
 
     const result = await healRepositoryState(repoDir, { unshallowIfNeeded: false });
     assert.strictEqual(result.healed, true);
@@ -55,7 +53,7 @@ test("GitHealthGuard - Auto-cura preventiva do repositório Git", async (t) => {
 
     // O arquivo não deve mais estar rastreado no index
     const checkRes = await executeGit(
-      ["ls-files", "--error-unmatch", ".spec-memory/workspace_changes.json"],
+      ["ls-files", "--error-unmatch", ".workspace_changes.json"],
       repoDir,
     );
     assert.strictEqual(checkRes.success, false);

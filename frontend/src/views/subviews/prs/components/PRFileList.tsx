@@ -363,35 +363,6 @@ export const PRFileList: React.FC<PRFileListProps> = ({
           </div>
         </div>
       )}
-
-      {/* When all modified files in PR are system files */}
-      {prFiles.length === 0 && rawFiles.length > 0 && (
-        <div
-          style={{
-            padding: "12px 14px",
-            borderRadius: "8px",
-            background: "var(--color-surface-subtle, #f8fafc)",
-            border:
-              "1px dashed var(--color-border-subtle, #cbd5e1)",
-            fontSize: "12.5px",
-            color: "var(--color-text-muted, #64748b)",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: "18px", color: "var(--color-text-muted)" }}
-          >
-            settings
-          </span>
-          <span>
-            Esta revisão contém apenas {rawFiles.length} arquivo(s) de sistema ou
-            configuração interna (não visíveis nesta listagem).
-          </span>
-        </div>
-      )}
     </>
   );
 };

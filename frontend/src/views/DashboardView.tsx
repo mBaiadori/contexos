@@ -7,7 +7,6 @@ import { HistorySidebar } from "../components/copilot/HistorySidebar";
 import { RawInspectorSidebar } from "../components/copilot/RawInspectorSidebar";
 import { ContextSidebar } from "../components/copilot/ContextSidebar";
 import { SkillsSidebar } from "../components/copilot/SkillsSidebar";
-import { DiffModal } from "../components/modals/DiffModal";
 import { ScaffoldModal } from "../components/modals/ScaffoldModal";
 import { AISettingsModal } from "../components/modals/AISettingsModal";
 import { SelectOrgModal } from "../components/modals/SelectOrgModal";
@@ -20,7 +19,6 @@ import { useEditorStore } from "../stores/editorStore";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { LoadingPane } from "../components/layout/LoadingPane";
 import { EditorSubView } from "./subviews/EditorSubView";
-import { VersionsSubView } from "./subviews/VersionsSubView";
 import { VersionsCanvasSubView } from "./subviews/VersionsCanvasSubView";
 import { WikiSubView } from "./subviews/WikiSubView";
 import { DictionarySubView } from "./subviews/DictionarySubView";
@@ -45,7 +43,6 @@ const DEFAULT_AI_WIDTH = 360;
 
 const VALID_SUBVIEWS: SubViewType[] = [
   "editor",
-  "edits",
   "versions",
   "dictionary",
   "wiki",
@@ -74,7 +71,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<
     "prompt" | "history" | "raw" | "context" | "skills" | null
   >(null);
-  const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isSelectOrgModalOpen, setIsSelectOrgModalOpen] = useState(false);
 
@@ -306,29 +302,22 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     const base = buildRepoBaseUrl(view);
     if (view === "editor" && activeFile) {
       navigate(`${base}?file=${encodeURIComponent(activeFile)}`);
-    } else if (view === "edits") {
-      navigate(`${buildRepoBaseUrl("edits")}?tab=drafts`);
     } else {
       navigate(base);
     }
   };
 
-  const handleNavigateToEdits = useCallback(
-    (tab?: "drafts") => {
-      const base = buildRepoBaseUrl("edits");
-      const targetTab = tab || "drafts";
-      navigate(`${base}?tab=${targetTab}`);
-    },
-    [buildRepoBaseUrl, navigate],
-  );
+  const handleNavigateToEdits = useCallback(() => {
+    navigate(buildRepoBaseUrl("versions"));
+  }, [buildRepoBaseUrl, navigate]);
 
   const handleOpenDiffModal = useCallback(() => {
-    handleNavigateToEdits("drafts");
-  }, [handleNavigateToEdits]);
+    navigate(buildRepoBaseUrl("versions"));
+  }, [buildRepoBaseUrl, navigate]);
 
   const handleOpenGitModal = useCallback(() => {
-    handleNavigateToEdits();
-  }, [handleNavigateToEdits]);
+    navigate(buildRepoBaseUrl("versions"));
+  }, [buildRepoBaseUrl, navigate]);
 
   const handleOpenFile = (rawPath: string) => {
     const base = buildRepoBaseUrl("editor");
@@ -426,23 +415,13 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
           {activeSubView === "editor" && (
             <EditorSubView
               onOpenScaffoldWizard={() => setIsScaffoldModalOpen(true)}
-              onOpenDiffModal={() => handleNavigateToEdits("drafts")}
+              onOpenDiffModal={() => handleSelectView("versions")}
               onToggleCopilot={toggleCopilot}
               onOpenFile={handleOpenFile}
             />
           )}
 
           <React.Suspense fallback={<LoadingPane />}>
-            {activeSubView === "edits" && (
-              <VersionsSubView
-                onOpenFile={(path) => {
-                  handleOpenFile(path);
-                  handleSelectView("editor");
-                }}
-                onOpenDiffModal={() => handleNavigateToEdits("drafts")}
-              />
-            )}
-
             {activeSubView === "versions" && (
               <VersionsCanvasSubView
                 onNavigateToProposal={(prId) => {
@@ -451,13 +430,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
                     prId ? `${base}?pr=${encodeURIComponent(prId)}` : base,
                   );
                 }}
-                onOpenDiffModal={(targetBranch) => {
-                  if (targetBranch) {
-                    setIsDiffModalOpen(true);
-                  } else {
-                    handleNavigateToEdits("drafts");
-                  }
-                }}
+                onOpenDiffModal={() => handleSelectView("versions")}
               />
             )}
 
@@ -470,7 +443,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             )}
 
             {activeSubView === "prs" && (
-              <PRsSubView onOpenDiffModal={() => setIsDiffModalOpen(true)} />
+              <PRsSubView onOpenDiffModal={() => handleSelectView("versions")} />
             )}
 
             {activeSubView === "governance" && <GovernanceMembersSubView />}
@@ -588,12 +561,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
 
       {/* Global Modals */}
       <AISettingsModal />
-
-      <DiffModal
-        isOpen={isDiffModalOpen}
-        onClose={() => setIsDiffModalOpen(false)}
-        onPROpened={() => handleSelectView("prs")}
-      />
 
       <ScaffoldModal
         isOpen={isScaffoldModalOpen}

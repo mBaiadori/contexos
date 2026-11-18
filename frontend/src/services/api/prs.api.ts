@@ -42,8 +42,16 @@ export const prsApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async createPR(payload: { title: string; content?: string; path?: string; repo?: string }): Promise<ApiResponse<any>> {
-    const res = await fetch('/api/prs/create', {
+  async createPR(payload: {
+    title: string;
+    description?: string;
+    branch?: string;
+    sourceBranch?: string;
+    squash?: boolean;
+    targetProposalId?: number | string;
+    repo?: string;
+  }): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/workspace/create-pr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

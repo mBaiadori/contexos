@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
 import { isPathHidden } from "../../utils/hidden-files";
-import { IconButton, Button, Badge } from "../ui";
+import { Button, Badge } from "../ui";
 import {
   Sparkles,
   User,
@@ -16,7 +16,6 @@ import {
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 import { InvitationsModal } from "../modals/InvitationsModal";
 import { HeaderVersionPill } from "./HeaderVersionPill";
-import { SavedChangesPill } from "./SavedChangesPill";
 import { useUpdaterStore } from "../../stores/updaterStore";
 
 interface TopHeaderProps {
@@ -232,14 +231,13 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
           </h1>
 
           <HeaderVersionPill onClick={onOpenVersionGraph} />
-          <SavedChangesPill />
 
           {hasRemoteUpdates && (
             <button
               id="dash-repo-remote-update-badge"
               type="button"
               onClick={() => syncGit()}
-              title="Existem novos commits no GitHub. Clique para puxar atualizações sem perder rascunhos."
+              title="Existem atualizações na nuvem. Clique para atualizar."
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -277,7 +275,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
               variant="subtle"
               size="sm"
               onClick={() => handleGoToEdits("drafts")}
-              title="Ver minhas alterações e rascunhos na Central de Edições"
+              title="Ver alterações deste rascunho de versão"
               leftIcon={
                 <Badge variant="warning" size="sm" hasDot>
                   {filteredPendingChanges.length}

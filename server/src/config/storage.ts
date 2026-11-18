@@ -346,7 +346,7 @@ export function saveConfig(cfg: AppConfig): void {
 
 export function getRepoWorkspaceChangesPath(repoName: string, ownerOrOrg?: string): string {
   const repoDir = resolveRepoDir(repoName, ownerOrOrg);
-  return path.join(repoDir, ".spec-memory", "workspace_changes.json");
+  return path.join(repoDir, ".workspace_changes.json");
 }
 
 export function loadRepoWorkspaceChanges(repoName: string, ownerOrOrg?: string): WorkspaceChange[] {
@@ -830,7 +830,10 @@ export async function ensureDefaultRepoFiles(
     ".dictionary.json",
     ".templates.json",
     ".templates.metadata.json",
-    ".spec-memory",
+    ".workspace_changes.json",
+    ".sessions",
+    ".prs.json",
+    ".rag",
     ".skills",
     ".agents",
     ".tools",

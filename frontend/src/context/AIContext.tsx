@@ -111,7 +111,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     activeRepo,
     activeFile,
     fileMetadata,
-    projectConfig,
     tree,
     reloadActiveFile,
     loadTree,

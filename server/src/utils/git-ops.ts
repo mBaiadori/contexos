@@ -4,6 +4,8 @@ import {
   executeGit,
   isGitRepo,
   ensureGitIgnore,
+  isTransientGitPath,
+  TRANSIENT_INDEX_PATHS,
   GitProgressEvent,
   executeGitCommandWithProgress,
 } from "./git-core.js";
@@ -194,10 +196,7 @@ export async function commitChanges(
   if (Array.isArray(files) && files.length > 0) {
     const validFiles: string[] = [];
     for (const file of files) {
-      if (
-        file.includes(".docs.metadata.json") ||
-        file.includes("workspace_changes.json")
-      ) {
+      if (isTransientGitPath(file)) {
         continue;
       }
       validFiles.push(assertGitPath(file));
@@ -212,13 +211,7 @@ export async function commitChanges(
   // Garantia pós-staging: desindexa imediatamente arquivos transitórios do sistema caso tenham entrado no index
   try {
     await executeGit(
-      [
-        "rm",
-        "--cached",
-        "-r",
-        "--ignore-unmatch",
-        ".docs.metadata.json",
-      ],
+      ["rm", "--cached", "-r", "--ignore-unmatch", ...TRANSIENT_INDEX_PATHS],
       repoDir,
     );
   } catch {}

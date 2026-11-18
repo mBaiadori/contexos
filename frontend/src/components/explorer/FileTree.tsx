@@ -24,6 +24,7 @@ import { useFileTreeDnD } from "./hooks/useFileTreeDnD";
 import { FileTreeToolbar } from "./FileTreeToolbar";
 import { RepoTreeItem } from "./RepoTreeItem";
 import { FileTreeModals } from "./FileTreeModals";
+import { CreateDraftBranchModal } from "../modals/CreateDraftBranchModal";
 import { filesToScannedList } from "./utils/fileTreeUtils";
 
 export const FileTree: React.FC<FileTreeProps> = ({
@@ -43,9 +44,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
     activeOrg,
     loadTree,
     gitStatus,
+    versionGraph,
     pendingChanges,
     refreshPendingChanges,
     refreshGitStatus,
+    refreshVersionGraph,
+    createOrSwitchBranch,
     isLoadingWorkspace,
     isLoadingTree,
     moveFileOrFolder,
@@ -71,6 +75,26 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const [deleteItemTarget, setDeleteItemTarget] = useState<DeleteItemTarget | null>(null);
   const [isDeletingItem, setIsDeletingItem] = useState(false);
   const [governanceRepoTarget, setGovernanceRepoTarget] = useState<Repo | null>(null);
+  const [draftBranchPromptOpen, setDraftBranchPromptOpen] = useState(false);
+  const [isCreatingDraftBranch, setIsCreatingDraftBranch] = useState(false);
+  const [pendingTreeAction, setPendingTreeAction] = useState<
+    | { type: "create"; parentPath: string; isFolder: boolean }
+    | { type: "delete"; path: string; name: string; isFolder: boolean; repoName?: string }
+    | { type: "rename"; path: string; name: string; isFolder: boolean }
+    | null
+  >(null);
+
+  const defaultBranch = versionGraph?.defaultBranch || activeRepo?.default_branch || "main";
+  const currentBranch = gitStatus?.branch || versionGraph?.currentBranch || defaultBranch;
+  const isDetached = Boolean(versionGraph?.isDetached);
+  const isOfficial = !isDetached && currentBranch === defaultBranch;
+  const activeVersionNode = versionGraph?.nodes?.find((n) => n.name === currentBranch);
+  const isPublishedBranch = Boolean(
+    !isOfficial &&
+      !isDetached &&
+      (activeVersionNode?.isMerged || activeVersionNode?.publicationStatus === "published"),
+  );
+  const needsDraftBranch = Boolean(activeRepo && (isOfficial || isDetached || isPublishedBranch));
 
   // Repositórios colapsados e loadings
   const [collapsedRepos, setCollapsedRepos] = useState<Record<string, boolean>>({});
@@ -313,6 +337,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const startInlineCreate = useCallback(
     (parentPath: string = "", isFolder: boolean = false, e?: React.MouseEvent) => {
       if (e) e.stopPropagation();
+      if (needsDraftBranch) {
+        setPendingTreeAction({ type: "create", parentPath, isFolder });
+        setDraftBranchPromptOpen(true);
+        return;
+      }
       isSubmittingInlineRef.current = false;
 
       if (parentPath) {
@@ -326,7 +355,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       setInlineCreating({ parentPath, isFolder });
       setInlineValue("");
     },
-    [setExpandedFolders],
+    [needsDraftBranch, setExpandedFolders],
   );
 
   const handleCancelInlineCreate = useCallback(() => {
@@ -451,11 +480,16 @@ export const FileTree: React.FC<FileTreeProps> = ({
       e?: React.MouseEvent,
     ) => {
       if (e) e.stopPropagation();
+      if (needsDraftBranch) {
+        setPendingTreeAction({ type: "rename", path: itemPath, name: currentName, isFolder });
+        setDraftBranchPromptOpen(true);
+        return;
+      }
       setInlineCreating(null);
       setInlineRenaming({ path: itemPath, originalName: currentName, isFolder });
       setInlineRenameValue(currentName);
     },
-    [],
+    [needsDraftBranch],
   );
 
   const handleCancelInlineRename = useCallback(() => {
@@ -538,9 +572,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
       e?: React.MouseEvent,
     ) => {
       if (e) e.stopPropagation();
+      if (needsDraftBranch) {
+        setPendingTreeAction({ type: "delete", path, name, isFolder, repoName });
+        setDraftBranchPromptOpen(true);
+        return;
+      }
       setDeleteItemTarget({ path, name, isFolder, repoName });
     },
-    [],
+    [needsDraftBranch],
   );
 
   const handleConfirmDeleteItem = useCallback(async () => {
@@ -1316,6 +1355,81 @@ export const FileTree: React.FC<FileTreeProps> = ({
         onConfirmDeleteItem={handleConfirmDeleteItem}
         governanceRepoTarget={governanceRepoTarget}
         onCloseGovernance={() => setGovernanceRepoTarget(null)}
+      />
+
+      <CreateDraftBranchModal
+        isOpen={draftBranchPromptOpen}
+        onClose={() => {
+          setDraftBranchPromptOpen(false);
+          setPendingTreeAction(null);
+        }}
+        defaultBaseBranch={defaultBranch}
+        availableBranches={(versionGraph?.nodes || []).map((n) => ({
+          name: n.name,
+          displayName: n.displayName,
+          isDefault: n.isDefault,
+        }))}
+        suggestedName={
+          pendingTreeAction?.type === "delete"
+            ? `remover-${pendingTreeAction.name.replace(/\.[^/.]+$/, "")}`
+            : pendingTreeAction?.type === "rename"
+              ? `renomear-${pendingTreeAction.name.replace(/\.[^/.]+$/, "")}`
+              : "novo-documento"
+        }
+        isProcessing={isCreatingDraftBranch}
+        onConfirmCreate={async (params) => {
+          if (!createOrSwitchBranch) return;
+          setIsCreatingDraftBranch(true);
+          try {
+            const res = await createOrSwitchBranch(
+              params.branchName,
+              params.baseBranch,
+              params.displayTitle,
+            );
+            if (res?.success) {
+              await Promise.allSettled([
+                refreshGitStatus?.(),
+                refreshVersionGraph?.(),
+                loadTree(),
+              ]);
+              const action = pendingTreeAction;
+              setDraftBranchPromptOpen(false);
+              setPendingTreeAction(null);
+              showToast(`Rascunho "${params.displayTitle}" criado.`, "info");
+
+              if (action?.type === "create") {
+                isSubmittingInlineRef.current = false;
+                if (action.parentPath) {
+                  setExpandedFolders((prev) => ({ ...prev, [action.parentPath]: true }));
+                }
+                setSelectedTemplate(null);
+                setInlineCreating({ parentPath: action.parentPath, isFolder: action.isFolder });
+                setInlineValue("");
+              } else if (action?.type === "delete") {
+                setDeleteItemTarget({
+                  path: action.path,
+                  name: action.name,
+                  isFolder: action.isFolder,
+                  repoName: action.repoName,
+                });
+              } else if (action?.type === "rename") {
+                setInlineCreating(null);
+                setInlineRenaming({
+                  path: action.path,
+                  originalName: action.name,
+                  isFolder: action.isFolder,
+                });
+                setInlineRenameValue(action.name);
+              }
+            } else {
+              showToast(res?.message || "Não foi possível criar o rascunho.", "warning");
+            }
+          } catch {
+            showToast("Erro ao criar rascunho de versão.", "warning");
+          } finally {
+            setIsCreatingDraftBranch(false);
+          }
+        }}
       />
     </>
   );

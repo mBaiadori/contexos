@@ -456,6 +456,22 @@ export async function isGitRepo(repoDir: string): Promise<boolean> {
   return fs.existsSync(gitDir);
 }
 
+export const TRANSIENT_INDEX_PATHS = [
+  ".docs.metadata.json",
+  ".prs.json",
+  ".rag",
+  ".workspace_changes.json",
+  ".sessions",
+];
+
+export function isTransientGitPath(filePath: string): boolean {
+  const clean = (filePath || "").trim().replace(/^\/+/, "").replace(/\\/g, "/");
+  if (!clean) return false;
+  return TRANSIENT_INDEX_PATHS.some(
+    (p) => clean === p || clean.startsWith(`${p}/`),
+  );
+}
+
 export function ensureGitIgnore(repoDir: string): void {
   const gitignorePath = path.join(repoDir, ".gitignore");
   const requiredPatterns = [
@@ -464,6 +480,10 @@ export function ensureGitIgnore(repoDir: string): void {
     "*.log",
     ".env",
     ".docs.metadata.json",
+    ".prs.json",
+    ".rag/",
+    ".workspace_changes.json",
+    ".sessions/",
   ];
 
   const systemPatternsToUnignore = [

@@ -30,7 +30,7 @@ export const VersionCanvasLegend: React.FC = () => {
             flexShrink: 0,
           }}
         />
-        <span>Principal</span>
+        <span>Versão Oficial</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <span
@@ -42,19 +42,7 @@ export const VersionCanvasLegend: React.FC = () => {
             flexShrink: 0,
           }}
         />
-        <span>Versão</span>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <span
-          style={{
-            width: "8px",
-            height: "8px",
-            borderRadius: "50%",
-            background: "#059669",
-            flexShrink: 0,
-          }}
-        />
-        <span>Mesclada</span>
+        <span>Rascunho Local / Colega</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <span
@@ -66,7 +54,19 @@ export const VersionCanvasLegend: React.FC = () => {
             flexShrink: 0,
           }}
         />
-        <span>Rascunho ou Proposta</span>
+        <span>Em Publicação</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <span
+          style={{
+            width: "8px",
+            height: "8px",
+            borderRadius: "50%",
+            background: "#059669",
+            flexShrink: 0,
+          }}
+        />
+        <span>Publicada na Oficial ✓</span>
       </div>
     </div>
   );

@@ -92,15 +92,16 @@ export function sanitizeSessionEvents(events: any[]): any[] {
 }
 
 export class AIService {
-  private getMemoryDir(repoName?: string): string {
+  private getSessionsDir(repoName?: string): string {
     const cfg = loadConfig();
-    let resolvedRepo = (repoName && repoName !== 'local' && repoName !== 'default')
-      ? repoName
-      : (cfg.active_repo?.name || 'default');
+    const resolvedRepo =
+      repoName && repoName !== 'local' && repoName !== 'default'
+        ? repoName
+        : cfg.active_repo?.name || 'default';
 
-    const targetDir = path.join(resolveRepoDir(resolvedRepo), '.spec-memory');
+    const targetDir = path.join(resolveRepoDir(resolvedRepo), '.sessions');
     if (!fs.existsSync(targetDir) && cfg.active_repo?.name) {
-      const activeDir = path.join(resolveRepoDir(cfg.active_repo.name), '.spec-memory');
+      const activeDir = path.join(resolveRepoDir(cfg.active_repo.name), '.sessions');
       if (fs.existsSync(activeDir)) {
         return activeDir;
       }
@@ -108,23 +109,8 @@ export class AIService {
     return targetDir;
   }
 
-  private getSessionsDir(repoName?: string): string {
-    return path.join(this.getMemoryDir(repoName), 'sessions');
-  }
-
-  getBriefing(repoName: string, _filePath: string): string {
-    const memDir = this.getMemoryDir(repoName);
-    const handoffPath = path.join(memDir, 'handoffs', 'latest.md');
-    let briefing = '';
-
-    if (fs.existsSync(handoffPath)) {
-      try {
-        const handoff = fs.readFileSync(handoffPath, 'utf-8');
-        briefing += `### Último Handoff de Contexto:\n${handoff}\n\n`;
-      } catch {}
-    }
-
-    return briefing;
+  getBriefing(_repoName: string, _filePath: string): string {
+    return '';
   }
 
   async callLLM(
@@ -722,7 +708,7 @@ export class AIService {
     if (!fs.existsSync(sessionsDir)) {
       const cfg = loadConfig();
       if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackDir = path.join(resolveRepoDir(cfg.active_repo.name), '.spec-memory', 'sessions');
+        const fallbackDir = path.join(resolveRepoDir(cfg.active_repo.name), '.sessions');
         if (fs.existsSync(fallbackDir)) {
           sessionsDir = fallbackDir;
         } else {
@@ -819,7 +805,7 @@ export class AIService {
     if (!fs.existsSync(sessionFile)) {
       const cfg = loadConfig();
       if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackFile = path.join(resolveRepoDir(cfg.active_repo.name), '.spec-memory', 'sessions', `${sessionId}.json`);
+        const fallbackFile = path.join(resolveRepoDir(cfg.active_repo.name), '.sessions', `${sessionId}.json`);
         if (fs.existsSync(fallbackFile)) {
           sessionFile = fallbackFile;
         }
@@ -839,7 +825,7 @@ export class AIService {
     if (!fs.existsSync(sessionFile)) {
       const cfg = loadConfig();
       if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackFile = path.join(resolveRepoDir(cfg.active_repo.name), '.spec-memory', 'sessions', `${sessionId}.json`);
+        const fallbackFile = path.join(resolveRepoDir(cfg.active_repo.name), '.sessions', `${sessionId}.json`);
         if (fs.existsSync(fallbackFile)) {
           sessionFile = fallbackFile;
         }
@@ -857,13 +843,9 @@ export class AIService {
   }
 
   finalizeSession(repoName: string, filePath: string, sessionId: string, summary?: string) {
-    const memDir = this.getMemoryDir(repoName);
-    const handoffsDir = path.join(memDir, 'handoffs');
-    fs.mkdirSync(handoffsDir, { recursive: true });
-
     const sessionData = this.getSessionDetails(repoName, sessionId);
     const nowStr = new Date().toLocaleString('pt-BR');
-    
+
     let generatedSummary = summary;
     if (!generatedSummary && sessionData && sessionData.events?.length > 0) {
       const userQuestions = sessionData.events
@@ -875,13 +857,7 @@ export class AIService {
 
     const content = `# Handoff de Sessão (${nowStr})\n\n**Arquivo / Escopo:** \`${filePath || 'Global'}\`\n**Sessão:** \`${sessionId}\`\n**Modelo:** \`${sessionData?.model || 'AI'}\`\n\n${generatedSummary || 'Sessão finalizada com sucesso.'}\n`;
 
-    const handoffFile = path.join(handoffsDir, 'latest.md');
-    fs.writeFileSync(handoffFile, content, 'utf-8');
-
-    const archiveHandoffFile = path.join(handoffsDir, `handoff-${sessionId}.md`);
-    fs.writeFileSync(archiveHandoffFile, content, 'utf-8');
-
-    // Persistir automaticamente na Base Wiki sob a categoria 'handoffs'
+    // Persistir na Base Wiki sob a categoria 'handoffs'
     try {
       wikiService.saveWikiPage(
         'handoffs',
@@ -896,18 +872,17 @@ export class AIService {
 
     return {
       success: true,
-      message: 'Sessão finalizada e Handoff gerado com sucesso.',
-      handoff_path: handoffFile,
+      message: 'Sessão finalizada com sucesso.',
       briefing: content,
     };
   }
 
   resetMemory(repoName: string) {
-    const memDir = this.getMemoryDir(repoName);
-    if (fs.existsSync(memDir)) {
-      fs.rmSync(memDir, { recursive: true, force: true });
+    const sessionsDir = this.getSessionsDir(repoName);
+    if (fs.existsSync(sessionsDir)) {
+      fs.rmSync(sessionsDir, { recursive: true, force: true });
     }
-    return { success: true, message: 'Memória de IA resetada com sucesso.' };
+    return { success: true, message: 'Histórico de sessões resetado com sucesso.' };
   }
 }
 

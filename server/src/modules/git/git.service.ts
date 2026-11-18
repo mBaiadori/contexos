@@ -7,6 +7,7 @@ import {
   checkRemoteGitUpdates,
   cloneGitRepo,
   commitChanges,
+  compareGitBranches,
   createAndCheckoutBranch,
   executeGit,
   getDefaultBranch,
@@ -38,6 +39,7 @@ interface RepoPRItem {
   target_branch?: string;
   base_sha?: string;
   head_sha?: string;
+  merge_commit_sha?: string;
   status?: string;
   merged_at?: string;
   updated_at?: string;
@@ -191,6 +193,21 @@ export class GitService {
       return { diff: "", isClean: true };
     }
     return await getGitDiff(repoDir, filePath);
+  }
+
+  async compareBranches(
+    baseBranch: string,
+    headBranch: string,
+    repoNameParam?: string,
+    ownerParam?: string,
+  ) {
+    const cfg = loadConfig();
+    const repoName = repoNameParam || cfg.active_repo?.name || "local";
+    const repoDir = this.getRepoDir(repoName, ownerParam);
+    if (!(await isGitRepo(repoDir))) {
+      return { baseBranch, headBranch, commits: [], files: [] };
+    }
+    return await compareGitBranches(repoDir, baseBranch, headBranch);
   }
 
   async getLog(
@@ -485,7 +502,9 @@ export class GitService {
       repoPRs = prsService.loadRepoPRs(repoName) || [];
     } catch {}
 
-    // 5. Pontas de todas as branches locais (refs/heads/*)
+    // 5. Pontas de todas as branches locais (refs/heads/*) e remotas (refs/remotes/origin/*)
+    const localBranches = new Set<string>();
+    const remoteBranches = new Set<string>();
     const branchTips = new Map<
       string,
       {
@@ -503,13 +522,17 @@ export class GitService {
           const [fullRef, hash, date, author, ...msgParts] = parts;
           if (fullRef === "refs/remotes/origin/HEAD") continue;
           let branchName = fullRef;
+          let isRemoteRef = false;
           if (branchName.startsWith("refs/heads/")) {
             branchName = branchName.slice("refs/heads/".length);
+            localBranches.add(branchName);
           } else if (branchName.startsWith("refs/remotes/origin/")) {
             branchName = branchName.slice("refs/remotes/origin/".length);
+            remoteBranches.add(branchName);
+            isRemoteRef = true;
           }
           // Branches locais (refs/heads/) têm precedência sobre remotas
-          if (branchTips.has(branchName)) continue;
+          if (isRemoteRef && branchTips.has(branchName)) continue;
 
           branchTips.set(branchName, {
             hash,
@@ -712,16 +735,33 @@ export class GitService {
           s.message.includes(`contexos:auto:${branch}`),
       );
 
+      const hasLocal = localBranches.has(branch);
+      const hasRemote = remoteBranches.has(branch);
+      const publicationStatus = isDefault
+        ? "official"
+        : wasMergedIntoMain
+          ? "published"
+          : pr?.status === "OPEN"
+            ? "open"
+            : hasRemote && !hasLocal
+              ? "remote_only"
+              : hasRemote
+                ? "synced"
+                : "local";
+
       return {
         name: branch,
         displayName,
         parentDisplayName: isDefault
           ? undefined
           : parentBranch === defaultBranch
-            ? "Principal"
+            ? "Versão Oficial"
             : branchConfigTitles.get(parentBranch || "") || parentBranch,
         isCurrent,
         isDefault,
+        hasLocal,
+        hasRemote,
+        publicationStatus,
         type: (isDefault ? "main" : pr ? "proposal" : "draft") as "main" | "proposal" | "draft",
         parentBranch,
         proposal: pr
@@ -740,8 +780,8 @@ export class GitService {
         ahead: isDefault ? 0 : branchCommits.length,
         behind: 0,
         isMerged: wasMergedIntoMain,
-        mergedDate: directMerge?.date || "",
-        mergeCommitHash: directMerge?.hash || "",
+        mergedDate: directMerge?.date || pr?.merged_at || "",
+        mergeCommitHash: directMerge?.hash || pr?.merge_commit_sha || "",
         baseHash,
         baseDate,
         hasStash: branchStashes.length > 0,
@@ -843,12 +883,11 @@ export class GitService {
     const action = payload.action || "check";
 
     const switchTarget = async () => {
-      // Destrava arquivos transitórios de controle interno (.spec-memory/workspace_changes.json)
+      // Destrava arquivos transitórios de controle interno (.workspace_changes.json)
       // que possam colidir durante o checkout se já tiverem sido commitados em alguma branch
       const wsChangesPath = path.join(
         repoDir,
-        ".spec-memory",
-        "workspace_changes.json",
+        ".workspace_changes.json",
       );
       let wsChangesBackup: string | null = null;
       if (fs.existsSync(wsChangesPath)) {

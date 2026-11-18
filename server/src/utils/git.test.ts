@@ -64,8 +64,10 @@ test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async
       // Deve ter designorado .project.config.json
       assert.strictEqual(content.includes(".project.config.json"), false);
       // Deve conter os padrões essenciais do Context OS
-      assert.ok(content.includes(".spec-memory/workspace_changes.json"));
-      assert.ok(content.includes(".spec-memory/sessions/"));
+      assert.ok(content.includes(".prs.json"));
+      assert.ok(content.includes(".rag/"));
+      assert.ok(content.includes(".workspace_changes.json"));
+      assert.ok(content.includes(".sessions/"));
       assert.ok(content.includes(".env"));
       assert.ok(content.includes(".DS_Store"));
     });
@@ -104,23 +106,21 @@ test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async
       assert.strictEqual(status.files.some((f) => f.path === "artigo.md"), false);
     });
 
-    // 7. Proteção contra commit de workspace_changes.json
+    // 7. Proteção contra commit de .workspace_changes.json
     await t.test("commitChanges deve desindexar arquivos transitórios antes de commitar", async () => {
-      const specDir = path.join(repoDir, ".spec-memory");
-      fs.mkdirSync(specDir, { recursive: true });
-      fs.writeFileSync(path.join(specDir, "workspace_changes.json"), '{"changes":[]}', "utf-8");
+      fs.writeFileSync(path.join(repoDir, ".workspace_changes.json"), '{"changes":[]}', "utf-8");
 
       // Força staging do arquivo transitório
-      await executeGit(["add", "-f", ".spec-memory/workspace_changes.json"], repoDir);
+      await executeGit(["add", "-f", ".workspace_changes.json"], repoDir);
 
       // Modifica artigo.md e commita
       fs.writeFileSync(path.join(repoDir, "artigo.md"), "# Artigo Atualizado\n", "utf-8");
       const result = await commitChanges(repoDir, "Atualiza artigo com segurança");
       assert.strictEqual(result.success, true);
 
-      // Verifica se workspace_changes.json NÃO foi commitado
+      // Verifica se .workspace_changes.json NÃO foi commitado
       const lsResult = await executeGit(
-        ["ls-files", "--error-unmatch", ".spec-memory/workspace_changes.json"],
+        ["ls-files", "--error-unmatch", ".workspace_changes.json"],
         repoDir,
       );
       assert.strictEqual(lsResult.success, false);

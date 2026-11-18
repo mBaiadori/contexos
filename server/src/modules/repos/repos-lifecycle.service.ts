@@ -110,8 +110,18 @@ export class ReposLifecycleService {
             stage: "Concluído",
             percent: 100,
           });
+        } else if (!(await isGitRepo(repoDir))) {
+          eventsService.broadcast("repo_progress", {
+            repo: repo.name,
+            owner: effectiveOwner,
+            stage: "Falha ao baixar projeto",
+            percent: 0,
+          });
+          throw new Error(
+            cloneResult.message || `Não foi possível baixar o projeto '${fullName}' para a sua máquina.`,
+          );
         }
-      } catch (cloneErr) {
+      } catch (cloneErr: any) {
         console.warn(`[selectRepo] Não foi possível clonar ${fullName}:`, cloneErr);
         eventsService.broadcast("repo_progress", {
           repo: repo.name,
@@ -119,6 +129,11 @@ export class ReposLifecycleService {
           stage: "Falha na sincronização",
           percent: 0,
         });
+        if (!(await isGitRepo(repoDir))) {
+          throw new Error(
+            cloneErr?.message || `Não foi possível baixar o projeto '${fullName}' para a sua máquina.`,
+          );
+        }
       }
     }
 
@@ -235,11 +250,29 @@ export class ReposLifecycleService {
     const repoDir = resolveRepoDir(repoName, targetOwner);
 
     if (!cfg.authenticated || !cfg.token) {
-      // Criação Local
+      // Criação Local: inicializa com branch main e commit inicial para evitar repositório sem Versão Oficial
       if (!fs.existsSync(repoDir)) {
         fs.mkdirSync(repoDir, { recursive: true });
       }
-      await ensureGitRepo(repoDir, cfg.user);
+      if (!(await isGitRepo(repoDir))) {
+        await executeGit(["init", "-b", "main"], repoDir);
+        const userName = cfg.user?.name || cfg.user?.login || "Contexos";
+        const userEmail = cfg.user?.email || "dev@contexos.local";
+        await executeGit(["config", "user.name", userName], repoDir).catch(() => {});
+        await executeGit(["config", "user.email", userEmail], repoDir).catch(() => {});
+        const readmePath = path.join(repoDir, "README.md");
+        if (!fs.existsSync(readmePath)) {
+          fs.writeFileSync(
+            readmePath,
+            `# ${repoName}\n\n${payload.description || "Projeto criado no Contexos."}\n`,
+            "utf-8",
+          );
+        }
+        await executeGit(["add", "."], repoDir);
+        await executeGit(["commit", "-m", "Versão oficial inicial"], repoDir);
+      } else {
+        await ensureGitRepo(repoDir, cfg.user);
+      }
       cfg.active_repo = {
         name: repoName,
         full_name: `${targetOwner}/${repoName}`,
@@ -284,10 +317,10 @@ export class ReposLifecycleService {
       "POST",
       {
         name: repoName,
-        description: payload.description || "Repositório de Governança",
+        description: payload.description || "Projeto Contexos",
         private: payload.is_private ?? true,
         visibility: (payload.is_private ?? true) ? "private" : "public",
-        auto_init: false, // Repositório mantido em branco
+        auto_init: true, // Cria a branch main automaticamente no GitHub
       },
     );
 
@@ -320,8 +353,13 @@ export class ReposLifecycleService {
       }
     }
 
-    // Clona ou inicializa o repositório em branco para a máquina
-    await ensureGitRepo(repoDir, cfg.user, remoteUrl, cfg.token, repoName);
+    // Clona o repositório já com a branch main para a máquina
+    const cloneUrl = respData.clone_url || (remoteUrl.endsWith(".git") ? remoteUrl : `${remoteUrl}.git`);
+    if (!(await isGitRepo(repoDir))) {
+      await cloneGitRepo(repoDir, cloneUrl, cfg.token, cfg.user);
+    } else {
+      await ensureGitRepo(repoDir, cfg.user, remoteUrl, cfg.token, repoName);
+    }
 
     cfg.active_repo = {
       name: repoName,
@@ -382,9 +420,9 @@ export class ReposLifecycleService {
             payload.description || "Repositório de especificações e governança",
         },
         security: {
-          enable_branch_protection: payload.enable_protection ?? true,
-          required_approvals: payload.required_approvals ?? 1,
-          create_codeowners: true,
+          enable_branch_protection: payload.enable_protection ?? false,
+          required_approvals: payload.required_approvals ?? 0,
+          create_codeowners: false,
         },
       });
     }

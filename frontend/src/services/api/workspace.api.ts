@@ -39,6 +39,8 @@ export const workspaceApi = {
     title: string;
     description: string;
     branch?: string;
+    sourceBranch?: string;
+    squash?: boolean;
     targetProposalId?: number | string;
     repo?: string;
   }): Promise<ApiResponse<any>> {

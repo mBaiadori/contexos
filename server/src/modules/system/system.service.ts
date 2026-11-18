@@ -289,7 +289,6 @@ Este é o seu **Workspace de Demonstração Interativo**. O Contexos foi constru
 - \`project/\`: Especificações de alto nível, visão geral e roadmap.
 - \`domains/\`: Módulos de domínio e regras de negócio.
 - \`engenharia/\`: Guias de arquitetura, banco de dados e integrações técnicas.
-- \`.spec-memory/\`: Memória permanente do agente e decisões de design.
 `;
       try {
         fs.writeFileSync(welcomeDocPath, welcomeContent, 'utf-8');

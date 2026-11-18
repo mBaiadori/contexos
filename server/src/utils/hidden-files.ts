@@ -67,7 +67,7 @@ export function isPathHidden(filePath: string, hiddenList?: string[]): boolean {
 
   const segments = cleanPath.split("/").filter(Boolean);
 
-  // 1. Fast check: Any dot segment (e.g. .git, .spec-memory, .DS_Store)
+  // 1. Fast check: Any dot segment (e.g. .git, .rag, .DS_Store)
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     if (seg.charCodeAt(0) === 46 /* '.' */ && seg !== "." && seg !== "..") {

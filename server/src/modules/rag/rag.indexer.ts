@@ -98,7 +98,9 @@ export class RagIndexer {
     "dist",
     "build",
     ".cache",
-    ".spec-memory",
+    ".rag",
+    ".sessions",
+    ".audit",
     "coverage",
     ".vscode",
     ".antigravity",
@@ -133,7 +135,7 @@ export class RagIndexer {
   }
 
   /**
-   * Carrega o índice persistido do disco em .spec-memory/rag-index.json
+   * Carrega o índice persistido do disco em .rag/rag-index.json
    */
   loadDiskIndex(
     repoName: string,

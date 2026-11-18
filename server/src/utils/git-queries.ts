@@ -5,7 +5,7 @@ import {
   assertBranchName,
   assertGitPath,
 } from "./git-validate.js";
-import { executeGit, isGitRepo } from "./git-core.js";
+import { executeGit, isGitRepo, isTransientGitPath } from "./git-core.js";
 
 export interface GitFileStatus {
   path: string;
@@ -157,7 +157,7 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
   const visibleFiles = files.filter((f) => {
     const clean = f.path.replace(/\\/g, "/");
     return (
-      clean !== ".docs.metadata.json" &&
+      !isTransientGitPath(clean) &&
       !clean.endsWith("/.DS_Store") &&
       clean !== ".DS_Store"
     );
@@ -572,5 +572,116 @@ export async function checkRemoteGitUpdates(
     localHash,
     remoteHash,
     branch,
+  };
+}
+
+export async function compareGitBranches(
+  repoDir: string,
+  baseBranch: string,
+  headBranch: string,
+): Promise<{
+  baseBranch: string;
+  headBranch: string;
+  commits: Array<{
+    hash: string;
+    shortHash: string;
+    author: string;
+    date: string;
+    message: string;
+  }>;
+  files: Array<{
+    path: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    diff: string;
+  }>;
+}> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) {
+    return { baseBranch, headBranch, commits: [], files: [] };
+  }
+
+  const safeBase = assertBranchName(baseBranch.trim(), "Versão base");
+  const safeHead = assertBranchName(headBranch.trim(), "Versão comparada");
+  const range = `${safeBase}...${safeHead}`;
+
+  const [logRes, numstatRes, nameStatusRes] = await Promise.all([
+    executeGit(
+      ["log", `${safeBase}..${safeHead}`, "-n", "100", "--format=%H|%h|%an|%cI|%s"],
+      repoDir,
+    ),
+    executeGit(["diff", "--numstat", range], repoDir),
+    executeGit(["diff", "--name-status", range], repoDir),
+  ]);
+
+  const commits: Array<{
+    hash: string;
+    shortHash: string;
+    author: string;
+    date: string;
+    message: string;
+  }> = [];
+  if (logRes.success && logRes.stdout.trim()) {
+    for (const line of logRes.stdout.trim().split("\n").filter(Boolean)) {
+      const [hash, shortHash, author, date, ...msgParts] = line.split("|");
+      commits.push({
+        hash: hash || "",
+        shortHash: shortHash || (hash || "").slice(0, 7),
+        author: author || "Sistema",
+        date: date || "",
+        message: msgParts.join("|") || "Checkpoint",
+      });
+    }
+  }
+
+  const statusMap = new Map<string, string>();
+  if (nameStatusRes.success && nameStatusRes.stdout.trim()) {
+    for (const line of nameStatusRes.stdout.trim().split("\n").filter(Boolean)) {
+      const parts = line.split("\t");
+      const st = parts[0]?.trim() || "M";
+      const filePath = (parts[parts.length - 1] || "").trim();
+      if (filePath) statusMap.set(filePath, st);
+    }
+  }
+
+  const statsMap = new Map<string, { additions: number; deletions: number }>();
+  if (numstatRes.success && numstatRes.stdout.trim()) {
+    for (const line of numstatRes.stdout.trim().split("\n").filter(Boolean)) {
+      const [addStr, delStr, ...pathParts] = line.split("\t");
+      const filePath = pathParts.join("\t").trim();
+      if (!filePath) continue;
+      statsMap.set(filePath, {
+        additions: parseInt(addStr, 10) || 0,
+        deletions: parseInt(delStr, 10) || 0,
+      });
+    }
+  }
+
+  const allPaths = Array.from(new Set([...statusMap.keys(), ...statsMap.keys()]));
+  const files = await Promise.all(
+    allPaths.map(async (filePath) => {
+      let diffText = "";
+      try {
+        const diffRes = await executeGit(["diff", range, "--", filePath], repoDir);
+        if (diffRes.success && diffRes.stdout) diffText = diffRes.stdout;
+      } catch {}
+      const stats = statsMap.get(filePath) || { additions: 0, deletions: 0 };
+      const st = statusMap.get(filePath) || "M";
+      return {
+        path: filePath,
+        status: st.startsWith("A") ? "ADDED" : st.startsWith("D") ? "DELETED" : "MODIFIED",
+        additions: stats.additions,
+        deletions: stats.deletions,
+        diff: diffText,
+      };
+    }),
+  );
+
+  return {
+    baseBranch: safeBase,
+    headBranch: safeHead,
+    commits,
+    files,
   };
 }

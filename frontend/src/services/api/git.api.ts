@@ -144,6 +144,38 @@ export const gitApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async compareBranches(
+    base: string,
+    head: string,
+    repo?: string,
+  ): Promise<
+    ApiResponse<{
+      baseBranch: string;
+      headBranch: string;
+      commits: Array<{
+        hash: string;
+        shortHash: string;
+        author: string;
+        date: string;
+        message: string;
+      }>;
+      files: Array<{
+        path: string;
+        status: string;
+        additions: number;
+        deletions: number;
+        diff: string;
+      }>;
+    }>
+  > {
+    const params = new URLSearchParams();
+    params.set('base', base);
+    params.set('head', head);
+    if (repo) params.set('repo', repo);
+    const res = await fetch(`/api/git/compare?${params.toString()}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async getGitDiagnostic(): Promise<ApiResponse<{ version: string; installed: boolean }>> {
     const res = await fetch('/api/git/diagnostic');
     return { ok: res.ok, data: await res.json() };

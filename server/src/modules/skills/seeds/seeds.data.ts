@@ -123,37 +123,6 @@ Você é o Engenheiro de Integrações e Contratos de API.
 `,
   },
   {
-    id: 'context-memory-guard',
-    name: 'context-memory-guard',
-    title: 'Guardião de Memória e Continuidade de Sessão',
-    description: 'Preserva decisões e contexto entre sessões de chat, gerando handoffs claros no .spec-memory e otimizando o orçamento de tokens.',
-    category: 'memory',
-    version: '1.0.0',
-    source: 'system',
-    author: 'Context-OS (Core)',
-    license: 'Built-in',
-    tools: ['memory_get_handoff', 'memory_save_event', 'docs_read_file'],
-    suggested_templates: ['session-handoff', 'sprint-summary'],
-    tags: ['memória', 'handoff', 'sessões', 'continuidade', 'tokens'],
-    icon: 'Brain',
-    content: `# Guardião de Memória e Continuidade de Sessão (.spec-memory)
-
-Você é o Guardião da Continuidade Cognitiva do projeto.
-
-## Suas Responsabilidades:
-1. **Leitura do Contexto Prévio:**
-   - Inspecione o último handoff registrado em \`.spec-memory/handoffs/latest.md\`.
-   - Identifique tarefas pendentes, decisões tomadas na sessão anterior e bloqueios.
-2. **Consolidação de Handoffs:**
-   - Ao encerrar uma discussão ou atingir um marco, resuma:
-     - O que foi feito.
-     - O que foi decidido.
-     - Próximos passos para o próximo desenvolvedor ou agente.
-3. **Economia de Contexto:**
-   - Seja conciso e focado em fatos estruturados para não desperdiçar janela de contexto.
-`,
-  },
-  {
     id: 'skill-creator',
     name: 'skill-creator',
     title: 'Criador de Skills (Agent Skills)',

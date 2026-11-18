@@ -20,7 +20,7 @@ describe('PRsService - Isolamento de PRs por Repositório', () => {
     } catch {}
   });
 
-  it('Deve salvar e carregar PRs isoladamente na pasta de cada projeto (.spec-memory/prs.json)', () => {
+  it('Deve salvar e carregar PRs isoladamente na pasta de cada projeto (.prs.json)', () => {
     const prA = [{ id: 1, title: 'PR Alpha', repo_name: TEST_REPO_A, status: 'OPEN' }];
     const prB = [{ id: 10, title: 'PR Beta', repo_name: TEST_REPO_B, status: 'OPEN' }];
 
@@ -38,8 +38,8 @@ describe('PRsService - Isolamento de PRs por Repositório', () => {
     assert.strictEqual(loadedB[0].title, 'PR Beta');
 
     // 3. Verifica se os arquivos físicos foram criados nos caminhos corretos
-    const fileAPath = path.join(repoADir, '.spec-memory', 'prs.json');
-    const fileBPath = path.join(repoBDir, '.spec-memory', 'prs.json');
+    const fileAPath = path.join(repoADir, '.prs.json');
+    const fileBPath = path.join(repoBDir, '.prs.json');
 
     assert.strictEqual(fs.existsSync(fileAPath), true);
     assert.strictEqual(fs.existsSync(fileBPath), true);

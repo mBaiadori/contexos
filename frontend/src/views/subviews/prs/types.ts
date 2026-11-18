@@ -23,7 +23,7 @@ export interface PRFileDiffData {
 
 export interface ActionLoadingState {
   id: number | string;
-  action: "approve" | "merge" | "reject" | "rollback";
+  action: "merge" | "reject" | "rollback";
 }
 
 export interface ActionFeedbackState {

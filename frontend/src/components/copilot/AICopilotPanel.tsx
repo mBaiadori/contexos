@@ -59,7 +59,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     isRawMode,
     setIsRawMode,
     activeProviderId,
-    setActiveProviderId,
     pendingApproval,
     approveAction,
     rejectAction,

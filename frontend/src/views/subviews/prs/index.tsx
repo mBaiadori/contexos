@@ -1,17 +1,20 @@
-import React from "react";
+import React, { useState } from "react";
 import { PageContainer, PageBody, Card } from "../../../components/ui";
 import { MergeConflictResolutionModal } from "../../../components/modals/MergeConflictResolutionModal";
+import { CreatePublicationModal } from "../../../components/modals/CreatePublicationModal";
+import { useWorkspace } from "../../../context/WorkspaceContext";
 import { usePRsData } from "./hooks/usePRsData";
 import { PRsHeader } from "./components/PRsHeader";
 import { PRFilters } from "./components/PRFilters";
 import { PRCard } from "./components/PRCard";
-import { PRApprovalModal } from "./components/PRApprovalModal";
 import { PRRollbackModal } from "./components/PRRollbackModal";
 import { PRPagination } from "./components/PRPagination";
 import type { PRsSubViewProps } from "./types";
 
 export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   const prsData = usePRsData();
+  const { activeRepo, versionGraph, refreshVersionGraph, refreshGitStatus } = useWorkspace();
+  const [isNewPubOpen, setIsNewPubOpen] = useState(false);
 
   return (
     <PageContainer id="prs-subview">
@@ -23,6 +26,10 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
         isLoading={prsData.isLoading}
         loadPRs={prsData.loadPRs}
         providerLabel={prsData.providerLabel}
+        onNewPublication={() => {
+          refreshVersionGraph?.();
+          setIsNewPubOpen(true);
+        }}
       />
 
       <PageBody>
@@ -152,7 +159,6 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                   actionLoading={prsData.actionLoading}
                   setRollbackTarget={prsData.setRollbackTarget}
                   handleReject={prsData.handleReject}
-                  handleOpenApproveModal={prsData.handleOpenApproveModal}
                   handleMerge={prsData.handleMerge}
                   collapsedFiles={prsData.collapsedFiles}
                   toggleFileCollapse={prsData.toggleFileCollapse}
@@ -180,17 +186,21 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
         </div>
       </PageBody>
 
-      {/* Approval Modal with Audit Metadata */}
-      <PRApprovalModal
-        approvalModalPR={prsData.approvalModalPR}
-        onClose={() => prsData.setApprovalModalPR(null)}
-        approvalRole={prsData.approvalRole}
-        setApprovalRole={prsData.setApprovalRole}
-        approvalComment={prsData.approvalComment}
-        setApprovalComment={prsData.setApprovalComment}
-        handleApproveSubmit={prsData.handleApproveSubmit}
-        actionLoading={prsData.actionLoading}
-        user={prsData.user}
+      <CreatePublicationModal
+        isOpen={isNewPubOpen}
+        onClose={() => setIsNewPubOpen(false)}
+        repoName={
+          prsData.selectedRepoFilter !== "all"
+            ? prsData.selectedRepoFilter
+            : activeRepo?.name
+        }
+        nodes={versionGraph?.nodes || []}
+        defaultBranch={versionGraph?.defaultBranch || activeRepo?.default_branch || "main"}
+        onCreated={async () => {
+          await prsData.loadPRs();
+          await refreshVersionGraph?.();
+          await refreshGitStatus?.();
+        }}
       />
 
       {/* Rollback Confirmation Modal */}

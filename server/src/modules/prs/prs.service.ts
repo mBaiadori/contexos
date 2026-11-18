@@ -13,7 +13,7 @@ export { prsLifecycleService, PRsLifecycleService } from "./prs-lifecycle.servic
 /**
  * PRsService Facade
  * Orquestra as operações de Pull Requests e propostas de versão divididas em submódulos especializados:
- * - PRsStorageService: Localização, leitura e persistência de PRs em disco (.spec-memory/prs.json)
+ * - PRsStorageService: Localização, leitura e persistência de PRs em disco (.prs.json)
  * - PRsQueryService: Consultas, paginação, sincronização GitHub, permissões e diffs
  * - PRsSummaryService: Geração de resumos com IA / heurística e análise de conflitos
  * - PRsLifecycleService: Ciclo de vida (criação, edição, aprovação, quorum, merge, rejeição e rollback)
@@ -105,6 +105,8 @@ export class PRsService {
     title: string;
     description: string;
     branch?: string;
+    sourceBranch?: string;
+    squash?: boolean;
     type?: string;
     layer?: string;
     domain?: string;

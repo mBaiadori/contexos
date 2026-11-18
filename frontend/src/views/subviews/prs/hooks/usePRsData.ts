@@ -22,6 +22,7 @@ export function usePRsData() {
     repos,
     refreshGitStatus,
     refreshPendingChanges,
+    refreshVersionGraph,
     projectConfig,
     getRepoOwnerOrOrg,
   } = useWorkspace();
@@ -67,11 +68,6 @@ export function usePRsData() {
   const [syncingFromBase, setSyncingFromBase] = useState<Record<string | number, boolean>>({});
   const [actionFeedback, setActionFeedback] = useState<ActionFeedbackState | null>(null);
   const [actionLoading, setActionLoading] = useState<ActionLoadingState | null>(null);
-
-  // Approval modal state
-  const [approvalModalPR, setApprovalModalPR] = useState<PR | null>(null);
-  const [approvalRole, setApprovalRole] = useState("Tech Lead");
-  const [approvalComment, setApprovalComment] = useState("");
 
   // Rollback modal state
   const [rollbackTarget, setRollbackTarget] = useState<PR | null>(null);
@@ -485,54 +481,6 @@ export function usePRsData() {
     });
   };
 
-  const handleOpenApproveModal = (pr: PR) => {
-    setApprovalModalPR(pr);
-    setApprovalComment("");
-    setApprovalRole("Tech Lead");
-  };
-
-  const handleApproveSubmit = async () => {
-    if (!approvalModalPR) return;
-    const id = approvalModalPR.id;
-    const prRepo = approvalModalPR.repo_name || repoName;
-    setActionLoading({ id, action: "approve" });
-    setActionFeedback(null);
-    try {
-      const res = await API.approvePR(id, {
-        approver: user?.login ? `@${user.login}` : undefined,
-        role: approvalRole,
-        comment: approvalComment,
-        repo: prRepo,
-      });
-      if (res.ok) {
-        setActionFeedback({
-          id,
-          message: res.data?.message || "Aprovação registrada com sucesso!",
-          type: "success",
-        });
-        setApprovalModalPR(null);
-        setApprovalComment("");
-        await loadPRs();
-        refreshGitStatus?.();
-        refreshPendingChanges?.();
-      } else {
-        setActionFeedback({
-          id,
-          message: res.data?.error || "Erro ao aprovar proposta.",
-          type: "error",
-        });
-      }
-    } catch (err: any) {
-      setActionFeedback({
-        id,
-        message: err.message || "Erro ao aprovar proposta.",
-        type: "error",
-      });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const handleEditDocumentInPR = (pr: PR, filePath: string) => {
     const prRepo = pr.repo_name || repoName;
     navigate(
@@ -556,6 +504,7 @@ export function usePRsData() {
         await loadPRs();
         refreshGitStatus?.();
         refreshPendingChanges?.();
+        refreshVersionGraph?.();
       } else {
         setActionFeedback({
           id,
@@ -596,6 +545,7 @@ export function usePRsData() {
         await loadPRs();
         refreshGitStatus?.();
         refreshPendingChanges?.();
+        refreshVersionGraph?.();
       } else {
         setActionFeedback({
           id,
@@ -640,6 +590,7 @@ export function usePRsData() {
         await loadPRs();
         refreshGitStatus?.();
         refreshPendingChanges?.();
+        refreshVersionGraph?.();
       } else {
         setActionFeedback({
           id: target.id,
@@ -719,21 +670,12 @@ export function usePRsData() {
     actionFeedback,
     setActionFeedback,
     actionLoading,
-    handleOpenApproveModal,
     handleMerge,
     handleReject,
     rollbackTarget,
     setRollbackTarget,
     handleRollback,
     handleEditDocumentInPR,
-    // Approval modal
-    approvalModalPR,
-    setApprovalModalPR,
-    approvalRole,
-    setApprovalRole,
-    approvalComment,
-    setApprovalComment,
-    handleApproveSubmit,
     projectConfig,
   };
 }

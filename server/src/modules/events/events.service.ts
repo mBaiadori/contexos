@@ -81,6 +81,8 @@ class EventsService {
       basename === '.templates.metadata.json' ||
       basename === '.hidden_files.json' ||
       basename === '.project.config.json' ||
+      basename === '.workspace_changes.json' ||
+      basename === '.prs.json' ||
       basename === '.gitignore' ||
       basename === '.gitattributes' ||
       basename === '.DS_Store' ||
@@ -88,8 +90,10 @@ class EventsService {
       normalized.includes('/.git') ||
       normalized.startsWith('.git/') ||
       normalized.startsWith('.git') ||
-      normalized.includes('/.spec-memory/') ||
-      normalized.startsWith('.spec-memory') ||
+      normalized.includes('/.rag/') ||
+      normalized.startsWith('.rag') ||
+      normalized.includes('/.sessions/') ||
+      normalized.startsWith('.sessions') ||
       normalized.includes('/.clone-tmp-') ||
       normalized.startsWith('.clone-tmp-') ||
       normalized.includes('/node_modules/') ||

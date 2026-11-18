@@ -605,6 +605,9 @@ export interface VersionNode {
   parentDisplayName?: string;
   isCurrent: boolean;
   isDefault: boolean;
+  hasLocal?: boolean;
+  hasRemote?: boolean;
+  publicationStatus?: 'official' | 'local' | 'synced' | 'open' | 'published' | 'remote_only';
   type: 'main' | 'proposal' | 'draft';
   parentBranch?: string;
   proposal?: VersionProposalInfo;

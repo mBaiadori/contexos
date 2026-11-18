@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { DraftsTrashModal } from "../../components/modals/DraftsTrashModal";
 import { SafeSwitchModal } from "../../components/modals/SafeSwitchModal";
+import { CompareVersionsModal } from "../../components/modals/CompareVersionsModal";
+import { CreatePublicationModal } from "../../components/modals/CreatePublicationModal";
 import {
   AlertBanner,
   Button,
@@ -19,20 +21,27 @@ export interface VersionsCanvasSubViewProps {
 
 export const VersionsCanvasSubView: React.FC<
   VersionsCanvasSubViewProps
-> = () => {
+> = ({ onNavigateToProposal }) => {
   const {
+    activeRepo,
     versionGraph,
     refreshVersionGraph,
     isVersionGraphLoading,
     safeSwitch,
     createOrSwitchBranch,
     commitGit,
-    mergeBranch,
+    syncGit,
     refreshGitStatus,
     refreshPendingChanges,
   } = useWorkspace();
 
   const [search, setSearch] = useState("");
+  const [hidePublished, setHidePublished] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [compareHeadBranch, setCompareHeadBranch] = useState<string | undefined>(undefined);
+  const [isPubModalOpen, setIsPubModalOpen] = useState(false);
+  const [pubSourceBranch, setPubSourceBranch] = useState<string | undefined>(undefined);
   const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(
     null,
   );
@@ -246,59 +255,7 @@ export const VersionsCanvasSubView: React.FC<
     }
   };
 
-  // SafeSwitch Confirm: Guardar no stash e alternar
-  const handleConfirmStash = async () => {
-    if (!pendingTarget) return;
-    setIsProcessing(true);
-    const target = pendingTarget;
-    try {
-      const res = await safeSwitch({
-        ...target,
-        action: "stash",
-      });
-      if (res.success) {
-        setSafeModalOpen(false);
-        setPendingTarget(null);
-        setFeedback({
-          type: "success",
-          message:
-            res.message || "Rascunhos guardados no stash e versão alternada.",
-        });
-        const [, , newGraph] = await Promise.all([
-          refreshGitStatus?.(),
-          refreshPendingChanges?.(),
-          refreshVersionGraph ? refreshVersionGraph() : loadGraph(),
-        ]);
-        if (newGraph) {
-          if (target.branch) {
-            const bNode = newGraph.nodes?.find((n) => n.name === target.branch);
-            const headOfBranch =
-              bNode?.lastCommit?.hash ||
-              newGraph.commits?.find((c) => c.isHead)?.hash ||
-              newGraph.headHash;
-            setSelectedCommitHash(headOfBranch || null);
-            setSelectedTargetBranch(target.branch);
-          } else if (target.commitHash) {
-            setSelectedCommitHash(target.commitHash);
-            setSelectedTargetBranch(newGraph.currentBranch || null);
-          }
-        } else if (target.branch) {
-          setSelectedTargetBranch(target.branch);
-        }
-      } else {
-        setFeedback({
-          type: "error",
-          message: res.error || "Falha ao guardar rascunhos.",
-        });
-      }
-    } catch (err) {
-      setFeedback({ type: "error", message: (err as Error).message });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // SafeSwitch Confirm: Mover para lixeira e alternar
+  // SafeSwitch Confirm: Descartar alterações e alternar
   const handleConfirmDiscard = async () => {
     if (!pendingTarget) return;
     setIsProcessing(true);
@@ -379,36 +336,34 @@ export const VersionsCanvasSubView: React.FC<
     }
   };
 
-  // Mesclar uma branch na branch atual (Merge)
-  const handleMergeBranch = async (sourceBranch: string) => {
-    if (!mergeBranch) return;
-    setIsProcessing(true);
+  // Buscar atualizações da nuvem
+  const handlePullUpdates = async () => {
+    if (!syncGit) return;
+    setIsSyncing(true);
     setFeedback(null);
     try {
-      const res = await mergeBranch({ sourceBranch });
-      if (res.success) {
-        setFeedback({
-          type: "success",
-          message:
-            res.message || `Branch "${sourceBranch}" mesclada com sucesso.`,
-        });
-        await Promise.all([
-          refreshGitStatus?.(),
-          refreshPendingChanges?.(),
-          loadGraph(),
-        ]);
-      } else {
-        setFeedback({
-          type: "error",
-          message: res.message || "Falha ao realizar o merge.",
-        });
-      }
-    } catch (err) {
-      setFeedback({ type: "error", message: (err as Error).message });
+      const res = await syncGit();
+      setFeedback({
+        type: res?.success !== false ? "success" : "error",
+        message:
+          res?.message ||
+          (res?.success !== false
+            ? "Projeto atualizado com sucesso!"
+            : "Não foi possível buscar atualizações."),
+      });
+      await loadGraph();
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err?.message || "Erro ao buscar atualizações." });
     } finally {
-      setIsProcessing(false);
+      setIsSyncing(false);
     }
   };
+
+  const visibleNodes = useMemo(() => {
+    const all = versionGraph?.nodes || [];
+    if (!hidePublished) return all;
+    return all.filter((n) => n.isDefault || !n.isMerged);
+  }, [versionGraph?.nodes, hidePublished]);
 
   return (
     <PageContainer id="versions-canvas-subview">
@@ -457,20 +412,50 @@ export const VersionsCanvasSubView: React.FC<
         >
           <Input
             type="text"
-            placeholder="Buscar por mensagem, autor ou versão..."
+            placeholder="Buscar por checkpoint, autor ou versão..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: "220px", height: "32px", fontSize: "12px" }}
+            style={{ width: "210px", height: "32px", fontSize: "12px" }}
           />
+
+          <Button
+            variant={hidePublished ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setHidePublished((v) => !v)}
+            title="Ocultar ou mostrar versões já publicadas na Oficial"
+          >
+            {hidePublished ? "Mostrar publicadas" : "Ocultar publicadas"}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCompareHeadBranch(currentBranch !== defaultBranch ? currentBranch : undefined);
+              setIsCompareOpen(true);
+            }}
+          >
+            Comparar Versões
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePullUpdates}
+            disabled={isSyncing || isProcessing}
+            isLoading={isSyncing}
+          >
+            {isSyncing ? "Atualizando..." : "Buscar Atualizações"}
+          </Button>
 
           <Button
             variant="ghost"
             size="sm"
             onClick={() => loadGraph()}
             disabled={isProcessing || isVersionGraphLoading}
-            title="Recarregar histórico git do disco"
+            title="Recarregar linha do tempo"
           >
-            {isVersionGraphLoading ? "Atualizando..." : "Atualizar"}
+            {isVersionGraphLoading ? "Atualizando..." : "Recarregar"}
           </Button>
 
           <Button
@@ -501,6 +486,34 @@ export const VersionsCanvasSubView: React.FC<
         </div>
       </div>
 
+      {/* Banner de Modo Leitura quando visualizando histórico */}
+      {isDetached && (
+        <div
+          style={{
+            padding: "8px 20px",
+            background: "rgba(245, 158, 11, 0.12)",
+            borderBottom: "1px solid rgba(245, 158, 11, 0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: "12.5px",
+            color: "#b45309",
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>
+            Visualizando checkpoint passado (modo leitura)
+          </span>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => handleSwitchTarget({ branch: defaultBranch })}
+            disabled={isProcessing}
+          >
+            Voltar para Versão Oficial
+          </Button>
+        </div>
+      )}
+
       {/* Banner de Feedback */}
       {feedback && (
         <div style={{ padding: "8px 20px 0 20px" }}>
@@ -526,7 +539,7 @@ export const VersionsCanvasSubView: React.FC<
         <div style={{ flex: 1, height: "100%", overflow: "hidden" }}>
           <VersionCanvasView
             commits={commits}
-            nodes={versionGraph?.nodes || []}
+            nodes={visibleNodes}
             defaultBranch={defaultBranch}
             currentBranch={currentBranch}
             isDetached={isDetached}
@@ -572,7 +585,14 @@ export const VersionsCanvasSubView: React.FC<
             onClose={() => setIsDrawerOpen(false)}
             onSwitch={handleSwitchTarget}
             onCreateBranch={handleCreateBranch}
-            onMerge={handleMergeBranch}
+            onCompare={(branchName) => {
+              setCompareHeadBranch(branchName);
+              setIsCompareOpen(true);
+            }}
+            onPublish={(branchName) => {
+              setPubSourceBranch(branchName);
+              setIsPubModalOpen(true);
+            }}
             isProcessing={isProcessing}
           />
         )}
@@ -588,19 +608,48 @@ export const VersionsCanvasSubView: React.FC<
         targetBranch={
           pendingTarget?.branch ||
           (pendingTarget?.commitHash
-            ? `marco ${pendingTarget.commitHash.slice(0, 7)}`
+            ? `checkpoint ${pendingTarget.commitHash.slice(0, 7)}`
             : "")
         }
         currentBranch={
           isDetached
-            ? `HEAD (${headHash ? headHash.slice(0, 7) : ""})`
-            : currentBranch
+            ? "Visualização de Histórico"
+            : currentBranch === defaultBranch
+              ? "Versão Oficial"
+              : currentBranch
         }
         uncommittedFiles={uncommittedFiles}
         onConfirmCommit={handleConfirmCommitAndSwitch}
-        onConfirmStash={handleConfirmStash}
         onConfirmDiscard={handleConfirmDiscard}
         isProcessing={isProcessing}
+      />
+
+      <CompareVersionsModal
+        isOpen={isCompareOpen}
+        onClose={() => setIsCompareOpen(false)}
+        repoName={activeRepo?.name}
+        nodes={versionGraph?.nodes || []}
+        defaultBranch={defaultBranch}
+        initialHeadBranch={compareHeadBranch}
+      />
+
+      <CreatePublicationModal
+        isOpen={isPubModalOpen}
+        onClose={() => setIsPubModalOpen(false)}
+        repoName={activeRepo?.name}
+        nodes={versionGraph?.nodes || []}
+        defaultBranch={defaultBranch}
+        initialSourceBranch={pubSourceBranch}
+        onCreated={async (pr) => {
+          setFeedback({
+            type: "success",
+            message: "Pedido de publicação enviado com sucesso!",
+          });
+          await loadGraph();
+          if (pr?.id && onNavigateToProposal) {
+            onNavigateToProposal(pr.id);
+          }
+        }}
       />
 
       {/* Modal da Lixeira Permanente de Rascunhos */}

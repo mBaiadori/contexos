@@ -26,7 +26,6 @@ interface PRCardProps {
   actionLoading: ActionLoadingState | null;
   setRollbackTarget: (pr: PR) => void;
   handleReject: (id: number | string, repo?: string) => void;
-  handleOpenApproveModal: (pr: PR) => void;
   handleMerge: (id: number | string, repo?: string) => void;
   collapsedFiles: Record<string, boolean>;
   toggleFileCollapse: (key: string) => void;
@@ -40,9 +39,9 @@ interface PRCardProps {
 
 export const PRCard: React.FC<PRCardProps> = ({
   pr,
-  user,
+  user: _user,
   providerLabel,
-  projectConfig,
+  projectConfig: _projectConfig,
   isExpanded,
   toggleExpand,
   mergeabilityMap,
@@ -53,7 +52,6 @@ export const PRCard: React.FC<PRCardProps> = ({
   actionLoading,
   setRollbackTarget,
   handleReject,
-  handleOpenApproveModal,
   handleMerge,
   collapsedFiles,
   toggleFileCollapse,
@@ -84,42 +82,6 @@ export const PRCard: React.FC<PRCardProps> = ({
   const revisionId =
     pr.short_id ||
     (pr.commit_hash ? pr.commit_hash.slice(0, 7) : pr.id);
-
-  const currentUserHandle = user?.login
-    ? `@${user.login}`
-    : "@tech-lead";
-  const isAuthor =
-    (pr.author || "").replace(/^@/, "").toLowerCase() ===
-    currentUserHandle.replace(/^@/, "").toLowerCase();
-  const isSolo =
-    pr.is_solo_mode !== undefined
-      ? pr.is_solo_mode
-      : (projectConfig?.governance_rules?.is_solo ?? true);
-  const minApprovals = isSolo
-    ? 1
-    : pr.min_approvals ||
-      (projectConfig?.governance_rules?.min_approvals_default ?? 1);
-  const approvalsList = Array.isArray(pr.approvals)
-    ? pr.approvals
-    : [];
-  const validApprovals = approvalsList.filter((app: any) => {
-    const u = typeof app === "string" ? app : app.user;
-    return (
-      isSolo ||
-      (u || "").replace(/^@/, "").toLowerCase() !==
-        (pr.author || "").replace(/^@/, "").toLowerCase()
-    );
-  });
-  const hasCurrentUserApproved = approvalsList.some((app: any) => {
-    const u = typeof app === "string" ? app : app.user;
-    return (
-      (u || "").replace(/^@/, "").toLowerCase() ===
-      currentUserHandle.replace(/^@/, "").toLowerCase()
-    );
-  });
-  const quorumMet = isSolo
-    ? approvalsList.length >= 1
-    : validApprovals.length >= minApprovals;
 
   return (
     <Card
@@ -297,30 +259,6 @@ export const PRCard: React.FC<PRCardProps> = ({
                 {prFiles.length}{" "}
                 {prFiles.length === 1 ? "documento" : "documentos"}
               </span>
-
-              {/* Quorum indicator only for active/open reviews */}
-              {isOpen && (
-                <>
-                  <span>&bull;</span>
-                  <Badge
-                    variant={quorumMet ? "success" : "warning"}
-                    size="sm"
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{
-                        fontSize: "13px",
-                        marginRight: "3px",
-                      }}
-                    >
-                      {quorumMet ? "verified" : "pending_actions"}
-                    </span>
-                    {quorumMet
-                      ? `Quórum Atingido (${validApprovals.length}/${minApprovals})`
-                      : `Aprovações (${validApprovals.length}/${minApprovals})`}
-                  </Badge>
-                </>
-              )}
             </div>
           </div>
         </div>
@@ -561,239 +499,6 @@ export const PRCard: React.FC<PRCardProps> = ({
             </div>
           )}
 
-          {/* Quorum & Approvals Section */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-              background:
-                "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
-              padding: "12px 14px",
-              borderRadius: "8px",
-              border:
-                "1px solid var(--md-sys-color-outline-variant, #e8eaed)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: "8px",
-              }}
-            >
-              <span
-                style={{
-                  color: "var(--md-sys-color-on-surface, #0f172a)",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "13px",
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{
-                    fontSize: "17px",
-                    color: "var(--md-sys-color-primary, #1a73e8)",
-                  }}
-                >
-                  verified_user
-                </span>
-                Trilha de Auditoria & Pareceres:
-              </span>
-
-              {isOpen && (
-                <Badge
-                  variant={quorumMet ? "success" : "warning"}
-                  size="sm"
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "14px", marginRight: "3px" }}
-                  >
-                    {quorumMet ? "verified" : "pending_actions"}
-                  </span>
-                  {quorumMet
-                    ? `✓ Quórum Atingido (${validApprovals.length}/${minApprovals}) • Liberado para Publicação`
-                    : `Quórum Pendente (${validApprovals.length}/${minApprovals} aprovações necessárias)`}
-                </Badge>
-              )}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                flexWrap: "wrap",
-              }}
-            >
-              {approvalsList.length > 0 ? (
-                approvalsList.map((app: any, idx: number) => {
-                  const isInvalidated =
-                    typeof app === "object" &&
-                    app.status === "INVALIDATED";
-                  const appUser =
-                    typeof app === "string" ? app : app.user;
-                  const appRole =
-                    typeof app === "object" ? app.role : null;
-                  const appHash =
-                    typeof app === "object" && app.commit_hash
-                      ? app.commit_hash.slice(0, 7)
-                      : null;
-                  const appDate =
-                    typeof app === "object" && app.timestamp
-                      ? formatPRDate(app.timestamp)
-                      : null;
-                  const appComment =
-                    typeof app === "object" ? app.comment : null;
-
-                  if (isInvalidated) {
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
-                          background:
-                            "var(--md-sys-color-surface-container-high, #f1f5f9)",
-                          border:
-                            "1px dashed var(--color-border-subtle, #cbd5e1)",
-                          color: "var(--color-text-muted, #64748b)",
-                          fontSize: "12px",
-                        }}
-                        title={
-                          appComment ||
-                          "Aprovação invalidada devido a novas edições no PR."
-                        }
-                      >
-                        <span
-                          className="material-symbols-outlined"
-                          style={{
-                            fontSize: "15px",
-                            color: "var(--color-warning, #f59e0b)",
-                          }}
-                        >
-                          history_toggle_off
-                        </span>
-                        <span
-                          style={{ textDecoration: "line-through" }}
-                        >
-                          {appUser}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            opacity: 0.85,
-                            color: "var(--color-warning, #d97706)",
-                            fontWeight: 600,
-                          }}
-                        >
-                          (Invalidada por edições)
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "4px 10px",
-                        borderRadius: "6px",
-                        background:
-                          "var(--color-success-subtle, #f0fdf4)",
-                        border:
-                          "1px solid var(--color-border-subtle, #bbf7d0)",
-                        color: "var(--color-success, #166534)",
-                        fontSize: "12px",
-                      }}
-                      title={
-                        appComment
-                          ? `Comentário de Auditoria: "${appComment}"`
-                          : undefined
-                      }
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          fontSize: "15px",
-                          color: "var(--color-success, #16a34a)",
-                        }}
-                      >
-                        check_circle
-                      </span>
-                      <strong>{appUser}</strong>
-                      {appRole && (
-                        <span
-                          style={{
-                            opacity: 0.85,
-                            fontSize: "11px",
-                          }}
-                        >
-                          ({appRole})
-                        </span>
-                      )}
-                      {appHash && (
-                        <span
-                          style={{
-                            fontFamily: "var(--font-family-mono)",
-                            fontSize: "10.5px",
-                            background: "rgba(0,0,0,0.06)",
-                            padding: "1px 4px",
-                            borderRadius: "3px",
-                          }}
-                        >
-                          #{appHash}
-                        </span>
-                      )}
-                      {appDate && (
-                        <span
-                          style={{
-                            opacity: 0.7,
-                            fontSize: "10.5px",
-                          }}
-                        >
-                          &bull; {appDate}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })
-              ) : isMerged || isDirectCommit ? (
-                <Badge variant="success" size="sm">
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "14px", marginRight: "3px" }}
-                  >
-                    verified
-                  </span>
-                  Aprovado e integrado na versão oficial
-                </Badge>
-              ) : (
-                <Badge variant="neutral" size="sm">
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "14px", marginRight: "3px" }}
-                  >
-                    hourglass_top
-                  </span>
-                  Aguardando aprovação de revisores (0/{minApprovals})
-                </Badge>
-              )}
-            </div>
-          </div>
-
           {/* Feedback Message */}
           {actionFeedback && actionFeedback.id === pr.id && (
             <div
@@ -910,48 +615,10 @@ export const PRCard: React.FC<PRCardProps> = ({
                   </Button>
 
                   <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleOpenApproveModal(pr)}
-                    disabled={
-                      actionLoading?.id === pr.id ||
-                      (!isSolo && isAuthor)
-                    }
-                    icon={
-                      <span className="material-symbols-outlined icon-xs">
-                        {actionLoading?.id === pr.id &&
-                        actionLoading.action === "approve"
-                          ? "progress_activity"
-                          : hasCurrentUserApproved
-                            ? "verified"
-                            : "thumb_up"}
-                      </span>
-                    }
-                    title={
-                      !isSolo && isAuthor
-                        ? "O autor da proposta não pode aprovar o seu próprio PR no Modo Equipe."
-                        : hasCurrentUserApproved
-                          ? "Você já registrou aprovação nesta proposta. Clique para atualizar seu comentário ou papel."
-                          : isSolo
-                            ? "Registrar aprovação nesta revisão (Modo Solo ativo)"
-                            : "Registrar parecer e aprovação oficial nesta revisão"
-                    }
-                  >
-                    {actionLoading?.id === pr.id &&
-                    actionLoading.action === "approve"
-                      ? "Aprovando..."
-                      : hasCurrentUserApproved
-                        ? `✓ Aprovado por você (${validApprovals.length}/${minApprovals})`
-                        : `Aprovar Revisão (${validApprovals.length}/${minApprovals})`}
-                  </Button>
-
-                  <Button
                     variant="primary"
                     size="sm"
                     onClick={() => handleMerge(pr.id, pr.repo_name)}
-                    disabled={
-                      actionLoading?.id === pr.id || !quorumMet
-                    }
+                    disabled={actionLoading?.id === pr.id}
                     icon={
                       <span className="material-symbols-outlined icon-xs">
                         {actionLoading?.id === pr.id &&
@@ -960,18 +627,12 @@ export const PRCard: React.FC<PRCardProps> = ({
                           : "publish"}
                       </span>
                     }
-                    title={
-                      !quorumMet
-                        ? isSolo
-                        : "Quórum atingido! Integrar e publicar alterações na versão oficial."
-                    }
+                    title="Integrar e publicar estas alterações na Versão Oficial."
                   >
                     {actionLoading?.id === pr.id &&
                     actionLoading.action === "merge"
                       ? "Publicando..."
-                      : quorumMet
-                        ? "Publicar Versão Oficial"
-                        : `Publicar (${validApprovals.length}/${minApprovals})`}
+                      : "Publicar na Versão Oficial"}
                   </Button>
                 </>
               )}

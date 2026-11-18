@@ -4,6 +4,7 @@ import { loadConfig, clearWorkspaceChanges } from "../../config/storage.js";
 import {
   callGitHubAPI,
   commitChanges,
+  compareGitBranches,
   createAndCheckoutBranch,
   executeGit,
   getActiveBearerToken,
@@ -102,6 +103,8 @@ export class PRsLifecycleService {
     title: string;
     description: string;
     branch?: string;
+    sourceBranch?: string;
+    squash?: boolean;
     type?: string;
     layer?: string;
     domain?: string;
@@ -114,6 +117,14 @@ export class PRsLifecycleService {
     const repoDir = prsStorageService.getRepoDir(repoName);
     const hiddenList = loadHiddenFiles(repoDir);
     const gitStatus = await getGitStatus(repoDir);
+    const defaultBranch = activeRepo?.default_branch || "main";
+    const activeBranch =
+      payload.sourceBranch ||
+      payload.branch ||
+      (gitStatus.branch && gitStatus.branch !== "HEAD" ? gitStatus.branch : defaultBranch);
+    const isWorkingOnFeatureBranch =
+      Boolean(activeBranch) && activeBranch !== defaultBranch && activeBranch !== "HEAD";
+
     const gitFiles = [
       ...(gitStatus.files || []).filter(
         (f) => !isPathHidden(f.path, hiddenList),
@@ -129,10 +140,23 @@ export class PRsLifecycleService {
         ...rawChanges.map((c) => c.path),
         ...gitFiles.map((f) => f.path),
       ]),
-    ).filter((p) => !p.includes(".spec-memory") && !p.includes(".git"));
+    ).filter((p) => !p.includes(".git") && !p.includes(".prs.json") && !p.includes(".rag") && !p.includes(".workspace_changes.json") && !p.includes(".sessions"));
 
-    if (allChangedPaths.length === 0) {
-      throw new Error("Não há alterações pendentes para criar um PR.");
+    let commitsAheadCount = 0;
+    if (isWorkingOnFeatureBranch) {
+      const aheadRes = await executeGit(
+        ["rev-list", "--count", `${assertBranchName(defaultBranch)}..${assertBranchName(activeBranch)}`],
+        repoDir,
+      );
+      if (aheadRes.success) {
+        commitsAheadCount = parseInt(aheadRes.stdout.trim(), 10) || 0;
+      }
+    }
+
+    if (allChangedPaths.length === 0 && commitsAheadCount === 0) {
+      throw new Error(
+        "Não há alterações ou checkpoints pendentes nesta versão para enviar para publicação.",
+      );
     }
 
     // Pre-PR Secret Scanner Guard
@@ -182,7 +206,6 @@ export class PRsLifecycleService {
       );
     }
 
-    const defaultBranch = activeRepo?.default_branch || "main";
     const baseHashRes = await executeGit(
       ["rev-parse", assertBranchName(defaultBranch)],
       repoDir,
@@ -194,29 +217,46 @@ export class PRsLifecycleService {
     const repoPRs = prsStorageService.loadRepoPRs(repoName);
     const now = new Date().toISOString();
 
-    // Se o usuário optar por anexar à proposta aberta existente
-    if (payload.targetProposalId) {
+    // Se não informou targetProposalId explicitamente, mas já existe uma publicação aberta para esta branch, atualiza ela
+    const autoExistingPR =
+      !payload.targetProposalId && isWorkingOnFeatureBranch
+        ? repoPRs.find(
+            (p: { branch?: string; status?: string }) =>
+              p.branch === activeBranch && p.status === "OPEN",
+          )
+        : undefined;
+    const effectiveTargetProposalId = payload.targetProposalId || autoExistingPR?.id;
+
+    // Se o usuário optar por anexar/atualizar a proposta aberta existente
+    if (effectiveTargetProposalId) {
       const existingPR = repoPRs.find(
-        (p: { id?: number | string }) => String(p.id) === String(payload.targetProposalId),
+        (p: { id?: number | string }) => String(p.id) === String(effectiveTargetProposalId),
       );
       if (!existingPR) {
         throw new Error(
-          `Proposta #${payload.targetProposalId} não foi encontrada.`,
+          `Publicação #${effectiveTargetProposalId} não foi encontrada.`,
         );
       }
       if (existingPR.status === "MERGED" || existingPR.status === "CLOSED") {
         throw new Error(
-          `A Proposta #${payload.targetProposalId} já está finalizada ou encerrada.`,
+          `A Publicação #${effectiveTargetProposalId} já está finalizada ou encerrada.`,
         );
       }
 
       const activeToken = getActiveBearerToken(cfg.token);
       await healRepositoryState(repoDir, { token: activeToken });
-      await createAndCheckoutBranch(repoDir, existingPR.branch);
+      if (gitStatus.branch !== existingPR.branch) {
+        const coRes = await executeGit(["checkout", assertBranchName(existingPR.branch)], repoDir);
+        if (!coRes.success) {
+          await createAndCheckoutBranch(repoDir, existingPR.branch);
+        }
+      }
 
-      const commitMsg =
-        payload.title || `Atualizações na Proposta #${existingPR.id}`;
-      await commitChanges(repoDir, commitMsg, allChangedPaths);
+      if (allChangedPaths.length > 0) {
+        const commitMsg =
+          payload.title || `Atualização na Publicação #${existingPR.id}`;
+        await commitChanges(repoDir, commitMsg, allChangedPaths);
+      }
 
       const headHashRes = await executeGit(["rev-parse", "HEAD"], repoDir);
       const headSha = headHashRes.success
@@ -229,17 +269,31 @@ export class PRsLifecycleService {
         activeRepo?.full_name &&
         !activeRepo?.is_local
       ) {
-        try {
-          await executeGit(
-            ["push", "origin", assertBranchName(existingPR.branch)],
-            repoDir,
-          );
-        } catch (pushErr) {
-          console.warn(
-            "[PRsService] Falha ao sincronizar branch da proposta remota:",
-            pushErr,
+        const pushRes = await executeGit(
+          ["push", "-u", "origin", assertBranchName(existingPR.branch)],
+          repoDir,
+          activeToken,
+        );
+        if (!pushRes.success) {
+          throw new Error(
+            `Não foi possível enviar as atualizações para a nuvem: ${pushRes.stderr || pushRes.stdout}`,
           );
         }
+      }
+
+      const comparison = await compareGitBranches(
+        repoDir,
+        existingPR.target_branch || defaultBranch,
+        existingPR.branch,
+      );
+      if (comparison.files.length > 0) {
+        existingPR.files = comparison.files.map((f) => ({
+          path: f.path,
+          type: f.status,
+          additions: f.additions,
+          deletions: f.deletions,
+          restricted: false,
+        }));
       }
 
       existingPR.updated_at = now;
@@ -252,7 +306,8 @@ export class PRsLifecycleService {
 
       return {
         ...existingPR,
-        message: `Alterações anexadas com sucesso à Proposta #${existingPR.id}!`,
+        updated: true,
+        message: `Publicação #${existingPR.id} atualizada com suas novas alterações!`,
       };
     }
 
@@ -265,10 +320,11 @@ export class PRsLifecycleService {
       .replace(/^-+|-+$/g, "")
       .slice(0, 35) || "atualizacao";
 
-    const branchName =
-      payload.branch || `prop-${newId}-${cleanSlug}`;
+    const branchName = isWorkingOnFeatureBranch
+      ? activeBranch
+      : payload.branch || `rascunho-${newId}-${cleanSlug}`;
 
-    // 1. Create and checkout new Git branch
+    // 1. Posiciona na branch de trabalho (ou cria a partir da oficial se estiver na main)
     let headSha = "";
     let githubPRData: any = null;
     let prHtmlUrl = activeRepo?.html_url
@@ -279,148 +335,192 @@ export class PRsLifecycleService {
       const activeToken = getActiveBearerToken(cfg.token);
       await healRepositoryState(repoDir, { token: activeToken });
 
-      // Preserva em memória os arquivos alterados pelo usuário antes de criar a branch
-      // a partir da branch oficial (defaultBranch), evitando que um HEAD antigo ou
-      // branch já mesclada contamine a origem da nova edição.
-      const pendingBuffers = new Map<string, Buffer | null>();
-      for (const relPath of allChangedPaths) {
-        const absPath = path.join(repoDir, relPath);
-        if (fs.existsSync(absPath) && !fs.statSync(absPath).isDirectory()) {
-          pendingBuffers.set(relPath, fs.readFileSync(absPath));
-        } else {
-          pendingBuffers.set(relPath, null);
+      if (isWorkingOnFeatureBranch) {
+        if (gitStatus.branch !== branchName) {
+          const coRes = await executeGit(["checkout", assertBranchName(branchName)], repoDir);
+          if (!coRes.success) {
+            throw new Error(
+              `Não foi possível acessar a versão de trabalho '${branchName}': ${coRes.stderr || coRes.stdout}`,
+            );
+          }
         }
-      }
+        if (allChangedPaths.length > 0) {
+          const commitMsg = payload.title || `Checkpoint antes da publicação #${newId}`;
+          await commitChanges(repoDir, commitMsg, allChangedPaths);
+        }
+      } else {
+        const pendingBuffers = new Map<string, Buffer | null>();
+        for (const relPath of allChangedPaths) {
+          const absPath = path.join(repoDir, relPath);
+          if (fs.existsSync(absPath) && !fs.statSync(absPath).isDirectory()) {
+            pendingBuffers.set(relPath, fs.readFileSync(absPath));
+          } else {
+            pendingBuffers.set(relPath, null);
+          }
+        }
 
-      const branchRes = await createAndCheckoutBranch(
-        repoDir,
-        branchName,
-        defaultBranch,
-        payload.title?.trim(),
-      );
-      if (!branchRes.success) {
-        // Caso o checkout direto encontre conflito com a working tree ou a branch já exista,
-        // força o posicionamento a partir da defaultBranch e reaplica os buffers editados
-        await executeGit(
-          ["checkout", "-f", "-B", assertBranchName(branchName), assertBranchName(defaultBranch)],
+        const branchRes = await createAndCheckoutBranch(
           repoDir,
+          branchName,
+          defaultBranch,
+          payload.title?.trim(),
         );
-        await executeGit(
-          ["config", `branch.${branchName}.parent`, defaultBranch],
-          repoDir,
-        ).catch(() => {});
-      }
-
-      for (const [relPath, buf] of pendingBuffers.entries()) {
-        const absPath = path.join(repoDir, relPath);
-        if (buf !== null) {
-          fs.mkdirSync(path.dirname(absPath), { recursive: true });
-          fs.writeFileSync(absPath, buf);
-        } else if (fs.existsSync(absPath)) {
-          try {
-            fs.unlinkSync(absPath);
-          } catch {}
+        if (!branchRes.success) {
+          await executeGit(
+            ["checkout", "-f", "-B", assertBranchName(branchName), assertBranchName(defaultBranch)],
+            repoDir,
+          );
+          await executeGit(
+            ["config", `branch.${branchName}.parent`, defaultBranch],
+            repoDir,
+          ).catch(() => {});
         }
-      }
 
-      // Persiste o título semântico humano associado à branch no Git config
-      if (payload.title?.trim()) {
-        await executeGit(
-          ["config", `branch.${branchName}.title`, payload.title.trim()],
-          repoDir,
-        ).catch(() => {});
-      }
+        for (const [relPath, buf] of pendingBuffers.entries()) {
+          const absPath = path.join(repoDir, relPath);
+          if (buf !== null) {
+            fs.mkdirSync(path.dirname(absPath), { recursive: true });
+            fs.writeFileSync(absPath, buf);
+          } else if (fs.existsSync(absPath)) {
+            try {
+              fs.unlinkSync(absPath);
+            } catch {}
+          }
+        }
 
-      // 2. Commit changes to Git branch - estritamente os arquivos alterados pelo usuário
-      const commitMsg = payload.title || `Atualização de Governança #${newId}`;
-      await commitChanges(repoDir, commitMsg, allChangedPaths);
+        if (payload.title?.trim()) {
+          await executeGit(
+            ["config", `branch.${branchName}.title`, payload.title.trim()],
+            repoDir,
+          ).catch(() => {});
+        }
+
+        const commitMsg = payload.title || `Publicação #${newId}`;
+        await commitChanges(repoDir, commitMsg, allChangedPaths);
+      }
 
       const headHashRes = await executeGit(["rev-parse", "HEAD"], repoDir);
       headSha = headHashRes.success ? (headHashRes.stdout || "").trim() : "";
 
-      // 3. GitHub Remote PR (if authenticated and remote repo)
+      // 3. GitHub Remote PR (if authenticated and remote repo) - erro explícito se falhar
       if (
         cfg.authenticated &&
         activeToken &&
         activeRepo?.full_name &&
         !activeRepo?.is_local
       ) {
-        try {
-          const pushRes = await executeGit(
-            ["push", "-u", "origin", assertBranchName(branchName)],
-            repoDir,
-            activeToken,
+        const pushRes = await executeGit(
+          ["push", "-u", "origin", assertBranchName(branchName)],
+          repoDir,
+          activeToken,
+        );
+        if (!pushRes.success) {
+          throw new Error(
+            `Não foi possível enviar a versão '${branchName}' para a nuvem: ${pushRes.stderr || pushRes.stdout}`,
           );
-          if (pushRes.success) {
-            const ghRes = await callGitHubAPI(
-              `/repos/${activeRepo.full_name}/pulls`,
-              activeToken,
-              "POST",
-              {
-                title: payload.title,
-                body:
-                  payload.description || `Atualização de governança Contexos`,
-                head: branchName,
-                base: defaultBranch,
-              },
-            );
+        }
 
-            if (ghRes.statusCode === 201 && ghRes.data) {
-              githubPRData = ghRes.data;
-              prHtmlUrl = ghRes.data.html_url || prHtmlUrl;
+        const ghRes = await callGitHubAPI(
+          `/repos/${activeRepo.full_name}/pulls`,
+          activeToken,
+          "POST",
+          {
+            title: payload.title,
+            body:
+              payload.description || `Pedido de publicação criado no Contexos`,
+            head: branchName,
+            base: defaultBranch,
+          },
+        );
+
+        if (ghRes.statusCode === 201 && ghRes.data) {
+          githubPRData = ghRes.data;
+          prHtmlUrl = ghRes.data.html_url || prHtmlUrl;
+        } else {
+          const ghMsg =
+            ghRes.data?.errors?.[0]?.message ||
+            ghRes.data?.message ||
+            `Status ${ghRes.statusCode}`;
+          if (ghRes.statusCode === 422 && ghMsg.toLowerCase().includes("already exists")) {
+            const ownerPrefix = activeRepo.full_name.split("/")[0];
+            const listRes = await callGitHubAPI(
+              `/repos/${activeRepo.full_name}/pulls?state=open&head=${encodeURIComponent(`${ownerPrefix}:${branchName}`)}`,
+              activeToken,
+              "GET",
+            );
+            if (listRes.statusCode === 200 && Array.isArray(listRes.data) && listRes.data.length > 0) {
+              githubPRData = listRes.data[0];
+              prHtmlUrl = githubPRData.html_url || prHtmlUrl;
             } else {
-              console.warn(
-                "[PRsService] GitHub PR retornou status:",
-                ghRes.statusCode,
-                ghRes.data,
+              throw new Error(
+                `Já existe uma publicação aberta para esta versão. Atualize-a em vez de criar uma nova.`,
               );
             }
           } else {
-            console.warn(
-              "[PRsService] git push remoto não teve sucesso:",
-              pushRes.stderr,
+            throw new Error(
+              `Não foi possível criar o Pedido de Publicação no GitHub: ${ghMsg}`,
             );
           }
-        } catch (err) {
-          console.warn("[PRsService] Aviso ao abrir PR no Git remoto:", err);
         }
       }
     } finally {
-      // Switch back to default branch so local environment is clean even if an error occurs
-      await executeGit(
-        ["checkout", assertBranchName(defaultBranch)],
-        repoDir,
-      ).catch(() => {});
+      // Volta para a Versão Oficial apenas se o usuário estava na Versão Oficial antes;
+      // se já estava trabalhando na branch dele, mantém ou volta de forma previsível
+      if (!isWorkingOnFeatureBranch) {
+        await executeGit(
+          ["checkout", assertBranchName(defaultBranch)],
+          repoDir,
+        ).catch(() => {});
+      }
     }
 
-    // Detailed changes: ONLY store metadata in JSON, NEVER plain content
-    const detailedChanges = allChangedPaths.map((p) => {
-      const wsChange = rawChanges.find((c) => c.path === p);
-      let additions = 1;
-      let deletions = 0;
-      if (wsChange && (wsChange.old_content || wsChange.new_content)) {
-        const diffData = computeDiff(
-          wsChange.old_content || "",
-          wsChange.new_content || "",
-          p,
-        );
-        additions = diffData.additions;
-        deletions = diffData.deletions;
-      }
-      const gitItem = gitFiles.find((f) => f.path === p);
-      const isNew =
-        gitItem?.status === "??" ||
-        gitItem?.status === "A" ||
-        wsChange?.type === "ADDED";
-      const isDeleted = gitItem?.status === "D" || wsChange?.type === "DELETED";
-      return {
-        path: p,
-        type: isNew ? "ADDED" : isDeleted ? "DELETED" : "MODIFIED",
-        additions,
-        deletions,
+    // Detailed changes: se veio de branch já commitada, extrai comparação base..head
+    let detailedChanges: Array<{
+      path: string;
+      type: string;
+      additions: number;
+      deletions: number;
+      restricted: boolean;
+    }> = [];
+
+    if (allChangedPaths.length > 0) {
+      detailedChanges = allChangedPaths.map((p) => {
+        const wsChange = rawChanges.find((c) => c.path === p);
+        let additions = 1;
+        let deletions = 0;
+        if (wsChange && (wsChange.old_content || wsChange.new_content)) {
+          const diffData = computeDiff(
+            wsChange.old_content || "",
+            wsChange.new_content || "",
+            p,
+          );
+          additions = diffData.additions;
+          deletions = diffData.deletions;
+        }
+        const gitItem = gitFiles.find((f) => f.path === p);
+        const isNew =
+          gitItem?.status === "??" ||
+          gitItem?.status === "A" ||
+          wsChange?.type === "ADDED";
+        const isDeleted = gitItem?.status === "D" || wsChange?.type === "DELETED";
+        return {
+          path: p,
+          type: isNew ? "ADDED" : isDeleted ? "DELETED" : "MODIFIED",
+          additions,
+          deletions,
+          restricted: false,
+        };
+      });
+    } else {
+      const comparison = await compareGitBranches(repoDir, defaultBranch, branchName);
+      detailedChanges = comparison.files.map((f) => ({
+        path: f.path,
+        type: f.status,
+        additions: f.additions,
+        deletions: f.deletions,
         restricted: false,
-      };
-    });
+      }));
+    }
 
     const newPR: any = {
       id: githubPRData?.number || newId,
@@ -448,6 +548,7 @@ export class PRsLifecycleService {
       type: payload.type || "docs",
       layer: payload.layer || "Geral",
       domain: payload.domain || "",
+      squash: true,
       files: detailedChanges,
       html_url: prHtmlUrl,
     };
@@ -874,39 +975,6 @@ export class PRsLifecycleService {
       );
     }
 
-    const govRules = prsStorageService.getGovernanceRules(repoName);
-    const minApprovals = target.min_approvals || govRules.min_approvals || 1;
-
-    // Strict Quorum validation: ONLY count APPROVED votes matching current HEAD commit
-    const authorHandle = (target.author || "").trim();
-    const cleanAuthor = authorHandle.replace(/^@/, "").toLowerCase();
-
-    const approvalsList = Array.isArray(target.approvals)
-      ? target.approvals
-      : [];
-    const validApprovers = new Set<string>();
-    for (const app of approvalsList) {
-      const u = typeof app === "string" ? app : app.user;
-      const status = typeof app === "object" ? app.status : "APPROVED";
-      const hash = typeof app === "object" ? app.commit_hash : "";
-      const cleanU = (u || "").replace(/^@/, "").toLowerCase();
-
-      if (
-        status === "APPROVED" &&
-        (!target.head_sha || !hash || hash === target.head_sha)
-      ) {
-        if (govRules.is_solo || cleanU !== cleanAuthor) {
-          if (cleanU) validApprovers.add(cleanU);
-        }
-      }
-    }
-
-    if (!govRules.is_solo && validApprovers.size < minApprovals) {
-      throw new Error(
-        `Quórum de aprovação não atingido na versão atual do PR (${validApprovers.size}/${minApprovals}). Revalide as aprovações após as edições recentes.`,
-      );
-    }
-
     // Mergeability check: abort if conflicts exist with target branch
     const mergeCheck = await prConflictsService.getMergeability(
       repoName,
@@ -914,15 +982,18 @@ export class PRsLifecycleService {
     );
     if (!mergeCheck.mergeable) {
       throw new Error(
-        `Existem conflitos impeditivos entre a branch '${target.branch}' e '${target.target_branch || "main"}'. Conflitos em: ${mergeCheck.conflicts.map((c) => c.path).join(", ")}.`,
+        `Existem edições concorrentes entre '${target.branch}' e '${target.target_branch || "main"}'. Resolva os conflitos em: ${mergeCheck.conflicts.map((c) => c.path).join(", ")}.`,
       );
     }
 
-    await this.executeMerge(target, repoName);
+    const mergeCommitSha = await this.executeMerge(target, repoName);
     await prWorktreeService.removePRWorktree(repoName, target.id);
 
     target.status = "MERGED";
     target.merged_at = new Date().toISOString();
+    if (mergeCommitSha) {
+      target.merge_commit_sha = mergeCommitSha;
+    }
     prsStorageService.saveRepoPRs(repoName, prs);
 
     try {
@@ -943,7 +1014,7 @@ export class PRsLifecycleService {
     return {
       success: true,
       pr: target,
-      message: `PR #${prId} aprovado com quórum (${validApprovers.size}/${minApprovals}) e integrado com sucesso na versão oficial!`,
+      message: `Publicação #${prId} integrada com sucesso na Versão Oficial!`,
     };
   }
 
@@ -1082,13 +1153,14 @@ export class PRsLifecycleService {
     };
   }
 
-  private async executeMerge(targetPR: any, repoNameParam?: string) {
+  private async executeMerge(targetPR: any, repoNameParam?: string): Promise<string> {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
     const repoName =
       repoNameParam || targetPR.repo_name || activeRepo?.name || "local";
     const repoDir = prsStorageService.getRepoDir(repoName);
     const targetBranch = assertBranchName(targetPR.target_branch || "main");
+    const useSquash = true;
 
     const approvalsList = Array.isArray(targetPR.approvals)
       ? targetPR.approvals
@@ -1112,7 +1184,7 @@ export class PRsLifecycleService {
 
     const trailers =
       auditLines.length > 0
-        ? `\n\n${auditLines.join("\n")}\nReviewed-in: Contexos Governance Platform`
+        ? `\n\n${auditLines.join("\n")}\nReviewed-in: Contexos`
         : "";
     const commitMsg = `Publicação da versão: ${targetPR.title}${trailers}`;
 
@@ -1124,7 +1196,7 @@ export class PRsLifecycleService {
       unshallowIfNeeded: true,
     });
 
-    // 2. Se houver arquivos modificados ou untracked na working tree (ex: .docs.metadata.json ou .gitignore), guarda em stash temporário
+    // 2. Se houver arquivos modificados ou untracked na working tree, guarda em stash temporário
     let didStash = false;
     try {
       const statusRes = await executeGit(["status", "--porcelain"], repoDir);
@@ -1149,25 +1221,65 @@ export class PRsLifecycleService {
     } catch {}
 
     try {
-      // 3. Local Git Checkout
+      // 3. Local Git Checkout para Versão Oficial
       const checkoutRes = await executeGit(["checkout", targetBranch], repoDir);
       if (!checkoutRes.success) {
         throw new Error(
-          `Falha ao alternar para branch ${targetBranch}: ${checkoutRes.stderr || checkoutRes.stdout}`,
+          `Falha ao alternar para '${targetBranch}': ${checkoutRes.stderr || checkoutRes.stdout}`,
         );
       }
 
-      // 4. Local Git Merge
+      // 4. Se conectado ao GitHub com PR remoto, publica primeiro via API do GitHub (respeitando squash/merge)
+      if (
+        cfg.authenticated &&
+        activeToken &&
+        activeRepo?.full_name &&
+        !activeRepo?.is_local &&
+        targetPR.github_number
+      ) {
+        const ghMergeRes = await callGitHubAPI(
+          `/repos/${activeRepo.full_name}/pulls/${targetPR.github_number}/merge`,
+          activeToken,
+          "PUT",
+          {
+            commit_title: `${targetPR.title} (#${targetPR.github_number})`,
+            commit_message: auditLines.join("\n") || targetPR.description || "",
+            merge_method: useSquash ? "squash" : "merge",
+          },
+        );
+        if (ghMergeRes.statusCode >= 200 && ghMergeRes.statusCode < 300) {
+          await executeGit(
+            ["fetch", "origin", targetBranch],
+            repoDir,
+            activeToken,
+          ).catch(() => {});
+          await executeGit(
+            ["reset", "--hard", `origin/${targetBranch}`],
+            repoDir,
+          ).catch(() => {});
+          workspaceService.invalidateTreeCache(repoName);
+          clearWorkspaceChanges(repoName);
+          const headRes = await executeGit(["rev-parse", "HEAD"], repoDir);
+          return (
+            ghMergeRes.data?.sha ||
+            (headRes.success ? headRes.stdout.trim() : "")
+          );
+        } else {
+          const ghMsg =
+            ghMergeRes.data?.message || `Status ${ghMergeRes.statusCode}`;
+          throw new Error(`Falha ao publicar no GitHub: ${ghMsg}`);
+        }
+      }
+
+      // 5. Local Git Merge (para repositórios locais ou sem PR remoto)
       if (targetPR.branch) {
         const prBranch = assertBranchName(targetPR.branch);
-        // Se o repo for shallow, busca histórico completo para encontrar base comum de merge
         try {
           const isShallowRes = await executeGit(
             ["rev-parse", "--is-shallow-repository"],
             repoDir,
           );
           if (isShallowRes.success && isShallowRes.stdout.trim() === "true") {
-            const activeToken = getActiveBearerToken(cfg.token);
             await executeGit(
               ["fetch", "--unshallow", "origin"],
               repoDir,
@@ -1176,114 +1288,43 @@ export class PRsLifecycleService {
           }
         } catch {}
 
-        let mergeRes = await executeGit(
-          ["merge", prBranch, "--no-ff", "-m", commitMsg],
-          repoDir,
-        );
-
-        // Se o merge falhou, checa se os conflitos são exclusivamente em arquivos internos de metadados
-        if (!mergeRes.success) {
-          const unmergedRes = await executeGit(
-            ["diff", "--name-only", "--diff-filter=U"],
-            repoDir,
-          );
-          if (unmergedRes.success && unmergedRes.stdout.trim().length > 0) {
-            const conflictingFiles = unmergedRes.stdout
-              .trim()
-              .split("\n")
-              .map((f) => f.trim())
-              .filter(Boolean);
-            const onlyInternalConflicts = conflictingFiles.every(
-              (f) =>
-                f.startsWith(".spec-memory/") ||
-                f === ".docs.metadata.json" ||
-                f === ".gitignore",
+        let mergeRes = useSquash
+          ? await executeGit(["merge", "--squash", prBranch], repoDir)
+          : await executeGit(
+              ["merge", prBranch, "--no-ff", "-m", commitMsg],
+              repoDir,
             );
 
-            if (onlyInternalConflicts) {
-              // Remove arquivos transitórios que não devem ser versionados
-              await executeGit(
-                [
-                  "rm",
-                  "-f",
-                  "--ignore-unmatch",
-                  ".spec-memory/workspace_changes.json",
-                ],
-                repoDir,
-              ).catch(() => {});
-              // Para arquivos de metadados internos, adota a versão do branch de destino (ours)
-              for (const f of conflictingFiles) {
-                if (f !== ".spec-memory/workspace_changes.json") {
-                  const safeF = assertGitPath(f);
-                  await executeGit(
-                    ["checkout", "--ours", "--", safeF],
-                    repoDir,
-                  ).catch(() => {});
-                  await executeGit(["add", "--", safeF], repoDir).catch(
-                    () => {},
-                  );
-                }
-              }
-              // Conclui o commit de merge
-              mergeRes = await executeGit(["commit", "-m", commitMsg], repoDir);
-            }
-          }
+        if (mergeRes.success && useSquash) {
+          mergeRes = await executeGit(["commit", "-m", commitMsg], repoDir);
         }
 
         if (!mergeRes.success) {
-          await executeGit(["merge", "--abort"], repoDir);
+          await executeGit(["merge", "--abort"], repoDir).catch(() => {});
+          await executeGit(["reset", "--hard", "HEAD"], repoDir).catch(() => {});
           throw new Error(
-            `Falha no merge do Git: ${mergeRes.stderr || mergeRes.stdout}`,
+            `Falha ao integrar alterações: ${mergeRes.stderr || mergeRes.stdout}`,
           );
         }
       }
 
-      // 5. Remote GitHub Sync / Merge (if GitHub PR)
       if (
         cfg.authenticated &&
         activeToken &&
         activeRepo?.full_name &&
         !activeRepo?.is_local
       ) {
-        try {
-          const pushRes = await executeGit(
-            ["push", "origin", targetBranch],
-            repoDir,
-            activeToken,
-          );
-          if (!pushRes.success && targetPR.github_number) {
-            const ghMergeRes = await callGitHubAPI(
-              `/repos/${activeRepo.full_name}/pulls/${targetPR.github_number}/merge`,
-              activeToken,
-              "PUT",
-              {
-                commit_title: `Merge PR #${targetPR.id}: ${targetPR.title}`,
-                commit_message: auditLines.join("\n"),
-                merge_method: "merge",
-              },
-            );
-            if (ghMergeRes.statusCode >= 200 && ghMergeRes.statusCode < 300) {
-              await executeGit(
-                ["fetch", "origin", targetBranch],
-                repoDir,
-                activeToken,
-              );
-              await executeGit(
-                ["reset", "--hard", `origin/${targetBranch}`],
-                repoDir,
-              );
-            }
-          }
-        } catch (ghMergeErr) {
-          console.warn(
-            `[PRsService] Aviso ao executar merge no GitHub remoto:`,
-            ghMergeErr,
-          );
-        }
+        await executeGit(
+          ["push", "origin", targetBranch],
+          repoDir,
+          activeToken,
+        ).catch(() => {});
       }
 
       workspaceService.invalidateTreeCache(repoName);
       clearWorkspaceChanges(repoName);
+      const headRes = await executeGit(["rev-parse", "HEAD"], repoDir);
+      return headRes.success ? headRes.stdout.trim() : "";
     } finally {
       if (didStash) {
         try {

@@ -16,7 +16,8 @@ export interface CommitPanelProps {
     commitHash?: string;
   }) => void | Promise<void>;
   onCreateBranch: (name: string, fromHash: string) => void | Promise<void>;
-  onMerge: (sourceBranch: string) => void | Promise<void>;
+  onCompare?: (branchName: string) => void;
+  onPublish?: (branchName: string) => void;
   isProcessing?: boolean;
 }
 
@@ -31,12 +32,12 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
   onClose,
   onSwitch,
   onCreateBranch,
-  onMerge,
+  onCompare,
+  onPublish,
   isProcessing = false,
 }) => {
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
-  const [isConfirmingMerge, setIsConfirmingMerge] = useState(false);
 
   if (!commit) return null;
 
@@ -70,18 +71,24 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
     setIsCreatingBranch(false);
   };
 
-  const handleMergeConfirm = async () => {
-    if (!targetBranchName) return;
-    setIsConfirmingMerge(false);
-    await onMerge(targetBranchName);
-  };
-
   const displayName = isSelectedMain
-    ? "Principal"
+    ? "Versão Oficial"
     : nodeObj?.displayName ||
       targetBranchName ||
       commit.shortHash ||
       commit.hash.slice(0, 7);
+
+  const statusLabel = isSelectedMain
+    ? null
+    : nodeObj?.publicationStatus === "published" || nodeObj?.isMerged
+      ? { text: "Publicada ✓", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" }
+      : nodeObj?.publicationStatus === "open"
+        ? { text: "Em Publicação", color: "#b45309", bg: "#fffbeb", border: "#fde68a" }
+        : nodeObj?.publicationStatus === "remote_only"
+          ? { text: "De Colega (Na Nuvem)", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" }
+          : nodeObj?.hasRemote
+            ? { text: "Sincronizada na Nuvem", color: "#7e22ce", bg: "#faf5ff", border: "#e9d5ff" }
+            : { text: "Rascunho Local", color: "#475569", bg: "#f8fafc", border: "#cbd5e1" };
 
   return (
     <div
@@ -121,10 +128,10 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
             }}
           >
             {isSelectedMain
-              ? "Versão Principal"
+              ? "Versão Oficial"
               : isSelectedBranch
-                ? "Detalhes da Versão"
-                : "Detalhes do Marco"}
+                ? "Rascunho de Versão"
+                : "Checkpoint"}
           </span>
           <div
             style={{
@@ -147,25 +154,42 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
                   borderRadius: "9999px",
                 }}
               >
-                ★ Principal
+                ★ Versão Oficial
               </span>
             ) : isSelectedBranch ? (
-              <span
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  color: nodeObj?.isMerged ? "#15803d" : "#7e22ce",
-                  background: nodeObj?.isMerged ? "#f0fdf4" : "#faf5ff",
-                  border: `1px solid ${
-                    nodeObj?.isMerged ? "#bbf7d0" : "#e9d5ff"
-                  }`,
-                  padding: "2px 8px",
-                  borderRadius: "9999px",
-                }}
-              >
-                {displayName}
-                {nodeObj?.isMerged ? " ✓" : ""}
-              </span>
+              <>
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: nodeObj?.isMerged ? "#15803d" : "#7e22ce",
+                    background: nodeObj?.isMerged ? "#f0fdf4" : "#faf5ff",
+                    border: `1px solid ${
+                      nodeObj?.isMerged ? "#bbf7d0" : "#e9d5ff"
+                    }`,
+                    padding: "2px 8px",
+                    borderRadius: "9999px",
+                  }}
+                >
+                  {displayName}
+                  {nodeObj?.isMerged ? " ✓" : ""}
+                </span>
+                {statusLabel && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: statusLabel.color,
+                      background: statusLabel.bg,
+                      border: `1px solid ${statusLabel.border}`,
+                      padding: "2px 8px",
+                      borderRadius: "9999px",
+                    }}
+                  >
+                    {statusLabel.text}
+                  </span>
+                )}
+              </>
             ) : null}
 
             <code
@@ -230,7 +254,7 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
               textTransform: "uppercase",
             }}
           >
-            Mensagem do Marco
+            Descrição do Checkpoint
           </label>
           <div
             style={{
@@ -246,7 +270,7 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
               border: "1px solid var(--border-color)",
             }}
           >
-            {commit.message || "Sem mensagem"}
+            {commit.message || "Sem descrição"}
           </div>
         </div>
 
@@ -273,7 +297,7 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
               Autor
             </span>
             <strong style={{ fontSize: "12px", color: "var(--text-heading)" }}>
-              {commit.author || "Git"}
+              {commit.author || "Sistema"}
             </strong>
           </div>
           <div>
@@ -360,87 +384,66 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
                 {isProcessing
                   ? "Alternando..."
                   : isSelectedBranch
-                    ? `Alterar para "${displayName}"`
+                    ? `Trabalhar em "${displayName}"`
                     : isSelectedMain
-                      ? "Alterar para Principal"
-                      : "Alterar para este marco"}
+                      ? "Voltar para Versão Oficial"
+                      : "Visualizar este checkpoint"}
               </span>
             </Button>
           )}
 
-          {/* Opção de Mesclar (Merge) se for uma branch não mesclada diferente da atual */}
+          {/* Comparar com a Versão Oficial */}
+          {isSelectedBranch && targetBranchName && onCompare && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isProcessing}
+              onClick={() => onCompare(targetBranchName)}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                compare_arrows
+              </span>
+              <span>Comparar com Versão Oficial</span>
+            </Button>
+          )}
+
+          {/* Enviar para Publicação (PR) */}
           {isSelectedBranch &&
             targetBranchName &&
             !nodeObj?.isMerged &&
-            targetBranchName !== currentBranch && (
-              <div>
-                {!isConfirmingMerge ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isProcessing}
-                    onClick={() => setIsConfirmingMerge(true)}
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "16px" }}
-                    >
-                      call_merge
-                    </span>
-                    <span>Mesclar na versão atual</span>
-                  </Button>
-                ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "6px",
-                      background: "rgba(220, 38, 38, 0.05)",
-                      border: "1px solid rgba(220, 38, 38, 0.2)",
-                      padding: "8px",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        color: "#dc2626",
-                      }}
-                    >
-                      Deseja mesclar "{targetBranchName}" em "{currentBranch}"?
-                    </span>
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsConfirmingMerge(false)}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={handleMergeConfirm}
-                        disabled={isProcessing}
-                        style={{ background: "#dc2626", color: "#ffffff" }}
-                      >
-                        Confirmar Merge
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+            onPublish && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={isProcessing}
+                onClick={() => onPublish(targetBranchName)}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                  publish
+                </span>
+                <span>
+                  {nodeObj?.publicationStatus === "open" || nodeObj?.proposal?.status === "OPEN"
+                    ? "Atualizar Publicação"
+                    : "Enviar para Publicação"}
+                </span>
+              </Button>
             )}
 
-          {/* Ação: Nova branch a partir deste marco */}
+          {/* Ação: Novo rascunho a partir deste checkpoint */}
           {!isCreatingBranch ? (
             <Button
               variant="outline"
@@ -461,7 +464,7 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
               >
                 add
               </span>
-              <span>Criar nova versão a partir daqui</span>
+              <span>Criar novo rascunho a partir daqui</span>
             </Button>
           ) : (
             <form
@@ -483,7 +486,7 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
                   color: "var(--text-heading)",
                 }}
               >
-                Nome da nova versão (branch):
+                Nome do novo rascunho de versão:
               </label>
               <Input
                 type="text"

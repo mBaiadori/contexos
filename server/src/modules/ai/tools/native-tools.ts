@@ -471,49 +471,9 @@ export const nativeTools: AgentTool[] = [
   },
 
   {
-    name: "memory_get_handoff",
-    description:
-      "Recupera o último marco de handoff registrado no .spec-memory do projeto para manter a continuidade cognitiva entre sessões.",
-    parameters: {
-      type: "object",
-      properties: {},
-    },
-    execute: async (_args, context): Promise<ToolResult> => {
-      try {
-        const handoffPath = path.join(
-          PROJECTS_DIR,
-          context.repoName || "local",
-          ".spec-memory",
-          "handoffs",
-          "latest.md",
-        );
-        if (!fs.existsSync(handoffPath)) {
-          return {
-            success: true,
-            data: {
-              handoff: null,
-              message: "Nenhum handoff anterior registrado no repositório.",
-            },
-          };
-        }
-        const handoff = fs.readFileSync(handoffPath, "utf-8");
-        return {
-          success: true,
-          data: {
-            handoff,
-            updated_at: fs.statSync(handoffPath).mtime.toISOString(),
-          },
-        };
-      } catch (err: any) {
-        return { success: false, error: `Erro ao ler memória: ${err.message}` };
-      }
-    },
-  },
-
-  {
     name: "memory_wiki_search",
     description:
-      "Pesquisa por palavras-chave ou lista notas e decisões na Base de Conhecimento Wiki do projeto (.spec-memory/wiki/).",
+      "Pesquisa por palavras-chave ou lista notas e decisões na Base de Conhecimento Wiki do projeto (.wiki/).",
     parameters: {
       type: "object",
       properties: {
@@ -593,7 +553,7 @@ export const nativeTools: AgentTool[] = [
   {
     name: "memory_wiki_upsert",
     description:
-      "Cria ou atualiza uma nota de conhecimento na Wiki do projeto (.spec-memory/wiki/) nas categorias decisions, _rules, concepts, gotchas ou handoffs.",
+      "Cria ou atualiza uma nota de conhecimento na Wiki do projeto (.wiki/) nas categorias decisions, _rules, concepts, gotchas ou handoffs.",
     parameters: {
       type: "object",
       properties: {
@@ -629,7 +589,7 @@ export const nativeTools: AgentTool[] = [
         return {
           success: true,
           data: {
-            message: `Nota '${result.page.title}' salva com sucesso em '.spec-memory/wiki/${result.page.category}/${result.page.slug}.md'`,
+            message: `Nota '${result.page.title}' salva com sucesso em '.wiki/${result.page.category}/${result.page.slug}.md'`,
             page: result.page,
           },
         };

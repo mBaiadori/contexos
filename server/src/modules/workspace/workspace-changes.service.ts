@@ -8,7 +8,7 @@ import {
   saveRepoWorkspaceChanges,
 } from "../../config/storage.js";
 import { computeDiff } from "../../utils/diff.js";
-import { isGitRepo, executeGit, getGitStatus } from "../../utils/git.js";
+import { isGitRepo, executeGit, getGitStatus, isTransientGitPath } from "../../utils/git.js";
 import { assertGitPath } from "../../utils/git-validate.js";
 import {
   docsMetadataService,
@@ -17,6 +17,22 @@ import {
 } from "./docs-metadata.service.js";
 import { draftsTrashService } from "../git/drafts-trash.service.js";
 import { getRepoDir, workspaceTreeService } from "./workspace-tree.service.js";
+
+function isIgnoredChangePath(rawPath: string): boolean {
+  const clean = (rawPath || "").trim().replace(/^\/+/, "").replace(/\\/g, "/");
+  if (!clean) return true;
+  if (isTransientGitPath(clean)) return true;
+  const base = path.basename(clean);
+  return (
+    base === ".DS_Store" ||
+    base === ".env" ||
+    base.endsWith(".log") ||
+    clean === ".git" ||
+    clean.startsWith(".git/") ||
+    clean.includes("/node_modules/") ||
+    clean.startsWith("node_modules/")
+  );
+}
 
 export class WorkspaceChangesService {
   async getWorkspaceChanges(targetRepoName?: string) {
@@ -97,7 +113,7 @@ export class WorkspaceChangesService {
 
         for (const gf of allGitFiles) {
           const cleanPath = gf.path.trim().replace(/^\/+/, "");
-          if (!cleanPath || cleanPath === ".docs.metadata.json") continue;
+          if (isIgnoredChangePath(cleanPath)) continue;
 
           // Se já está no map de alterações da UI, mantém os dados originais preservados
           if (mergedMap.has(cleanPath)) continue;
@@ -158,21 +174,7 @@ export class WorkspaceChangesService {
     }
 
     const allRaw = Array.from(mergedMap.values());
-    const rawDocChanges = allRaw.filter((c) => {
-      const clean = (c.path || "").trim().replace(/^\/+/, "").replace(/\\/g, "/");
-      if (!clean) return false;
-      const base = path.basename(clean);
-      return (
-        clean !== ".docs.metadata.json" &&
-        base !== ".DS_Store" &&
-        base !== ".env" &&
-        !base.endsWith(".log") &&
-        !clean.startsWith(".git/") &&
-        clean !== ".git" &&
-        !clean.includes("/node_modules/") &&
-        !clean.startsWith("node_modules/")
-      );
-    });
+    const rawDocChanges = allRaw.filter((c) => !isIgnoredChangePath(c.path || ""));
 
     const detailedChanges = [];
     let totalAdditions = 0;

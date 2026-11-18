@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { executeGit, isGitRepo, getActiveBearerToken, ensureGitIgnore } from "./git.js";
+import {
+  executeGit,
+  isGitRepo,
+  getActiveBearerToken,
+  ensureGitIgnore,
+  TRANSIENT_INDEX_PATHS,
+} from "./git.js";
 import { assertGitPath } from "./git-validate.js";
 
 export interface HealOptions {
@@ -32,6 +38,21 @@ export async function healRepositoryState(
   // 1. Garante .gitignore com padrões obrigatórios para arquivos transitórios
   try {
     ensureGitIgnore(repoDir);
+  } catch {}
+
+  // 1b. Desindexa arquivos transitórios que tenham sido rastreados indevidamente no index do Git
+  try {
+    const lsTransient = await executeGit(
+      ["ls-files", "--", ...TRANSIENT_INDEX_PATHS],
+      repoDir,
+    );
+    if (lsTransient.success && lsTransient.stdout.trim().length > 0) {
+      await executeGit(
+        ["rm", "--cached", "-r", "--ignore-unmatch", ...TRANSIENT_INDEX_PATHS],
+        repoDir,
+      ).catch(() => {});
+      actions.push("unstaged_transient_files");
+    }
   } catch {}
 
   // 2. Aborta merge travado (.git/MERGE_HEAD)

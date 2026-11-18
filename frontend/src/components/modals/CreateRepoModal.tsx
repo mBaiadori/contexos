@@ -4,10 +4,10 @@ import {
   X,
   Lock,
   Globe,
-  Shield,
   AlertCircle,
   Sparkles,
   User,
+  Users,
   ExternalLink,
 } from "lucide-react";
 import { Button, IconButton, FormField, Input, Switch, Spinner } from "../ui";
@@ -15,11 +15,11 @@ import { API } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import type { Repo } from "../../types";
-import { AccessGovernanceManager } from "../governance/AccessGovernanceManager";
-import type {
-  SelectedGovernanceTeam,
-  SelectedGovernanceMember,
-} from "../governance/AccessGovernanceManager";
+
+interface SelectedMember {
+  username: string;
+  permission: "pull" | "push" | "admin";
+}
 
 interface CreateRepoModalProps {
   isOpen: boolean;
@@ -41,10 +41,9 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
   const [selectedOwner, setSelectedOwner] = useState<string>("");
   const [description, setDescription] = useState("");
   const [isPrivate, setIsPrivate] = useState(true);
-  const [enableProtection, setEnableProtection] = useState(true);
-  const [requiredApprovals, setRequiredApprovals] = useState(1);
-  const [selectedTeams, setSelectedTeams] = useState<SelectedGovernanceTeam[]>([]);
-  const [selectedMembers, setSelectedMembers] = useState<SelectedGovernanceMember[]>([]);
+  const [orgMembers, setOrgMembers] = useState<Array<{ login: string; avatar_url?: string }>>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [selectedMembers, setSelectedMembers] = useState<SelectedMember[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -97,9 +96,6 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
       setRepoName("");
       setDescription("");
       setIsPrivate(true);
-      setEnableProtection(true);
-      setRequiredApprovals(1);
-      setSelectedTeams([]);
       setSelectedMembers([]);
       setErrorMessage(null);
 
@@ -110,6 +106,49 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
       }
     }
   }, [isOpen, defaultOwner, availableOwners]);
+
+  const isSelectedOrg = React.useMemo(() => {
+    const ownerObj = availableOwners.find((o) => o.id === selectedOwner);
+    return Boolean(ownerObj?.isOrg);
+  }, [availableOwners, selectedOwner]);
+
+  useEffect(() => {
+    if (!isOpen || !selectedOwner || !isSelectedOrg) {
+      setOrgMembers([]);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingMembers(true);
+    API.getOrgMembers(selectedOwner)
+      .then((res) => {
+        if (!cancelled && res.ok && Array.isArray(res.data?.members)) {
+          setOrgMembers(
+            res.data.members.filter(
+              (m: any) => m?.login && m.login.toLowerCase() !== user?.login?.toLowerCase(),
+            ),
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOrgMembers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingMembers(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, selectedOwner, isSelectedOrg, user?.login]);
+
+  const toggleMember = (login: string) => {
+    setSelectedMembers((prev) => {
+      const exists = prev.some((m) => m.username.toLowerCase() === login.toLowerCase());
+      if (exists) {
+        return prev.filter((m) => m.username.toLowerCase() !== login.toLowerCase());
+      }
+      return [...prev, { username: login, permission: "push" }];
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -140,12 +179,8 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
         owner: selectedOwner || user?.login,
         description: description.trim(),
         is_private: isPrivate,
-        enable_protection: enableProtection,
-        required_approvals: requiredApprovals,
-        initialTeams: selectedTeams.map((t) => ({
-          slug: t.slug,
-          permission: t.permission,
-        })),
+        enable_protection: false,
+        required_approvals: 0,
         initialCollaborators: selectedMembers.map((m) => ({
           username: m.username,
           permission: m.permission,
@@ -471,29 +506,6 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
               />
             </FormField>
 
-            {/* Approvals */}
-            <FormField label="Aprovações de Governança">
-              <select
-                id="create-repo-approvals"
-                className="ui-input"
-                style={{
-                  height: "38px",
-                  width: "100%",
-                  borderRadius: "8px",
-                  border: "1px solid var(--color-outline, #cbd5e1)",
-                  padding: "0 10px",
-                  fontSize: "13px",
-                  backgroundColor: "var(--color-surface, #ffffff)",
-                  color: "var(--color-on-surface, #0f172a)",
-                }}
-                value={requiredApprovals}
-                onChange={(e) => setRequiredApprovals(Number(e.target.value))}
-              >
-                <option value="1">1 aprovação obrigatória (Padrão)</option>
-                <option value="2">2 aprovações obrigatórias (Alta Governança)</option>
-              </select>
-            </FormField>
-
             {/* Switches */}
             <div
               style={{
@@ -508,26 +520,6 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
               }}
             >
               <Switch
-                id="create-repo-protection"
-                checked={enableProtection}
-                onChange={setEnableProtection}
-                label={
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Shield size={14} color="#1a73e8" />
-                    Bloquear branch <code>main</code> (Exige PR obrigatório)
-                  </span>
-                }
-                description="Garante que nenhuma alteração direta seja feita sem revisão de governança"
-              />
-
-              <div
-                style={{
-                  height: "1px",
-                  backgroundColor: "var(--color-outline-variant, #e2e8f0)",
-                }}
-              />
-
-              <Switch
                 id="create-repo-private"
                 checked={isPrivate}
                 onChange={setIsPrivate}
@@ -538,19 +530,19 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
                     ) : (
                       <Globe size={14} color="#10b981" />
                     )}
-                    {isPrivate ? "Repositório Privado" : "Repositório Público"}
+                    {isPrivate ? "Projeto Privado" : "Projeto Público"}
                   </span>
                 }
                 description={
                   isPrivate
-                    ? "Apenas você e os membros autorizados da sua organização terão acesso"
-                    : "Qualquer pessoa na internet poderá visualizar este repositório"
+                    ? "Apenas você e as pessoas autorizadas terão acesso"
+                    : "Qualquer pessoa na internet poderá visualizar este projeto"
                 }
               />
             </div>
 
-            {/* Governança de Times e Colaboradores */}
-            {selectedOwner && selectedOwner !== "local" && (
+            {/* Pessoas da Organização com Acesso Inicial */}
+            {isSelectedOrg && (
               <div
                 style={{
                   paddingTop: "12px",
@@ -570,18 +562,75 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
                     marginBottom: "10px",
                   }}
                 >
-                  <Shield size={14} color="#1a73e8" />
-                  Governança & Acessos Iniciais
+                  <Users size={14} color="#1a73e8" />
+                  Pessoas da Organização (Acesso Inicial)
                 </span>
-                <AccessGovernanceManager
-                  orgLogin={selectedOwner}
-                  mode="form"
-                  selectedTeams={selectedTeams}
-                  onChangeTeams={setSelectedTeams}
-                  selectedMembers={selectedMembers}
-                  onChangeMembers={setSelectedMembers}
-                  compact={true}
-                />
+                {isLoadingMembers ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-secondary)" }}>
+                    <Spinner size="sm" />
+                    Carregando membros da organização...
+                  </div>
+                ) : orgMembers.length === 0 ? (
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    Nenhum outro membro encontrado nesta organização.
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                      maxHeight: "170px",
+                      overflowY: "auto",
+                      padding: "8px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                      backgroundColor: "var(--color-surface-container-low, #f8fafc)",
+                    }}
+                  >
+                    {orgMembers.map((member) => {
+                      const isChecked = selectedMembers.some(
+                        (m) => m.username.toLowerCase() === member.login.toLowerCase(),
+                      );
+                      return (
+                        <label
+                          key={member.login}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "8px",
+                            padding: "6px 8px",
+                            borderRadius: "6px",
+                            background: isChecked ? "rgba(26, 115, 232, 0.08)" : "var(--color-surface, #ffffff)",
+                            border: `1px solid ${isChecked ? "rgba(26, 115, 232, 0.3)" : "var(--color-outline-variant, #e2e8f0)"}`,
+                            cursor: "pointer",
+                            fontSize: "13px",
+                          }}
+                        >
+                          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleMember(member.login)}
+                            />
+                            {member.avatar_url && (
+                              <img
+                                src={member.avatar_url}
+                                alt={member.login}
+                                style={{ width: 20, height: 20, borderRadius: "50%" }}
+                              />
+                            )}
+                            <span style={{ fontWeight: 500 }}>@{member.login}</span>
+                          </span>
+                          <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                            {isChecked ? "Pode editar e publicar" : "Sem acesso inicial"}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
