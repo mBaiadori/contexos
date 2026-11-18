@@ -89,6 +89,8 @@ export const BASE_DIR = USER_DATA_DIR && fs.existsSync(USER_DATA_DIR)
 
 export const PROJECTS_DIR = path.join(BASE_DIR, "projects");
 export const CONFIG_PATH = path.join(BASE_DIR, "config.json");
+export const CACHE_DIR = path.join(BASE_DIR, ".cache");
+export const METADATA_CACHE_DIR = path.join(CACHE_DIR, "metadata");
 export const PROJECTS_CONFIG_PATH = path.join(
   PROJECTS_DIR,
   "project.config.json",

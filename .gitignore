@@ -8,6 +8,8 @@ projects/
 /projects/config.json
 /config.json
 config.json
+/.cache/
+.cache/
 /.user2-data
 .user*-data
 /ai-memory-main

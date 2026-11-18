@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
-import { resolveRepoDir } from "../../config/constants.js";
+import { METADATA_CACHE_DIR, resolveRepoDir } from "../../config/constants.js";
+import { executeGit } from "../../utils/git-core.js";
+import { checkAiPolicy } from "../ai/ai-policy.service.js";
 import {
   docsMetadataService,
   extractFrontmatterMeta,
@@ -225,6 +227,9 @@ Corpo`;
     // Limpeza
     try {
       fs.rmSync(repoDir, { recursive: true, force: true });
+      const cachePath = docsMetadataService.getDocsMetadataPath(testRepo);
+      if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+      docsMetadataService.clearCache(testRepo);
     } catch {}
   });
 
@@ -262,7 +267,137 @@ Corpo`;
     // Limpeza
     try {
       fs.rmSync(repoDir, { recursive: true, force: true });
+      const cachePath = docsMetadataService.getDocsMetadataPath(testRepo);
+      if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
       docsMetadataService.clearCache(testRepo);
     } catch {}
+  });
+
+  await t.test("Cache externo deve ficar fora do repositório e hidratar cold start em RAM", async () => {
+    const testRepo = "test-external-cache-repo";
+    const repoDir = resolveRepoDir(testRepo);
+    const cachePath = docsMetadataService.getDocsMetadataPath(testRepo);
+
+    try {
+      fs.rmSync(repoDir, { recursive: true, force: true });
+      if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+      docsMetadataService.clearCache(testRepo);
+
+      fs.mkdirSync(path.join(repoDir, "docs"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoDir, "docs", "spec.md"),
+        '---\ntitle: "Spec Externa"\nstatus: "approved"\nclassification: "restricted"\n---\nCorpo',
+        "utf-8",
+      );
+
+      // Caminho de cache deve apontar para METADATA_CACHE_DIR e não para dentro do repoDir
+      assert.ok(path.resolve(cachePath).startsWith(path.resolve(METADATA_CACHE_DIR)));
+      assert.strictEqual(fs.existsSync(path.join(repoDir, ".docs.metadata.json")), false);
+
+      docsMetadataService.scheduleBackgroundReconciliation(testRepo);
+      await new Promise((r) => setTimeout(r, 120));
+
+      assert.strictEqual(fs.existsSync(cachePath), true);
+      assert.strictEqual(fs.existsSync(path.join(repoDir, ".docs.metadata.json")), false);
+
+      // Simula cold start limpando toda a RAM
+      docsMetadataService.clearCache(testRepo);
+      const hydrated = docsMetadataService.loadDocsMetadata(testRepo, false);
+      assert.strictEqual(hydrated.length, 1);
+      assert.strictEqual(hydrated[0].title, "Spec Externa");
+      assert.strictEqual(hydrated[0].classification, "restricted");
+    } finally {
+      try {
+        fs.rmSync(repoDir, { recursive: true, force: true });
+        if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+        docsMetadataService.clearCache(testRepo);
+      } catch {}
+    }
+  });
+
+  await t.test("Reconciliação Git delta deve detectar novos commits e arquivos sujos sem sujar o repo", async () => {
+    const testRepo = "test-git-delta-repo";
+    const repoDir = resolveRepoDir(testRepo);
+    const cachePath = docsMetadataService.getDocsMetadataPath(testRepo);
+
+    try {
+      fs.rmSync(repoDir, { recursive: true, force: true });
+      if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+      docsMetadataService.clearCache(testRepo);
+
+      fs.mkdirSync(path.join(repoDir, "docs"), { recursive: true });
+      await executeGit(["init", "-b", "main"], repoDir);
+      await executeGit(["config", "user.name", "Test"], repoDir);
+      await executeGit(["config", "user.email", "test@example.com"], repoDir);
+
+      const f1 = path.join(repoDir, "docs", "a.md");
+      fs.writeFileSync(f1, '---\ntitle: "Doc A"\nstatus: "draft"\n---\nTexto A', "utf-8");
+      await executeGit(["add", "."], repoDir);
+      await executeGit(["commit", "-m", "init"], repoDir);
+
+      docsMetadataService.scheduleBackgroundReconciliation(testRepo);
+      await new Promise((r) => setTimeout(r, 150));
+
+      let list = docsMetadataService.loadDocsMetadata(testRepo);
+      assert.strictEqual(list.length, 1);
+      assert.strictEqual(list[0].title, "Doc A");
+
+      // Novo commit adicionando doc b.md
+      const f2 = path.join(repoDir, "docs", "b.md");
+      fs.writeFileSync(f2, '---\ntitle: "Doc B"\nstatus: "review"\n---\nTexto B', "utf-8");
+      await executeGit(["add", "."], repoDir);
+      await executeGit(["commit", "-m", "add b"], repoDir);
+
+      // Simula cold start e reconciliação via HEAD diff
+      docsMetadataService.clearCache(testRepo);
+      docsMetadataService.loadDocsMetadata(testRepo, true);
+      await new Promise((r) => setTimeout(r, 180));
+
+      list = docsMetadataService.loadDocsMetadata(testRepo);
+      assert.strictEqual(list.length, 2);
+      assert.strictEqual(list.find((d) => d.path === "docs/b.md")?.status, "review");
+
+      // Edição não commitada (working tree dirty)
+      fs.writeFileSync(f1, '---\ntitle: "Doc A Editado"\nstatus: "approved"\n---\nTexto A2', "utf-8");
+      docsMetadataService.scheduleBackgroundReconciliation(testRepo);
+      await new Promise((r) => setTimeout(r, 150));
+
+      list = docsMetadataService.loadDocsMetadata(testRepo);
+      assert.strictEqual(list.find((d) => d.path === "docs/a.md")?.status, "approved");
+      assert.strictEqual(fs.existsSync(path.join(repoDir, ".docs.metadata.json")), false);
+    } finally {
+      try {
+        fs.rmSync(repoDir, { recursive: true, force: true });
+        if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+        docsMetadataService.clearCache(testRepo);
+      } catch {}
+    }
+  });
+
+  await t.test("checkAiPolicy deve respeitar classification no frontmatter sem depender de .docs.metadata.json", () => {
+    const testRepo = "test-ai-policy-fm-repo";
+    const repoDir = resolveRepoDir(testRepo);
+
+    try {
+      fs.rmSync(repoDir, { recursive: true, force: true });
+      fs.mkdirSync(path.join(repoDir, "docs"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoDir, "docs", "segredo.md"),
+        '---\ntitle: "Segredo"\nclassification: "confidential"\n---\nConteúdo confidencial',
+        "utf-8",
+      );
+
+      const res = checkAiPolicy({
+        projectRoot: repoDir,
+        filePath: "docs/segredo.md",
+        provider: "openai",
+      });
+      assert.strictEqual(res.allowed, false);
+      assert.strictEqual(res.policy, "deny");
+    } finally {
+      try {
+        fs.rmSync(repoDir, { recursive: true, force: true });
+      } catch {}
+    }
   });
 });

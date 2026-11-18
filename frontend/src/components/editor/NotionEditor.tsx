@@ -1242,7 +1242,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                           activeLanguage.toLowerCase() !==
                           defaultLanguage.toLowerCase()
                             ? `Título Oficial (${defaultLanguage.toUpperCase()}) - Metadados são editados no Documento Oficial`
-                            : "Título principal do documento (.docs.metadata.json)"
+                            : "Título principal do documento (Frontmatter)"
                         }
                       />
                       {activeLanguage.toLowerCase() !==

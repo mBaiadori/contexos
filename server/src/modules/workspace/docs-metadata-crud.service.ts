@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { writeJsonAtomic, writeTextAtomic } from "../../utils/atomic-write.js";
+import { executeGit } from "../../utils/git-core.js";
 import {
   DEFAULT_DEPARTMENTS,
   DepartmentConfig,
@@ -17,6 +18,31 @@ import {
 } from "./docs-metadata-parser.js";
 import { docsMetadataConfigService } from "./docs-metadata-config.service.js";
 
+interface MetadataCacheEnvelope {
+  version: 2;
+  headHash?: string;
+  fileStats?: Record<string, { mtimeMs: number; size: number }>;
+  items: DocumentMetadataItem[];
+}
+
+const IGNORED_SCAN_DIRS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "coverage",
+  "templates",
+]);
+
+function isMarkdownDocPath(relPath: string): boolean {
+  if (!relPath) return false;
+  const normalized = relPath.replace(/\\/g, "/");
+  if (!(normalized.endsWith(".md") || normalized.endsWith(".markdown"))) {
+    return false;
+  }
+  const segments = normalized.split("/");
+  return !segments.some((seg) => seg.startsWith(".") || IGNORED_SCAN_DIRS.has(seg));
+}
+
 export class DocsMetadataCrudService {
   private metaCache = new Map<
     string,
@@ -31,6 +57,7 @@ export class DocsMetadataCrudService {
     string,
     Map<string, { mtimeMs: number; size: number }>
   >();
+  private headHashCache = new Map<string, string>();
   private reconciliationInProgress = new Set<string>();
   private reconciliationQueued = new Set<string>();
 
@@ -54,10 +81,12 @@ export class DocsMetadataCrudService {
       this.metaCache.delete(repoName);
       docsMetadataConfigService.clearProjectConfigCache(repoName);
       this.fileStatsCache.delete(repoName);
+      this.headHashCache.delete(repoName);
     } else {
       this.metaCache.clear();
       docsMetadataConfigService.clearProjectConfigCache();
       this.fileStatsCache.clear();
+      this.headHashCache.clear();
     }
   }
 
@@ -68,7 +97,6 @@ export class DocsMetadataCrudService {
   ): DocumentMetadataItem {
     const cleanItem = { ...item };
     delete cleanItem.layer;
-    delete cleanItem.badge;
 
     if (cleanItem.category && !cleanItem.categories) {
       cleanItem.categories = cleanItem.category;
@@ -84,6 +112,16 @@ export class DocsMetadataCrudService {
       );
       resolvedDept = inferred.department;
     }
+
+    const badge =
+      typeof cleanItem.badge === "string" && cleanItem.badge.trim()
+        ? cleanItem.badge.trim()
+        : undefined;
+    const classification =
+      typeof cleanItem.classification === "string" &&
+      cleanItem.classification.trim()
+        ? cleanItem.classification.trim()
+        : undefined;
 
     return {
       id: (cleanItem.id as string) || generateDocId((cleanItem.path as string) || "doc"),
@@ -105,7 +143,177 @@ export class DocsMetadataCrudService {
       templateId: (cleanItem.templateId as string) || "",
       prompt: (cleanItem.prompt as string) || "",
       department: resolvedDept,
+      ...(badge ? { badge } : {}),
+      ...(classification ? { classification } : {}),
     };
+  }
+
+  private async getGitDelta(
+    repoDir: string,
+    cachedHeadHash?: string,
+  ): Promise<
+    | {
+        supported: false;
+      }
+    | {
+        supported: true;
+        headHash: string;
+        upToDate: boolean;
+        changedPaths?: string[];
+      }
+  > {
+    if (!fs.existsSync(path.join(repoDir, ".git"))) {
+      return { supported: false };
+    }
+
+    const headRes = await executeGit(["rev-parse", "HEAD"], repoDir);
+    if (!headRes.success || !headRes.stdout?.trim()) {
+      return { supported: false };
+    }
+    const headHash = headRes.stdout.trim();
+
+    if (!cachedHeadHash) {
+      return { supported: true, headHash, upToDate: false };
+    }
+
+    const statusRes = await executeGit(
+      ["status", "--porcelain=v1", "-b", "-uall"],
+      repoDir,
+    );
+    if (!statusRes.success) {
+      return { supported: false };
+    }
+
+    const dirtyPaths = new Set<string>();
+    const rawLines = (statusRes.stdout || "").split("\n");
+    for (const rawLine of rawLines) {
+      if (!rawLine || rawLine.startsWith("## ") || rawLine.length < 4) continue;
+      let pathPart = rawLine.slice(3).trim();
+      if (pathPart.includes(" -> ")) {
+        const parts = pathPart.split(" -> ");
+        if (isMarkdownDocPath(parts[0])) dirtyPaths.add(parts[0].replace(/\\/g, "/"));
+        pathPart = parts[1];
+      }
+      const unquoted =
+        pathPart.startsWith('"') && pathPart.endsWith('"')
+          ? pathPart.slice(1, -1)
+          : pathPart;
+      if (isMarkdownDocPath(unquoted)) {
+        dirtyPaths.add(unquoted.replace(/\\/g, "/"));
+      }
+    }
+
+    if (cachedHeadHash === headHash) {
+      if (dirtyPaths.size === 0) {
+        return { supported: true, headHash, upToDate: true };
+      }
+      return {
+        supported: true,
+        headHash,
+        upToDate: false,
+        changedPaths: Array.from(dirtyPaths),
+      };
+    }
+
+    const diffRes = await executeGit(
+      ["diff", "--name-only", cachedHeadHash, headHash],
+      repoDir,
+    );
+    if (!diffRes.success) {
+      return { supported: true, headHash, upToDate: false };
+    }
+
+    for (const line of (diffRes.stdout || "").split("\n")) {
+      const clean = line.trim().replace(/\\/g, "/");
+      if (isMarkdownDocPath(clean)) {
+        dirtyPaths.add(clean);
+      }
+    }
+
+    return {
+      supported: true,
+      headHash,
+      upToDate: dirtyPaths.size === 0,
+      changedPaths: Array.from(dirtyPaths),
+    };
+  }
+
+  private parseCachePayload(
+    parsed: unknown,
+    cleanRepo: string,
+  ): {
+    metaList: DocumentMetadataItem[];
+    headHash?: string;
+    fileStats?: Record<string, { mtimeMs: number; size: number }>;
+  } {
+    let cachedDepartments: DepartmentConfig[] = DEFAULT_DEPARTMENTS;
+    try {
+      const config = docsMetadataConfigService.getProjectConfig(cleanRepo);
+      if (Array.isArray(config.departments) && config.departments.length > 0) {
+        cachedDepartments = config.departments as DepartmentConfig[];
+      }
+    } catch {}
+
+    if (Array.isArray(parsed)) {
+      return {
+        metaList: parsed.map((item) =>
+          this.sanitizeMetaItem(item, cleanRepo, cachedDepartments),
+        ),
+      };
+    }
+
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as Record<string, unknown>;
+      if (Array.isArray(obj.items)) {
+        return {
+          metaList: obj.items.map((item) =>
+            this.sanitizeMetaItem(
+              (item as Record<string, unknown>) || {},
+              cleanRepo,
+              cachedDepartments,
+            ),
+          ),
+          headHash: typeof obj.headHash === "string" ? obj.headHash : undefined,
+          fileStats:
+            obj.fileStats && typeof obj.fileStats === "object"
+              ? (obj.fileStats as Record<string, { mtimeMs: number; size: number }>)
+              : undefined,
+        };
+      }
+
+      if (obj.documents && typeof obj.documents === "object") {
+        const metaList: DocumentMetadataItem[] = [];
+        for (const [relPath, meta] of Object.entries(obj.documents)) {
+          const m = (meta as Record<string, unknown>) || {};
+          const ext = path.extname(relPath).replace(/^\./, "") || "md";
+          const name = path.basename(relPath, path.extname(relPath));
+          const id = generateDocId(relPath);
+          metaList.push(
+            this.sanitizeMetaItem(
+              {
+                id,
+                name,
+                title: m.title || name,
+                ext,
+                path: relPath,
+                status: m.status || "",
+                categories: m.categories || m.category || "",
+                tags: Array.isArray(m.tags) ? m.tags : [],
+                updated_at: m.updated_at || new Date().toISOString(),
+                approvers: Array.isArray(m.approvers) ? m.approvers : [],
+                links: Array.isArray(m.links) ? m.links : [],
+                templateId: m.templateId || "",
+              },
+              cleanRepo,
+              cachedDepartments,
+            ),
+          );
+        }
+        return { metaList };
+      }
+    }
+
+    return { metaList: [] };
   }
 
   loadDocsMetadata(
@@ -125,7 +333,7 @@ export class DocsMetadataCrudService {
       } catch {}
     }
 
-    // Se o arquivo não mudou no disco e não foi forçado, retorna cache em O(1) imediatamente (0ms)
+    // Se o cache externo não mudou no disco e não foi forçado, retorna cache em O(1) imediatamente (0ms)
     if (cached && !forceDiskScan && exists && cached.mtimeMs === currentMtime) {
       return cached.data.map((d) => ({
         ...d,
@@ -141,50 +349,38 @@ export class DocsMetadataCrudService {
       try {
         const raw = fs.readFileSync(metaPath, "utf-8");
         const parsed = JSON.parse(raw);
+        const envelope = this.parseCachePayload(parsed, cleanRepo);
+        metaList = envelope.metaList;
 
-        let cachedDepartments: DepartmentConfig[] = DEFAULT_DEPARTMENTS;
-        try {
-          const config = docsMetadataConfigService.getProjectConfig(cleanRepo);
-          if (Array.isArray(config.departments) && config.departments.length > 0) {
-            cachedDepartments = config.departments as DepartmentConfig[];
+        if (envelope.headHash) {
+          this.headHashCache.set(cleanRepo, envelope.headHash);
+        }
+        if (envelope.fileStats) {
+          const statsMap = new Map<string, { mtimeMs: number; size: number }>();
+          for (const [relPath, st] of Object.entries(envelope.fileStats)) {
+            if (st && typeof st.mtimeMs === "number" && typeof st.size === "number") {
+              statsMap.set(relPath, { mtimeMs: st.mtimeMs, size: st.size });
+            }
           }
-        } catch {}
-
-        if (Array.isArray(parsed)) {
-          metaList = parsed.map((item) => this.sanitizeMetaItem(item, cleanRepo, cachedDepartments));
-        } else if (parsed && typeof parsed === "object" && parsed.documents) {
-          // Migração de formato legado
-          for (const [relPath, meta] of Object.entries(parsed.documents)) {
-            const m = (meta as Record<string, unknown>) || {};
-            const ext = path.extname(relPath).replace(/^\./, "") || "md";
-            const name = path.basename(relPath, path.extname(relPath));
-            const id = generateDocId(relPath);
-            metaList.push(
-              this.sanitizeMetaItem({
-                id,
-                name,
-                title: m.title || name,
-                ext,
-                path: relPath,
-                status: m.status || "",
-                categories: m.categories || m.category || "",
-                tags: Array.isArray(m.tags) ? m.tags : [],
-                updated_at: m.updated_at || new Date().toISOString(),
-                approvers: Array.isArray(m.approvers) ? m.approvers : [],
-                links: Array.isArray(m.links) ? m.links : [],
-                templateId: m.templateId || "",
-              }, cleanRepo, cachedDepartments),
-            );
-          }
+          this.fileStatsCache.set(cleanRepo, statsMap);
         }
       } catch (err) {
         console.error(
-          `[DocsMetadataService] Erro ao ler docs.metadata.json em ${metaPath}:`,
+          `[DocsMetadataService] Erro ao ler cache de metadados em ${metaPath}:`,
           err,
         );
       }
     } else if (fs.existsSync(repoDir)) {
-      // Se não existe .docs.metadata.json no disco, dispara geração incremental inteligente em segundo plano
+      // Semente única de legado (somente leitura) caso exista .docs.metadata.json antigo no repositório
+      const legacyPath = docsMetadataConfigService.getLegacyRepoMetadataPath(cleanRepo);
+      if (legacyPath) {
+        try {
+          const rawLegacy = fs.readFileSync(legacyPath, "utf-8");
+          const envelope = this.parseCachePayload(JSON.parse(rawLegacy), cleanRepo);
+          metaList = envelope.metaList;
+        } catch {}
+      }
+      // Dispara reconciliação incremental em segundo plano a partir dos arquivos .md
       this.scheduleBackgroundReconciliation(cleanRepo);
     }
 
@@ -216,35 +412,13 @@ export class DocsMetadataCrudService {
         const repoDir = docsMetadataConfigService.getRepoDir(cleanRepo);
         if (!fs.existsSync(repoDir)) return;
 
-        const diskFiles: string[] = [];
-        const scanDir = (dir: string) => {
-          try {
-            const entries = fs.readdirSync(dir, { withFileTypes: true });
-            for (const entry of entries) {
-              if (
-                entry.name.startsWith(".") ||
-                entry.name === "node_modules" ||
-                entry.name === "dist" ||
-                entry.name === "build" ||
-                entry.name === "coverage" ||
-                entry.name === "templates"
-              )
-                continue;
-              const full = path.join(dir, entry.name);
-              if (entry.isDirectory()) {
-                scanDir(full);
-              } else if (
-                entry.isFile() &&
-                (entry.name.endsWith(".md") || entry.name.endsWith(".markdown"))
-              ) {
-                diskFiles.push(
-                  path.relative(repoDir, full).replace(/\\/g, "/"),
-                );
-              }
-            }
-          } catch {}
-        };
-        scanDir(repoDir);
+        // Garante hidratação prévia do cache externo em cold start antes de reconciliar
+        if (!this.metaCache.has(cleanRepo)) {
+          const metaPath = docsMetadataConfigService.getDocsMetadataPath(cleanRepo);
+          if (fs.existsSync(metaPath)) {
+            this.loadDocsMetadata(cleanRepo, false);
+          }
+        }
 
         const currentCached = this.metaCache.get(cleanRepo)?.data || [];
         const metaMap = new Map(currentCached.map((d) => [d.path, { ...d }]));
@@ -254,12 +428,70 @@ export class DocsMetadataCrudService {
           this.fileStatsCache.set(cleanRepo, repoStats);
         }
 
-        // 1. Filtragem inteligente por mtime e size: descobre apenas os arquivos modificados ou novos
+        const cachedHeadHash = this.headHashCache.get(cleanRepo);
+        const gitDelta =
+          metaMap.size > 0
+            ? await this.getGitDelta(repoDir, cachedHeadHash)
+            : await this.getGitDelta(repoDir, undefined);
+
+        let nextHeadHash = gitDelta.supported ? gitDelta.headHash : undefined;
+
+        if (gitDelta.supported && gitDelta.upToDate && metaMap.size > 0) {
+          if (nextHeadHash && nextHeadHash !== cachedHeadHash) {
+            this.headHashCache.set(cleanRepo, nextHeadHash);
+            this.saveDocsMetadata(cleanRepo, Array.from(metaMap.values()), true);
+          }
+          return;
+        }
+
+        let targetFiles: string[] = [];
+        let isPartialDelta = false;
+
+        if (gitDelta.supported && gitDelta.changedPaths && metaMap.size > 0) {
+          targetFiles = gitDelta.changedPaths;
+          isPartialDelta = true;
+        } else {
+          const scanDir = (dir: string) => {
+            try {
+              const entries = fs.readdirSync(dir, { withFileTypes: true });
+              for (const entry of entries) {
+                if (entry.name.startsWith(".") || IGNORED_SCAN_DIRS.has(entry.name)) {
+                  continue;
+                }
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  scanDir(full);
+                } else if (
+                  entry.isFile() &&
+                  (entry.name.endsWith(".md") || entry.name.endsWith(".markdown"))
+                ) {
+                  targetFiles.push(
+                    path.relative(repoDir, full).replace(/\\/g, "/"),
+                  );
+                }
+              }
+            } catch {}
+          };
+          scanDir(repoDir);
+        }
+
+        let changed = false;
         const filesToProcess: { relPath: string; stat: { mtimeMs: number; size: number } }[] = [];
-        for (const relPath of diskFiles) {
+
+        for (const relPath of targetFiles) {
           const full = path.join(repoDir, relPath);
+          if (!fs.existsSync(full)) {
+            if (metaMap.has(relPath)) {
+              metaMap.delete(relPath);
+              repoStats.delete(relPath);
+              changed = true;
+            }
+            continue;
+          }
+
           try {
             const stat = await fs.promises.stat(full);
+            if (!stat.isFile()) continue;
             const cachedStat = repoStats.get(relPath);
             const cachedItem = metaMap.get(relPath);
 
@@ -269,19 +501,14 @@ export class DocsMetadataCrudService {
               cachedStat.mtimeMs === stat.mtimeMs &&
               cachedStat.size === stat.size
             ) {
-              // Arquivo idêntico ao já processado. Pula leitura de disco!
               continue;
             }
             filesToProcess.push({
               relPath,
               stat: { mtimeMs: stat.mtimeMs, size: stat.size },
             });
-          } catch {
-            // Se falhar o stat, continua
-          }
+          } catch {}
         }
-
-        let changed = false;
 
         // 2. Processa apenas os arquivos modificados em lotes de 25 arquivos com liberação do Event Loop
         const BATCH_SIZE = 25;
@@ -352,6 +579,22 @@ export class DocsMetadataCrudService {
                 }
 
                 if (
+                  frontmatterMeta.badge !== undefined &&
+                  item.badge !== frontmatterMeta.badge
+                ) {
+                  item.badge = frontmatterMeta.badge;
+                  itemModified = true;
+                }
+
+                if (
+                  frontmatterMeta.classification !== undefined &&
+                  item.classification !== frontmatterMeta.classification
+                ) {
+                  item.classification = frontmatterMeta.classification;
+                  itemModified = true;
+                }
+
+                if (
                   frontmatterMeta.templateId !== undefined &&
                   item.templateId !== frontmatterMeta.templateId
                 ) {
@@ -389,6 +632,8 @@ export class DocsMetadataCrudService {
                       "",
                     tags: frontmatterMeta.tags || [],
                     department: frontmatterMeta.department,
+                    badge: frontmatterMeta.badge,
+                    classification: frontmatterMeta.classification,
                     templateId: frontmatterMeta.templateId || "",
                     approvers: frontmatterMeta.approvers || [],
                     updated_at: new Date().toISOString(),
@@ -402,25 +647,34 @@ export class DocsMetadataCrudService {
             }),
           );
 
-          // Libera o Event Loop
           await new Promise((resolve) => setImmediate(resolve));
         }
 
-        // 3. Remove arquivos que foram deletados do disco
-        const diskSet = new Set(diskFiles);
-        for (const key of metaMap.keys()) {
-          if (!diskSet.has(key)) {
-            metaMap.delete(key);
-            repoStats.delete(key);
-            changed = true;
+        // 3. No scan completo, remove arquivos que foram deletados do disco
+        if (!isPartialDelta) {
+          const diskSet = new Set(targetFiles);
+          for (const key of metaMap.keys()) {
+            if (!diskSet.has(key)) {
+              metaMap.delete(key);
+              repoStats.delete(key);
+              changed = true;
+            }
           }
         }
 
         this.fileStatsCache.set(cleanRepo, repoStats);
+        if (nextHeadHash) {
+          this.headHashCache.set(cleanRepo, nextHeadHash);
+        }
 
-        if (changed) {
+        const metaPath = docsMetadataConfigService.getDocsMetadataPath(cleanRepo);
+        if (
+          changed ||
+          !fs.existsSync(metaPath) ||
+          (nextHeadHash && nextHeadHash !== cachedHeadHash)
+        ) {
           const metaList = Array.from(metaMap.values());
-          this.saveDocsMetadata(cleanRepo, metaList);
+          this.saveDocsMetadata(cleanRepo, metaList, true);
         }
       } catch (err) {
         console.warn(
@@ -437,7 +691,11 @@ export class DocsMetadataCrudService {
     });
   }
 
-  saveDocsMetadata(repoName: string, metaList: DocumentMetadataItem[]): void {
+  saveDocsMetadata(
+    repoName: string,
+    metaList: DocumentMetadataItem[],
+    forceEnvelopeWrite = false,
+  ): void {
     const cleanRepo = repoName || "local";
     const metaPath = docsMetadataConfigService.getDocsMetadataPath(cleanRepo);
     const sanitizedList = metaList.map((item) =>
@@ -447,6 +705,7 @@ export class DocsMetadataCrudService {
     // Comparação profunda de objetos: se nada de fato mudou, pula escrita no disco!
     const cached = this.metaCache.get(cleanRepo);
     if (
+      !forceEnvelopeWrite &&
       cached &&
       areMetadataListsEqual(cached.data, sanitizedList) &&
       fs.existsSync(metaPath)
@@ -455,7 +714,19 @@ export class DocsMetadataCrudService {
     }
 
     const map = new Map(sanitizedList.map((item) => [item.path, item]));
-    writeJsonAtomic(metaPath, sanitizedList, 2);
+    const statsMap = this.fileStatsCache.get(cleanRepo);
+    const envelope: MetadataCacheEnvelope = {
+      version: 2,
+      ...(this.headHashCache.has(cleanRepo)
+        ? { headHash: this.headHashCache.get(cleanRepo) }
+        : {}),
+      ...(statsMap && statsMap.size > 0
+        ? { fileStats: Object.fromEntries(statsMap.entries()) }
+        : {}),
+      items: sanitizedList,
+    };
+
+    writeJsonAtomic(metaPath, envelope, 2);
 
     let currentMtime = Date.now();
     try {
@@ -510,6 +781,9 @@ export class DocsMetadataCrudService {
                 existingFrontmatter.categories !== doc.categories) ||
               (Boolean(doc.department) &&
                 existingFrontmatter.department !== doc.department) ||
+              (Boolean(doc.badge) && existingFrontmatter.badge !== doc.badge) ||
+              (Boolean(doc.classification) &&
+                existingFrontmatter.classification !== doc.classification) ||
               (Boolean(doc.templateId) &&
                 existingFrontmatter.templateId !== doc.templateId) ||
               (Array.isArray(doc.tags) &&
@@ -522,6 +796,9 @@ export class DocsMetadataCrudService {
               if (doc.status) syncPayload.status = doc.status;
               if (doc.categories) syncPayload.categories = doc.categories;
               if (doc.department) syncPayload.department = doc.department;
+              if (doc.badge) syncPayload.badge = doc.badge;
+              if (doc.classification)
+                syncPayload.classification = doc.classification;
               if (doc.templateId) syncPayload.templateId = doc.templateId;
               if (doc.tags && doc.tags.length > 0) syncPayload.tags = doc.tags;
               if (doc.approvers && doc.approvers.length > 0)
@@ -588,10 +865,13 @@ export class DocsMetadataCrudService {
       status: (frontmatterMeta.status as string) || "",
       categories: ((frontmatterMeta.categories || frontmatterMeta.category) as string) || "",
       tags: Array.isArray(frontmatterMeta.tags) ? frontmatterMeta.tags : [],
+      department: frontmatterMeta.department as string | undefined,
+      badge: frontmatterMeta.badge as string | undefined,
+      classification: frontmatterMeta.classification as string | undefined,
       updated_at: new Date().toISOString(),
-      approvers: [],
+      approvers: Array.isArray(frontmatterMeta.approvers) ? frontmatterMeta.approvers : [],
       links: [],
-      templateId: "",
+      templateId: (frontmatterMeta.templateId as string) || "",
     }, cleanRepo);
 
     if (cached) {
@@ -618,7 +898,7 @@ export class DocsMetadataCrudService {
         ...partialMeta,
         path: cleanPath,
         updated_at: new Date().toISOString(),
-      });
+      }, repoName);
       metaList[existingIdx] = updatedItem;
     } else {
       const ext = path.extname(cleanPath).replace(/^\./, "") || "md";
@@ -639,7 +919,7 @@ export class DocsMetadataCrudService {
         links: Array.isArray(partialMeta.links) ? partialMeta.links : [],
         templateId: partialMeta.templateId || "",
         ...partialMeta,
-      });
+      }, repoName);
       metaList.push(updatedItem);
     }
 
@@ -657,6 +937,7 @@ export class DocsMetadataCrudService {
         if (partialMeta.title !== undefined) frontmatterSyncPayload.title = partialMeta.title;
         if (partialMeta.type !== undefined) frontmatterSyncPayload.type = partialMeta.type;
         if (partialMeta.badge !== undefined) frontmatterSyncPayload.badge = partialMeta.badge;
+        if (partialMeta.classification !== undefined) frontmatterSyncPayload.classification = partialMeta.classification;
         if (partialMeta.status !== undefined) frontmatterSyncPayload.status = partialMeta.status;
         if (partialMeta.categories !== undefined) frontmatterSyncPayload.categories = partialMeta.categories;
         if (partialMeta.category !== undefined) frontmatterSyncPayload.categories = partialMeta.category;

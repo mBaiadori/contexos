@@ -896,19 +896,8 @@ export async function ensureDefaultRepoFiles(
     );
   }
 
-  // .docs.metadata.json: verify schema if exists, create if missing
-  const docsMetaPath = path.join(targetDir, ".docs.metadata.json");
-  const defaultDocsMetaPath = path.join(defaultDir, ".docs.metadata.json");
-  if (!fs.existsSync(docsMetaPath)) {
-    fs.writeFileSync(docsMetaPath, JSON.stringify([], null, 2), "utf-8");
-  } else {
-    verifyAndRepairStructure(
-      defaultDocsMetaPath,
-      docsMetaPath,
-      ".docs.metadata.json",
-      repoName,
-    );
-  }
+  // Índice de metadados (.cache/metadata) é mantido fora do repositório via DocsMetadataService;
+  // não cria mais .docs.metadata.json na raiz do projeto.
 
   // .dictionary.json: verify schema if exists, create if missing
   const dictPath = path.join(targetDir, ".dictionary.json");

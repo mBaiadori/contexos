@@ -515,11 +515,7 @@ export class ReposLifecycleService {
       "utf-8",
     );
 
-    // 3. .docs.metadata.json
-    const docsMetaPath = path.join(repoDir, ".docs.metadata.json");
-    if (!fs.existsSync(docsMetaPath)) {
-      fs.writeFileSync(docsMetaPath, JSON.stringify([], null, 2), "utf-8");
-    }
+    // 3. Índice de metadados é mantido no cache externo da aplicação (fora do repo Git)
 
     // 4. .dictionary.json & .templates.json
     const dictPath = path.join(repoDir, ".dictionary.json");

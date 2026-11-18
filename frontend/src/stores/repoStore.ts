@@ -473,7 +473,6 @@ export const useRepoStore = create<RepoState>((set, get) => ({
           useGitStore.getState().refreshGitLog(15, repo.name),
           useGitStore.getState().refreshWhatsNew(),
           useGitStore.getState().checkRemoteUpdates(repo.name),
-          API.syncFrontmatters(repo.name),
           useGovernanceStore.getState().loadDictionaryTerms(),
         ]).catch(() => {});
       }, 50);

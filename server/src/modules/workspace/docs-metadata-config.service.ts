@@ -1,6 +1,7 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { resolveRepoDir } from "../../config/constants.js";
+import { METADATA_CACHE_DIR, resolveRepoDir } from "../../config/constants.js";
 import { loadConfig } from "../../config/storage.js";
 import { validateJsonSchema } from "../../utils/schema.validator.js";
 import {
@@ -19,19 +20,27 @@ export class DocsMetadataConfigService {
   }
 
   getDocsMetadataPath(repoName: string): string {
-    const hiddenPath = path.join(
-      this.getRepoDir(repoName),
-      ".docs.metadata.json",
-    );
-    const legacyPath = path.join(
-      this.getRepoDir(repoName),
-      "project",
-      "docs.metadata.json",
-    );
-    if (!fs.existsSync(hiddenPath) && fs.existsSync(legacyPath)) {
+    const repoDir = path.resolve(this.getRepoDir(repoName));
+    const safeName = (repoName || "local").replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const hash = crypto
+      .createHash("sha256")
+      .update(repoDir)
+      .digest("hex")
+      .slice(0, 12);
+    return path.join(METADATA_CACHE_DIR, `${safeName}-${hash}.json`);
+  }
+
+  getLegacyRepoMetadataPath(repoName: string): string | null {
+    const repoDir = this.getRepoDir(repoName);
+    const hiddenPath = path.join(repoDir, ".docs.metadata.json");
+    if (fs.existsSync(hiddenPath)) {
+      return hiddenPath;
+    }
+    const legacyPath = path.join(repoDir, "project", "docs.metadata.json");
+    if (fs.existsSync(legacyPath)) {
       return legacyPath;
     }
-    return hiddenPath;
+    return null;
   }
 
   getProjectConfigPath(repoName: string): string {

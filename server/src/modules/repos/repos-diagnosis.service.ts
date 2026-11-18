@@ -61,8 +61,8 @@ export class ReposDiagnosisService {
       }
     }
 
-    // 2. Check .docs.metadata.json (Catálogo de governança com auto-geração em cache local)
-    const pMetaPath = path.join(repoDir, ".docs.metadata.json");
+    // 2. Check Índice de Metadados (Cache externo reconstruído a partir dos frontmatters .md)
+    const pMetaPath = docsMetadataService.getDocsMetadataPath(repoName);
     let hasPMeta = fs.existsSync(pMetaPath);
     let validPMeta = false;
     let pMetaDetails = "Não encontrado";
@@ -70,16 +70,16 @@ export class ReposDiagnosisService {
       try {
         const metaList = docsMetadataService.loadDocsMetadata(repoName);
         validPMeta = true;
-        pMetaDetails = `${metaList.length} documento(s) catalogado(s)`;
+        pMetaDetails = `${metaList.length} documento(s) indexado(s) em cache local`;
       } catch {
-        pMetaDetails = "JSON inválido";
+        pMetaDetails = "Cache inválido";
       }
     } else if (fs.existsSync(repoDir)) {
-      // Auto-reconcilia no background se ainda não existir localmente
+      // Auto-reconcilia no background se ainda não existir cache externo
       docsMetadataService.scheduleBackgroundReconciliation(repoName);
       hasPMeta = true;
       validPMeta = true;
-      pMetaDetails = "Catálogo gerado localmente em segundo plano";
+      pMetaDetails = "Índice reconstruído em segundo plano a partir dos frontmatters";
     }
 
     // 3. Check .hidden_files.json
@@ -128,7 +128,6 @@ export class ReposDiagnosisService {
     const missingEssentials: string[] = [];
     if (!hasPConfig || !validPConfig)
       missingEssentials.push(".project.config.json");
-    if (!hasPMeta || !validPMeta) missingEssentials.push(".docs.metadata.json");
     if (!hasHidden) missingEssentials.push(".hidden_files.json");
 
     const isReady = isClonedLocally && missingEssentials.length === 0;
@@ -151,8 +150,8 @@ export class ReposDiagnosisService {
         docs_metadata: {
           exists: hasPMeta,
           valid: validPMeta,
-          path: ".docs.metadata.json",
-          label: "Catálogo de Governança (.docs.metadata.json)",
+          path: pMetaPath,
+          label: "Índice de Metadados (Cache Local)",
           details: pMetaDetails,
         },
         hidden_files: {

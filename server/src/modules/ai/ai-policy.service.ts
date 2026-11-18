@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveRepoDir } from "../../config/constants.js";
+import { extractFrontmatterMeta } from "../workspace/docs-metadata-parser.js";
+import { docsMetadataCrudService } from "../workspace/docs-metadata-crud.service.js";
 
 export type AiPolicyMode = "allow_external" | "local_only" | "deny";
 
@@ -88,23 +90,91 @@ export function checkAiPolicy(options: CheckAiPolicyOptions): AiPolicyCheckResul
   let classification = options.classification;
   let department = options.department;
 
-  // Se filePath foi passado e faltam metadados, tenta consultar .docs.metadata.json
+  // Se filePath foi passado e faltam metadados, consulta frontmatter do documento, índice em cache ou legado
   if (root && options.filePath && (!classification || !department)) {
-    try {
-      const metaPath = path.join(root, ".docs.metadata.json");
-      if (fs.existsSync(metaPath)) {
-        const rawMeta = fs.readFileSync(metaPath, "utf-8");
-        const list = JSON.parse(rawMeta);
-        if (Array.isArray(list)) {
-          const item = list.find((d: Record<string, unknown>) => d.path === options.filePath || d.name === path.basename(options.filePath || ""));
-          if (item) {
-            if (!classification && typeof item.classification === "string") classification = item.classification;
-            if (!classification && typeof item.badge === "string") classification = item.badge;
-            if (!department && typeof item.department === "string") department = item.department;
+    const cleanRel = options.filePath.replace(/^\/+/, "");
+    const absDocPath = path.resolve(root, cleanRel);
+    if (
+      absDocPath.startsWith(path.resolve(root) + path.sep) &&
+      fs.existsSync(absDocPath) &&
+      (cleanRel.endsWith(".md") || cleanRel.endsWith(".markdown"))
+    ) {
+      try {
+        const fd = fs.openSync(absDocPath, "r");
+        try {
+          const buf = Buffer.alloc(8192);
+          const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+          const head = buf.subarray(0, bytesRead).toString("utf-8");
+          const fm = extractFrontmatterMeta(head);
+          if (!classification && typeof fm.classification === "string") {
+            classification = fm.classification;
+          }
+          if (!classification && typeof fm.badge === "string") {
+            classification = fm.badge;
+          }
+          if (!department && typeof fm.department === "string") {
+            department = fm.department;
+          }
+        } finally {
+          fs.closeSync(fd);
+        }
+      } catch {}
+    }
+
+    if ((!classification || !department) && options.repoName) {
+      try {
+        const list = docsMetadataCrudService.loadDocsMetadata(options.repoName);
+        const item = list.find(
+          (d) =>
+            d.path === cleanRel ||
+            d.name === path.basename(cleanRel, path.extname(cleanRel)),
+        );
+        if (item) {
+          if (!classification && typeof item.classification === "string") {
+            classification = item.classification;
+          }
+          if (!classification && typeof item.badge === "string") {
+            classification = item.badge;
+          }
+          if (!department && typeof item.department === "string") {
+            department = item.department;
           }
         }
-      }
-    } catch {}
+      } catch {}
+    }
+
+    if (!classification || !department) {
+      try {
+        const legacyMetaPath = path.join(root, ".docs.metadata.json");
+        if (fs.existsSync(legacyMetaPath)) {
+          const rawMeta = fs.readFileSync(legacyMetaPath, "utf-8");
+          const parsed = JSON.parse(rawMeta);
+          const list = Array.isArray(parsed)
+            ? parsed
+            : Array.isArray(parsed?.items)
+              ? parsed.items
+              : null;
+          if (Array.isArray(list)) {
+            const item = list.find(
+              (d: Record<string, unknown>) =>
+                d.path === options.filePath ||
+                d.name === path.basename(options.filePath || ""),
+            );
+            if (item) {
+              if (!classification && typeof item.classification === "string") {
+                classification = item.classification;
+              }
+              if (!classification && typeof item.badge === "string") {
+                classification = item.badge;
+              }
+              if (!department && typeof item.department === "string") {
+                department = item.department;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
   }
 
   let effectivePolicy: AiPolicyMode = policyConfig.default;

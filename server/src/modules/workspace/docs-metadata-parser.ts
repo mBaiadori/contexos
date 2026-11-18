@@ -15,6 +15,8 @@ export interface DocumentMetadataItem {
   templateId: string;
   prompt: string;
   department?: string; // id do departamento (e.g. "engineering", "finance", "legal")
+  badge?: string;
+  classification?: string;
   [key: string]: unknown;
 }
 
@@ -69,6 +71,8 @@ export function areMetadataItemsEqual(
     a.status === b.status &&
     a.categories === b.categories &&
     a.department === b.department &&
+    a.badge === b.badge &&
+    a.classification === b.classification &&
     a.templateId === b.templateId &&
     areArraysEqual(a.tags, b.tags) &&
     areArraysEqual(a.approvers, b.approvers) &&
@@ -182,6 +186,7 @@ export function sanitizeMetadataForFrontmatter(
     "title",
     "type",
     "badge",
+    "classification",
     "status",
     "categories",
     "tags",
@@ -212,6 +217,8 @@ export function extractFrontmatterMeta(content: string): {
   categories?: string;
   tags?: string[];
   department?: string;
+  badge?: string;
+  classification?: string;
   templateId?: string;
   approvers?: string[];
   [key: string]: unknown;
