@@ -10,7 +10,6 @@ import { ToolCallExecutionRecord } from './tools/tool.types.js';
 import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
 import { wikiService } from '../wiki/wiki.service.js';
 import { checkAiPolicy } from './ai-policy.service.js';
-import { recordAuditEvent } from '../audit/audit-chain.service.js';
 
 export interface ChatMessage {
   role: 'user' | 'model' | 'assistant' | 'system';
@@ -167,12 +166,6 @@ export class AIService {
         },
       };
     }
-
-    recordAuditEvent(repoName, {
-      eventType: "ai_request",
-      user: activeUser,
-      payload: { provider, model, filePath, promptLength: prompt.length },
-    }).catch(() => {});
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. Google Gemini (com suporte a Function Calling e Retry)

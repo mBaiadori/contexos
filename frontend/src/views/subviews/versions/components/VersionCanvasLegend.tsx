@@ -62,6 +62,18 @@ export const VersionCanvasLegend: React.FC = () => {
             width: "8px",
             height: "8px",
             borderRadius: "50%",
+            background: "#dc2626",
+            flexShrink: 0,
+          }}
+        />
+        <span>Publicação Rejeitada</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <span
+          style={{
+            width: "8px",
+            height: "8px",
+            borderRadius: "50%",
             background: "#059669",
             flexShrink: 0,
           }}

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { gitService } from "./git.service.js";
+import { prsService } from "../prs/prs.service.js";
 import { executeGit } from "../../utils/git.js";
 
 test("Git Version Graph & Safe Switch Suite", async (t) => {
@@ -174,6 +175,82 @@ test("Git Version Graph & Safe Switch Suite", async (t) => {
       const draftNode = graph.nodes.find((n) => n.name === "versao-rascunho") as any;
       assert.ok(draftNode);
       assert.strictEqual(draftNode.isMerged, true);
+    });
+
+    // 10. Guardrails de commit direto na Versão Oficial e HEAD desacoplado
+    await t.test("Bloqueia commit direto na Versão Oficial (main) e em detached HEAD, permitindo apenas em rascunhos", async () => {
+      fs.appendFileSync(path.join(repoPath, "doc.md"), "\nEdição direta na main\n");
+      const commitOnMain = await gitService.commit("Tentativa na main", undefined, undefined, repoName);
+      assert.strictEqual(commitOnMain.success, false);
+      assert.match(commitOnMain.message, /Versão Oficial/i);
+
+      // Troca para o rascunho ativo 'versao-limpa' levando a edição
+      const switchDraft = await gitService.switchOrCreateBranch("versao-em-edicao", repoName, undefined, "main", "Versão em edição");
+      assert.strictEqual(switchDraft.success, true);
+
+      const commitOnDraft = await gitService.commit("Checkpoint válido no rascunho", undefined, undefined, repoName);
+      assert.strictEqual(commitOnDraft.success, true);
+
+      // Testa bloqueio em detached HEAD
+      const headCommit = (await executeGit(["rev-parse", "HEAD"], repoPath)).stdout.trim();
+      await executeGit(["checkout", headCommit], repoPath);
+      fs.appendFileSync(path.join(repoPath, "doc.md"), "\nEdição em detached\n");
+      const commitDetached = await gitService.commit("Tentativa em detached", undefined, undefined, repoName);
+      assert.strictEqual(commitDetached.success, false);
+      assert.match(commitDetached.message, /desacoplado|rascunho/i);
+
+      // Limpa alteração em detached e volta para main
+      await executeGit(["checkout", "--", "doc.md"], repoPath);
+      await executeGit(["checkout", "main"], repoPath);
+    });
+
+    // 11. Exclusão de rascunho com defaultBranch contendo barra (gov/update-2675) e fechamento de PR aberto
+    await t.test("deleteBranch alterna corretamente para defaultBranch com barra (gov/update-2675) e emite evento sem erro", async () => {
+      const slashRepoName = "test-slash-delete-repo";
+      const slashRepoPath = path.join(tmpDir, slashRepoName);
+      fs.mkdirSync(slashRepoPath, { recursive: true });
+      const prevGetRepoDir = (gitService as any).getRepoDir;
+      const prevLoadRepoPRs = prsService.loadRepoPRs.bind(prsService);
+      const prevRejectPR = prsService.rejectPR.bind(prsService);
+      let rejectedId: number | string | null = null;
+
+      (gitService as any).getRepoDir = (name: string) =>
+        name === slashRepoName ? slashRepoPath : repoPath;
+      (prsService as any).loadRepoPRs = (name: string) =>
+        name === slashRepoName
+          ? [{ id: 77, title: "Proposta teste", branch: "rascunho-para-excluir", status: "OPEN" }]
+          : [];
+      (prsService as any).rejectPR = async (id: number | string) => {
+        rejectedId = id;
+        return { success: true };
+      };
+
+      try {
+        await executeGit(["init", "-b", "gov/update-2675"], slashRepoPath);
+        await executeGit(["config", "user.name", "Tester"], slashRepoPath);
+        await executeGit(["config", "user.email", "tester@test.com"], slashRepoPath);
+        fs.writeFileSync(path.join(slashRepoPath, "README.md"), "# Base\n");
+        await executeGit(["add", "."], slashRepoPath);
+        await executeGit(["commit", "-m", "Base commit"], slashRepoPath);
+        await executeGit(["update-ref", "refs/remotes/origin/gov/update-2675", "HEAD"], slashRepoPath);
+        await executeGit(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/gov/update-2675"], slashRepoPath);
+
+        await executeGit(["checkout", "-b", "rascunho-para-excluir"], slashRepoPath);
+        fs.writeFileSync(path.join(slashRepoPath, "extra.md"), "Rascunho\n");
+        await executeGit(["add", "."], slashRepoPath);
+        await executeGit(["commit", "-m", "Commit no rascunho"], slashRepoPath);
+
+        const delRes = await gitService.deleteBranch("rascunho-para-excluir", slashRepoName);
+        assert.strictEqual(delRes.success, true);
+        assert.strictEqual(rejectedId, 77);
+
+        const headBranch = (await executeGit(["symbolic-ref", "--short", "HEAD"], slashRepoPath)).stdout.trim();
+        assert.strictEqual(headBranch, "gov/update-2675");
+      } finally {
+        (gitService as any).getRepoDir = prevGetRepoDir;
+        (prsService as any).loadRepoPRs = prevLoadRepoPRs;
+        (prsService as any).rejectPR = prevRejectPR;
+      }
     });
   } finally {
     (gitService as any).getRepoDir = originalGetRepoDir;

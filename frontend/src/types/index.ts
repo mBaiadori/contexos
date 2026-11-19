@@ -594,6 +594,7 @@ export interface VersionProposalInfo {
   title: string;
   description?: string;
   status: 'OPEN' | 'MERGED' | 'CLOSED' | 'REJECTED';
+  rejection_reason?: string;
   author: string;
   created_at: string;
   approvals_count: number;
@@ -607,7 +608,7 @@ export interface VersionNode {
   isDefault: boolean;
   hasLocal?: boolean;
   hasRemote?: boolean;
-  publicationStatus?: 'official' | 'local' | 'synced' | 'open' | 'published' | 'remote_only';
+  publicationStatus?: 'official' | 'local' | 'synced' | 'open' | 'rejected' | 'published' | 'remote_only';
   type: 'main' | 'proposal' | 'draft';
   parentBranch?: string;
   proposal?: VersionProposalInfo;

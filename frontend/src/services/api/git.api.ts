@@ -93,6 +93,18 @@ export const gitApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async deleteBranch(
+    branch: string,
+    repo?: string,
+  ): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
+    const res = await fetch('/api/git/branch/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch, repo }),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async mergeBranch(payload: {
     sourceBranch: string;
     targetBranch?: string;

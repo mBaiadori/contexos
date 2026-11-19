@@ -62,4 +62,13 @@ describe('C3: default_branch preservation and origin/HEAD resolution', () => {
       fs.rmSync(specialTmpDir, { recursive: true, force: true });
     }
   });
+
+  test('getDefaultBranch deve preservar prefixo com barra quando origin/HEAD aponta para gov/update-2675', async () => {
+    await executeGit(['branch', 'gov/update-2675'], tmpDir);
+    await executeGit(['update-ref', 'refs/remotes/origin/gov/update-2675', 'HEAD'], tmpDir);
+    await executeGit(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/gov/update-2675'], tmpDir);
+
+    const defBranch = await getDefaultBranch(tmpDir);
+    assert.strictEqual(defBranch, 'gov/update-2675');
+  });
 });

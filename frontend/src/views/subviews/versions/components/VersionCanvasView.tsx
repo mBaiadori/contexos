@@ -606,16 +606,18 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                     <rect
                       x="0"
                       y="0"
-                      width="80"
+                      width={isWorkspaceActive ? "106" : "86"}
                       height="22"
                       rx="11"
                       fill={isWorkspaceActive ? "#2563eb" : "#1e40af"}
                       style={{
-                        filter: "drop-shadow(0 2px 5px rgba(37,99,235,0.35))",
+                        filter: isWorkspaceActive
+                          ? "drop-shadow(0 2px 8px rgba(37,99,235,0.5))"
+                          : "drop-shadow(0 2px 5px rgba(37,99,235,0.25))",
                       }}
                     />
                     <text
-                      x="40"
+                      x={isWorkspaceActive ? "53" : "43"}
                       y="11.5"
                       textAnchor="middle"
                       dominantBaseline="central"
@@ -624,7 +626,7 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                       fontWeight="700"
                       fontFamily="system-ui, -apple-system, sans-serif"
                     >
-                      ★ Principal
+                      {isWorkspaceActive ? "● Oficial (Ativa)" : "★ Oficial"}
                     </text>
                   </g>
                 ) : (
@@ -870,7 +872,41 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                           ? -8 - badgeW - 6
                           : -10;
 
-                    return (
+                    const labelText = br.isCurrent
+                      ? `● ${displayName}${br.isMerged ? " ✓" : ""}`
+                      : `${displayName}${br.isMerged ? " ✓" : ""}`;
+                    const pillW = Math.max(44, Math.min(labelText.length * 6.8 + 16, 156));
+                    const pillX = br.side === 1 ? textX - 4 : textX - pillW + 4;
+
+                    return br.isCurrent ? (
+                      <g
+                        style={{
+                          filter: `drop-shadow(0 2px 6px ${br.color}55)`,
+                        }}
+                      >
+                        <rect
+                          x={pillX}
+                          y="-11"
+                          width={pillW}
+                          height="22"
+                          rx="11"
+                          fill={br.color}
+                        />
+                        <text
+                          x={br.side === 1 ? pillX + 9 : pillX + pillW - 9}
+                          y="0.5"
+                          textAnchor={br.side === 1 ? "start" : "end"}
+                          dominantBaseline="central"
+                          fill="#ffffff"
+                          fontSize="11"
+                          fontWeight="700"
+                          fontFamily="system-ui, -apple-system, sans-serif"
+                          style={{ letterSpacing: "-0.01em" }}
+                        >
+                          {labelText}
+                        </text>
+                      </g>
+                    ) : (
                       <text
                         x={textX}
                         y="0"
@@ -878,9 +914,7 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                         dominantBaseline="central"
                         fill={br.color}
                         fontSize="11"
-                        fontWeight={
-                          isSelectedBranch || br.isCurrent ? "700" : "600"
-                        }
+                        fontWeight={isSelectedBranch ? "700" : "600"}
                         fontFamily="system-ui, -apple-system, sans-serif"
                         style={{
                           letterSpacing: "-0.01em",
@@ -890,8 +924,7 @@ export const VersionCanvasView: React.FC<VersionCanvasViewProps> = ({
                           strokeLinejoin: "round",
                         }}
                       >
-                        {displayName}
-                        {br.isMerged ? " ✓" : ""}
+                        {labelText}
                       </text>
                     );
                   })()}

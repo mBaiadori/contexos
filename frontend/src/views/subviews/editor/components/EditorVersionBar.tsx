@@ -41,6 +41,9 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
   const [checkpointMsg, setCheckpointMsg] = useState("");
   const [isSavingCheckpoint, setIsSavingCheckpoint] = useState(false);
   const [isPubModalOpen, setIsPubModalOpen] = useState(false);
+  const [pendingPublishBranch, setPendingPublishBranch] = useState<string | undefined>(undefined);
+  const [draftPromptIntent, setDraftPromptIntent] = useState<"edit" | "checkpoint" | "publish">("edit");
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [isBranchBusy, setIsBranchBusy] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
@@ -131,8 +134,25 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
   const uncommittedCount = uncommittedFiles.length;
   const checkpointsCount = !isOfficial && !isDetached ? activeNode?.ahead || 0 : 0;
 
+  const openDraftPromptForIntent = (intent: "edit" | "checkpoint" | "publish") => {
+    setDraftPromptIntent(intent);
+    setDraftError(null);
+    onOpenDraftPrompt();
+  };
+
+  const handleCloseDraftModal = () => {
+    setDraftPromptIntent("edit");
+    setDraftError(null);
+    onCloseDraftPrompt();
+  };
+
   const handleSaveCheckpoint = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isOfficial || isReadOnlyMode) {
+      setIsCreatingCheckpoint(false);
+      openDraftPromptForIntent("checkpoint");
+      return;
+    }
     if (!commitGit) return;
     const msg = checkpointMsg.trim() || `Checkpoint em ${displayVersionName}`;
     setIsSavingCheckpoint(true);
@@ -185,6 +205,7 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
     if (!createOrSwitchBranch) return;
     setIsBranchBusy(true);
     setFeedback(null);
+    setDraftError(null);
     try {
       const res = await createOrSwitchBranch(
         params.branchName,
@@ -192,19 +213,25 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
         params.displayTitle,
       );
       if (res?.success !== false) {
+        const nextIntent = draftPromptIntent;
+        setDraftPromptIntent("edit");
         onCloseDraftPrompt();
         setFeedback({
           type: "success",
           text: `Rascunho "${params.displayTitle}" criado. Suas edições serão salvas nele.`,
         });
+        if (nextIntent === "checkpoint") {
+          setIsCreatingCheckpoint(true);
+        } else if (nextIntent === "publish") {
+          setPendingPublishBranch(params.branchName);
+          setIsPubModalOpen(true);
+        }
       } else {
-        setFeedback({
-          type: "error",
-          text: res?.message || "Não foi possível criar o rascunho de versão.",
-        });
+        const errMsg = res?.message || "Não foi possível criar o rascunho de versão.";
+        setDraftError(errMsg);
       }
     } catch (err: any) {
-      setFeedback({ type: "error", text: err?.message || "Erro ao criar rascunho de versão." });
+      setDraftError(err?.message || "Erro ao criar rascunho de versão.");
     } finally {
       setIsBranchBusy(false);
     }
@@ -477,6 +504,49 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
             </span>
           )}
 
+          {!hasOpenProposal &&
+            !activeNode?.isMerged &&
+            (activeNode?.publicationStatus === "rejected" ||
+              activeNode?.proposal?.status === "CLOSED" ||
+              activeNode?.proposal?.status === "REJECTED") && (
+              <span
+                title={activeNode?.proposal?.rejection_reason || "Proposta rejeitada. Você pode editar e reenviar."}
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "9999px",
+                  background: "rgba(220, 38, 38, 0.1)",
+                  color: "#dc2626",
+                  border: "1px solid rgba(220, 38, 38, 0.28)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Publicação Rejeitada
+              </span>
+            )}
+
+          {(isOfficial || isReadOnlyMode) && uncommittedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => openDraftPromptForIntent("edit")}
+              title="Suas edições locais ainda estão fora de um rascunho. Clique para criar um Rascunho de Versão."
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: "2px 8px",
+                borderRadius: "9999px",
+                background: "rgba(245, 158, 11, 0.14)",
+                color: "#b45309",
+                border: "1px solid rgba(245, 158, 11, 0.35)",
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+              }}
+            >
+              Fora de rascunho • Criar Rascunho
+            </button>
+          )}
+
           {feedback && (
             <span
               style={{
@@ -497,7 +567,13 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => setIsCreatingCheckpoint(true)}
+              onClick={() => {
+                if (isOfficial || isReadOnlyMode) {
+                  openDraftPromptForIntent("checkpoint");
+                  return;
+                }
+                setIsCreatingCheckpoint(true);
+              }}
               icon={<BookmarkPlus size={13} />}
             >
               Checkpoint
@@ -557,11 +633,18 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
               );
             })()
           ) : (!isOfficial && !isReadOnlyMode && (checkpointsCount > 0 || uncommittedCount > 0)) ||
-            (isOfficial && uncommittedCount > 0) ? (
+            ((isOfficial || isReadOnlyMode) && uncommittedCount > 0) ? (
             <Button
               size="sm"
               variant="primary"
-              onClick={() => setIsPubModalOpen(true)}
+              onClick={() => {
+                if (isOfficial || isReadOnlyMode) {
+                  openDraftPromptForIntent("publish");
+                  return;
+                }
+                setPendingPublishBranch(undefined);
+                setIsPubModalOpen(true);
+              }}
               icon={<Send size={13} />}
             >
               Publicar
@@ -572,21 +655,36 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
 
       <CreateDraftBranchModal
         isOpen={isDraftPromptOpen}
-        onClose={onCloseDraftPrompt}
+        onClose={handleCloseDraftModal}
         defaultBaseBranch={defaultBranch}
-        availableBranches={versionGraph?.nodes || []}
+        availableBranches={(versionGraph?.nodes || []).filter(
+          (n) => n.isDefault || (!n.isMerged && n.hasLocal !== false),
+        )}
         suggestedName={suggestedDraftName}
+        subtitle={
+          draftPromptIntent === "checkpoint"
+            ? "A Versão Oficial é protegida. Crie um Rascunho de Versão para salvar seu checkpoint sem alterar a Oficial diretamente."
+            : draftPromptIntent === "publish"
+              ? "Suas alterações atuais ainda não estão em um rascunho. Dê um nome ao Rascunho de Versão antes de enviar para publicação."
+              : undefined
+        }
+        error={draftError}
         onConfirmCreate={handleCreateDraftBranch}
         isProcessing={isBranchBusy}
       />
 
       <CreatePublicationModal
         isOpen={isPubModalOpen}
-        onClose={() => setIsPubModalOpen(false)}
+        onClose={() => {
+          setIsPubModalOpen(false);
+          setPendingPublishBranch(undefined);
+        }}
         repoName={activeRepo.name}
         nodes={versionGraph?.nodes || []}
         defaultBranch={defaultBranch}
-        initialSourceBranch={!isOfficial && !isReadOnlyMode ? currentBranch : undefined}
+        initialSourceBranch={
+          pendingPublishBranch || (!isOfficial && !isReadOnlyMode ? currentBranch : undefined)
+        }
         existingProposal={hasOpenProposal ? activeNode?.proposal : undefined}
         onCreated={async (pr) => {
           setFeedback({

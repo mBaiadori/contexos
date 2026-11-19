@@ -385,6 +385,10 @@ export function calculateCanvasLayout({
     const branchY = slotStartY;
     const path = getSankeyHorizontalPath(sourceX, sourceY, entryX, branchY);
 
+    const isRejected =
+      node.publicationStatus === "rejected" ||
+      node.proposal?.status === "CLOSED" ||
+      node.proposal?.status === "REJECTED";
     const isRemoteOrPublished =
       Boolean(node.hasRemote) ||
       node.type === "proposal" ||
@@ -392,6 +396,7 @@ export function calculateCanvasLayout({
       node.publicationStatus === "synced" ||
       node.publicationStatus === "remote_only";
     let color = isRemoteOrPublished ? "#7c3aed" : "#d97706";
+    if (isRejected) color = "#dc2626";
     if (node.isMerged) color = "#059669";
 
     const bCommits = branchCommitsMap.get(node.name) || [];

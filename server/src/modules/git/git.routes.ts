@@ -244,6 +244,22 @@ export async function gitRoutes(app: FastifyInstance) {
     }
   });
 
+  // 4.1 Delete draft branch (local + remote best-effort)
+  app.post("/api/git/branch/delete", async (req, reply) => {
+    try {
+      const { branch, repo } = req.body as { branch?: string; repo?: string };
+      if (!branch || !branch.trim()) {
+        return reply.status(400).send({ error: "Nome do rascunho é obrigatório" });
+      }
+      const res = await gitService.deleteBranch(branch, repo);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err?.message || "Erro ao excluir rascunho" });
+    }
+  });
+
   // 5. Commit changes
   app.post("/api/git/commit", async (req, reply) => {
     try {
@@ -259,6 +275,12 @@ export async function gitRoutes(app: FastifyInstance) {
           .send({ error: "Mensagem de commit é obrigatória" });
       }
       const res = await gitService.commit(message.trim(), files, user, repo);
+      if (!res?.success) {
+        return reply.status(400).send({
+          ...res,
+          error: res?.message || "Não foi possível realizar o commit.",
+        });
+      }
       return res;
     } catch (err: any) {
       return reply

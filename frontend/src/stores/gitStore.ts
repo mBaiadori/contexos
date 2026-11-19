@@ -205,7 +205,12 @@ export const useGitStore = create<GitState>((set, get) => ({
       await get().refreshGitLog(15);
       await get().refreshVersionGraph();
     }
-    return res.data;
+    const rawData = res.data as { success?: boolean; message?: string; error?: string; commitHash?: string } | undefined;
+    return {
+      success: Boolean(res.ok && rawData?.success),
+      message: rawData?.message || rawData?.error || "Não foi possível salvar o checkpoint.",
+      commitHash: rawData?.commitHash,
+    };
   },
 
   syncGit: async (branch?: string) => {

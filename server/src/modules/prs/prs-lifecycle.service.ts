@@ -8,6 +8,7 @@ import {
   createAndCheckoutBranch,
   executeGit,
   getActiveBearerToken,
+  getDefaultBranch,
   getGitStatus,
   rollbackToCommit,
 } from "../../utils/git.js";
@@ -31,7 +32,6 @@ import { prWorktreeService } from "./pr-worktree.service.js";
 import { prConflictsService } from "./pr-conflicts.service.js";
 import { workspaceService } from "../workspace/workspace.service.js";
 import { healRepositoryState } from "../../utils/git-health.js";
-import { recordAuditEvent } from "../audit/audit-chain.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { prsStorageService } from "./prs-storage.service.js";
 import type { PRApprovalAudit } from "./prs-types.js";
@@ -117,11 +117,17 @@ export class PRsLifecycleService {
     const repoDir = prsStorageService.getRepoDir(repoName);
     const hiddenList = loadHiddenFiles(repoDir);
     const gitStatus = await getGitStatus(repoDir);
-    const defaultBranch = activeRepo?.default_branch || "main";
+    const repoObj =
+      cfg.repos?.find((r: any) => r?.name === repoName) ||
+      (activeRepo?.name === repoName ? activeRepo : undefined);
+    const defaultBranch =
+      repoObj?.default_branch || (await getDefaultBranch(repoDir));
+    const currentCheckedOutBranch =
+      gitStatus.branch && gitStatus.branch !== "HEAD" ? gitStatus.branch : defaultBranch;
     const activeBranch =
       payload.sourceBranch ||
       payload.branch ||
-      (gitStatus.branch && gitStatus.branch !== "HEAD" ? gitStatus.branch : defaultBranch);
+      currentCheckedOutBranch;
     const isWorkingOnFeatureBranch =
       Boolean(activeBranch) && activeBranch !== defaultBranch && activeBranch !== "HEAD";
 
@@ -156,6 +162,16 @@ export class PRsLifecycleService {
     if (allChangedPaths.length === 0 && commitsAheadCount === 0) {
       throw new Error(
         "Não há alterações ou checkpoints pendentes nesta versão para enviar para publicação.",
+      );
+    }
+
+    if (
+      isWorkingOnFeatureBranch &&
+      allChangedPaths.length > 0 &&
+      currentCheckedOutBranch !== activeBranch
+    ) {
+      throw new Error(
+        `Existem alterações locais pendentes em "${currentCheckedOutBranch}". Salve ou isole-as em um rascunho antes de enviar a versão "${activeBranch}" para publicação.`,
       );
     }
 
@@ -743,21 +759,6 @@ export class PRsLifecycleService {
 
     prsStorageService.saveRepoPRs(repoName, prs);
 
-    try {
-      await recordAuditEvent(repoName, {
-        eventType: "PR_APPROVED",
-        user: approver,
-        payload: {
-          prId: target.id,
-          title: target.title,
-          headSha: target.head_sha,
-          quorumReached,
-        },
-      });
-    } catch (auditErr) {
-      console.warn("[PRsService] Falha ao registrar evento de auditoria de aprovação:", auditErr);
-    }
-
     if (quorumReached) {
       setImmediate(() => {
         notificationService.dispatch({
@@ -996,21 +997,6 @@ export class PRsLifecycleService {
     }
     prsStorageService.saveRepoPRs(repoName, prs);
 
-    try {
-      await recordAuditEvent(repoName, {
-        eventType: "PR_MERGED",
-        user: cfg.user?.login || "maintainer",
-        payload: {
-          prId: target.id,
-          title: target.title,
-          targetBranch: target.target_branch || "main",
-          headSha: target.head_sha,
-        },
-      });
-    } catch (auditErr) {
-      console.warn("[PRsService] Falha ao registrar evento de auditoria de merge:", auditErr);
-    }
-
     return {
       success: true,
       pr: target,
@@ -1056,20 +1042,6 @@ export class PRsLifecycleService {
     }
 
     prsStorageService.saveRepoPRs(repoName, prs);
-
-    try {
-      await recordAuditEvent(repoName, {
-        eventType: "PR_CLOSED",
-        user: cfg.user?.login || "reviewer",
-        payload: {
-          prId: target.id,
-          title: target.title,
-          reason: target.rejection_reason,
-        },
-      });
-    } catch (auditErr) {
-      console.warn("[PRsService] Falha ao registrar evento de auditoria de fechamento de PR:", auditErr);
-    }
 
     return {
       success: true,
@@ -1129,19 +1101,6 @@ export class PRsLifecycleService {
           pushErr,
         );
       }
-    }
-
-    try {
-      await recordAuditEvent(repoName, {
-        eventType: "ROLLBACK_APPLIED",
-        user: cfg.user?.login || "operator",
-        payload: {
-          targetHash,
-          targetTitle,
-        },
-      });
-    } catch (auditErr) {
-      console.warn("[PRsService] Falha ao registrar evento de auditoria de rollback:", auditErr);
     }
 
     clearWorkspaceChanges(repoName);

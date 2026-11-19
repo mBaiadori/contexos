@@ -18,6 +18,7 @@ export interface CommitPanelProps {
   onCreateBranch: (name: string, fromHash: string) => void | Promise<void>;
   onCompare?: (branchName: string) => void;
   onPublish?: (branchName: string) => void;
+  onDeleteBranch?: (branchName: string) => void | Promise<void>;
   isProcessing?: boolean;
 }
 
@@ -34,10 +35,12 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
   onCreateBranch,
   onCompare,
   onPublish,
+  onDeleteBranch,
   isProcessing = false,
 }) => {
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!commit) return null;
 
@@ -66,7 +69,12 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
     e.preventDefault();
     const clean = newBranchName.trim().replace(/\s+/g, "-");
     if (!clean) return;
-    await onCreateBranch(clean, commit.hash);
+    const baseRef = isSelectedMain
+      ? defaultBranch
+      : targetBranchName
+        ? targetBranchName
+        : commit.hash;
+    await onCreateBranch(clean, baseRef);
     setNewBranchName("");
     setIsCreatingBranch(false);
   };
@@ -78,17 +86,25 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
       commit.shortHash ||
       commit.hash.slice(0, 7);
 
+  const isRejected =
+    !nodeObj?.isMerged &&
+    (nodeObj?.publicationStatus === "rejected" ||
+      nodeObj?.proposal?.status === "CLOSED" ||
+      nodeObj?.proposal?.status === "REJECTED");
+
   const statusLabel = isSelectedMain
     ? null
     : nodeObj?.publicationStatus === "published" || nodeObj?.isMerged
       ? { text: "Publicada ✓", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" }
-      : nodeObj?.publicationStatus === "open"
-        ? { text: "Em Publicação", color: "#b45309", bg: "#fffbeb", border: "#fde68a" }
-        : nodeObj?.publicationStatus === "remote_only"
-          ? { text: "De Colega (Na Nuvem)", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" }
-          : nodeObj?.hasRemote
-            ? { text: "Sincronizada na Nuvem", color: "#7e22ce", bg: "#faf5ff", border: "#e9d5ff" }
-            : { text: "Rascunho Local", color: "#475569", bg: "#f8fafc", border: "#cbd5e1" };
+      : isRejected
+        ? { text: "Publicação Rejeitada", color: "#dc2626", bg: "#fef2f2", border: "#fecaca" }
+        : nodeObj?.publicationStatus === "open"
+          ? { text: "Em Publicação", color: "#7c3aed", bg: "#faf5ff", border: "#e9d5ff" }
+          : nodeObj?.publicationStatus === "remote_only"
+            ? { text: "De Colega (Na Nuvem)", color: "#7c3aed", bg: "#faf5ff", border: "#e9d5ff" }
+            : nodeObj?.hasRemote
+              ? { text: "Sincronizada na Nuvem", color: "#7c3aed", bg: "#faf5ff", border: "#e9d5ff" }
+              : { text: "Rascunho Local", color: "#d97706", bg: "#fffbeb", border: "#fde68a" };
 
   return (
     <div
@@ -438,9 +454,94 @@ export const CommitPanel: React.FC<CommitPanelProps> = ({
                 <span>
                   {nodeObj?.publicationStatus === "open" || nodeObj?.proposal?.status === "OPEN"
                     ? "Atualizar Publicação"
-                    : "Enviar para Publicação"}
+                    : isRejected
+                      ? "Reenviar para Publicação"
+                      : "Enviar para Publicação"}
                 </span>
               </Button>
+            )}
+
+          {isRejected && nodeObj?.proposal?.rejection_reason && (
+            <div
+              style={{
+                fontSize: "11.5px",
+                color: "#991b1b",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                padding: "8px 10px",
+                lineHeight: 1.4,
+              }}
+            >
+              <strong>Motivo da rejeição:</strong> {nodeObj.proposal.rejection_reason}
+            </div>
+          )}
+
+          {isSelectedBranch &&
+            targetBranchName &&
+            !isSelectedMain &&
+            !nodeObj?.isMerged &&
+            onDeleteBranch && (
+              confirmDelete ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 8px",
+                    borderRadius: "8px",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                  }}
+                >
+                  <span style={{ fontSize: "11.5px", color: "#991b1b", flex: 1 }}>
+                    {nodeObj?.publicationStatus === "open" || nodeObj?.proposal?.status === "OPEN"
+                      ? "Excluir rascunho e encerrar publicação?"
+                      : nodeObj?.hasRemote
+                        ? "Excluir rascunho local e remoto?"
+                        : "Excluir rascunho local?"}
+                  </span>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={isProcessing}
+                    onClick={async () => {
+                      setConfirmDelete(false);
+                      await onDeleteBranch(targetBranchName);
+                    }}
+                  >
+                    Excluir
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={isProcessing}
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={isProcessing}
+                  onClick={() => setConfirmDelete(true)}
+                  style={{
+                    width: "100%",
+                    color: "#dc2626",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                    delete_outline
+                  </span>
+                  <span>Excluir Rascunho</span>
+                </Button>
+              )
             )}
 
           {/* Ação: Novo rascunho a partir deste checkpoint */}

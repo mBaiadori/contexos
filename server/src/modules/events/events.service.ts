@@ -50,6 +50,21 @@ class EventsService {
     }
   }
 
+  public emitGitChanged(
+    repo: string,
+    action: string,
+    details: Record<string, any> = {},
+  ): void {
+    const payload = {
+      repo,
+      action,
+      ...details,
+      timestamp: Date.now(),
+    };
+    this.broadcast('git_changed', payload);
+    this.broadcast('refresh', payload);
+  }
+
   public closeAll(): void {
     for (const client of this.clients) {
       try {

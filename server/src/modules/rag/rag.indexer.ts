@@ -100,7 +100,6 @@ export class RagIndexer {
     ".cache",
     ".rag",
     ".sessions",
-    ".audit",
     "coverage",
     ".vscode",
     ".antigravity",

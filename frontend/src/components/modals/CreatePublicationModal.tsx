@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Send, Sparkles, AlertCircle, ChevronDown, ChevronRight, FileText, X } from "lucide-react";
 import { Button, FormField, Input, Textarea, Spinner } from "../ui";
@@ -36,15 +36,18 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
 }) => {
   const candidateNodes = useMemo(
     () =>
-      nodes.filter(
-        (n) =>
-          !n.isDefault &&
-          n.name !== defaultBranch &&
-          !n.isMerged &&
-          n.publicationStatus !== "open" &&
-          n.proposal?.status !== "OPEN" &&
-          (n.ahead > 0 || (n.uncommittedFiles && n.uncommittedFiles.length > 0)),
-      ),
+      nodes.filter((n) => {
+        if (n.isDefault || n.name === defaultBranch || n.isMerged) return false;
+        if (n.publicationStatus === "open" || n.proposal?.status === "OPEN") return false;
+        const isRejected =
+          n.publicationStatus === "rejected" ||
+          n.proposal?.status === "CLOSED" ||
+          n.proposal?.status === "REJECTED";
+        const isRemoteOnly =
+          n.hasLocal === false || n.publicationStatus === "remote_only";
+        if ((isRejected || isRemoteOnly) && !n.isCurrent) return false;
+        return n.ahead > 0 || (n.uncommittedFiles && n.uncommittedFiles.length > 0);
+      }),
     [nodes, defaultBranch],
   );
   const isLockedSource = Boolean(initialSourceBranch && initialSourceBranch !== defaultBranch);
@@ -69,9 +72,14 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   const [workspaceChanges, setWorkspaceChanges] = useState<WorkspaceChange[]>([]);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
+  const wasOpenRef = useRef(false);
+  const lastAutoTitleRef = useRef("");
 
   useEffect(() => {
-    if (isOpen) {
+    const justOpened = isOpen && !wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+    if (!isOpen) return;
+    if (justOpened || (isLockedSource && initialSourceBranch && sourceBranch !== initialSourceBranch)) {
       const preferred =
         initialSourceBranch && initialSourceBranch !== defaultBranch
           ? initialSourceBranch
@@ -80,15 +88,16 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
       const node = nodes.find((n) => n.name === preferred);
       const activeProp =
         node?.proposal?.status === "OPEN" ? node.proposal : existingProposal;
-      setTitle(
+      const autoTitle =
         activeProp?.title ||
-          (node?.displayName && node.displayName !== preferred ? node.displayName : ""),
-      );
+        (node?.displayName && node.displayName !== preferred ? node.displayName : "");
+      setTitle(autoTitle);
+      lastAutoTitleRef.current = autoTitle;
       setDescription(activeProp?.description || "");
       setErrorMsg(null);
       setExpandedFile(null);
     }
-  }, [isOpen, initialSourceBranch, defaultBranch, candidateNodes, nodes, existingProposal]);
+  }, [isOpen, isLockedSource, initialSourceBranch, defaultBranch, candidateNodes, nodes, existingProposal, sourceBranch]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -343,8 +352,11 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                       type="button"
                       onClick={() => {
                         setSourceBranch(n.name);
-                        if (n.displayName && !title.trim()) {
-                          setTitle(n.displayName);
+                        const nextAuto =
+                          n.displayName && n.displayName !== n.name ? n.displayName : "";
+                        if (!title.trim() || title === lastAutoTitleRef.current) {
+                          setTitle(nextAuto);
+                          lastAutoTitleRef.current = nextAuto;
                         }
                       }}
                       style={{

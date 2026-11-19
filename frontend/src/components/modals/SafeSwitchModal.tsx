@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal, Button, Badge, Input } from "../ui";
 import type { GitFileStatus } from "../../types";
 
@@ -8,7 +8,10 @@ export interface SafeSwitchModalProps {
   targetBranch: string;
   currentBranch: string;
   uncommittedFiles: GitFileStatus[];
+  isProtectedSource?: boolean;
+  isOfficialSource?: boolean;
   onConfirmCommit?: (message: string) => void | Promise<void>;
+  onConfirmCreateDraftAndSwitch?: (draftTitle: string) => void | Promise<void>;
   onConfirmStash?: () => void | Promise<void>;
   onConfirmDiscard: () => void | Promise<void>;
   isProcessing?: boolean;
@@ -20,18 +23,35 @@ export const SafeSwitchModal: React.FC<SafeSwitchModalProps> = ({
   targetBranch,
   currentBranch,
   uncommittedFiles,
+  isProtectedSource = false,
+  isOfficialSource = false,
   onConfirmCommit,
+  onConfirmCreateDraftAndSwitch,
+  onConfirmStash,
   onConfirmDiscard,
   isProcessing = false,
 }) => {
   const [commitMsg, setCommitMsg] = useState("");
+  const [draftTitle, setDraftTitle] = useState("Rascunho de alterações");
+
+  useEffect(() => {
+    if (isOpen) {
+      setCommitMsg("");
+      setDraftTitle(`Rascunho ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h")}`);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleCommitAndSwitch = () => {
-    if (!onConfirmCommit) return;
+    if (!onConfirmCommit || isProtectedSource) return;
     const msg = commitMsg.trim() || `Checkpoint em ${currentBranch}`;
     onConfirmCommit(msg);
+  };
+
+  const handleCreateDraftAndSwitch = () => {
+    if (!onConfirmCreateDraftAndSwitch) return;
+    onConfirmCreateDraftAndSwitch(draftTitle.trim() || "Rascunho de alterações");
   };
 
   return (
@@ -40,7 +60,7 @@ export const SafeSwitchModal: React.FC<SafeSwitchModalProps> = ({
       onClose={onClose}
       size="md"
       title="Alterações sem Checkpoint"
-      subtitle={`Você possui edições não salvas em checkpoint em "${currentBranch}". Como deseja prosseguir antes de mudar para "${targetBranch}"?`}
+      subtitle={`Você possui edições não salvas em "${currentBranch}". Como deseja prosseguir antes de mudar para "${targetBranch}"?`}
       footer={
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%", gap: "8px", flexWrap: "wrap" }}>
           <Button
@@ -64,7 +84,29 @@ export const SafeSwitchModal: React.FC<SafeSwitchModalProps> = ({
               Descartar alterações e Trocar
             </Button>
 
-            {onConfirmCommit && (
+            {isProtectedSource && onConfirmStash && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onConfirmStash}
+                disabled={isProcessing}
+              >
+                Guardar no Stash e Trocar
+              </Button>
+            )}
+
+            {isProtectedSource && isOfficialSource && onConfirmCreateDraftAndSwitch && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleCreateDraftAndSwitch}
+                disabled={isProcessing || !draftTitle.trim()}
+              >
+                {isProcessing ? "Salvando..." : "Salvar em Rascunho e Trocar"}
+              </Button>
+            )}
+
+            {!isProtectedSource && onConfirmCommit && (
               <Button
                 variant="primary"
                 size="sm"
@@ -79,11 +121,44 @@ export const SafeSwitchModal: React.FC<SafeSwitchModalProps> = ({
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        <p style={{ margin: 0, fontSize: "12px", color: "var(--text-secondary)" }}>
-          Para não perder o que você editou, salve um <strong>Checkpoint</strong> na versão atual antes de alternar, ou descarte essas alterações pendentes.
-        </p>
+        {isProtectedSource ? (
+          <div
+            style={{
+              padding: "8px 10px",
+              borderRadius: "6px",
+              background: "rgba(245, 158, 11, 0.12)",
+              border: "1px solid rgba(245, 158, 11, 0.35)",
+              fontSize: "12px",
+              color: "#92400e",
+              lineHeight: 1.45,
+            }}
+          >
+            {isOfficialSource
+              ? "A Versão Oficial é protegida e não recebe checkpoints diretos. Você pode isolar suas alterações em um novo rascunho antes de trocar, guardá-las no stash ou descartá-las."
+              : "Esta visualização é somente leitura e não recebe checkpoints diretos. Guarde suas alterações no stash ou descarte antes de trocar."}
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: "12px", color: "var(--text-secondary)" }}>
+            Para não perder o que você editou, salve um <strong>Checkpoint</strong> na versão atual antes de alternar, ou descarte essas alterações pendentes.
+          </p>
+        )}
 
-        {onConfirmCommit && (
+        {isProtectedSource && isOfficialSource && onConfirmCreateDraftAndSwitch && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-heading)" }}>
+              Nome do novo rascunho de versão:
+            </label>
+            <Input
+              type="text"
+              placeholder="Ex: ajuste-documento"
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              style={{ height: "30px", fontSize: "12px" }}
+            />
+          </div>
+        )}
+
+        {!isProtectedSource && onConfirmCommit && (
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-heading)" }}>
               Descrição do checkpoint (opcional):

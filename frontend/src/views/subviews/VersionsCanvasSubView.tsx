@@ -10,6 +10,7 @@ import {
   PageContainer,
 } from "../../components/ui";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { API } from "../../services/api";
 import type { GitFileStatus, GitGraphCommit } from "../../types";
 import { VersionCanvasView } from "./versions/components/VersionCanvasView";
 import { CommitPanel } from "./versions/components/CommitPanel";
@@ -88,6 +89,12 @@ export const VersionsCanvasSubView: React.FC<
   const defaultBranch = versionGraph?.defaultBranch || "main";
   const isDetached = Boolean(versionGraph?.isDetached);
   const headHash = versionGraph?.headHash;
+  const currentNode = versionGraph?.nodes?.find((n) => n.name === currentBranch);
+  const isOfficialSource = !isDetached && currentBranch === defaultBranch;
+  const isProtectedSource =
+    isDetached ||
+    isOfficialSource ||
+    Boolean(currentNode?.isMerged || currentNode?.publicationStatus === "published");
 
   // Seleciona o commit HEAD inicialmente quando os dados chegam
   useEffect(() => {
@@ -246,6 +253,140 @@ export const VersionsCanvasSubView: React.FC<
         setFeedback({
           type: "error",
           message: switchRes.error || "Falha ao alternar após salvar marco.",
+        });
+      }
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // SafeSwitch Confirm: Criar novo rascunho (quando vindo da Oficial), salvar marco e alternar
+  const handleConfirmCreateDraftAndSwitch = async (draftTitle: string) => {
+    if (!pendingTarget || !commitGit || !createOrSwitchBranch) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    const target = pendingTarget;
+    const branchSlug =
+      draftTitle
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 48) || `rascunho-${Date.now().toString().slice(-4)}`;
+
+    try {
+      const branchRes = await createOrSwitchBranch(
+        branchSlug,
+        defaultBranch,
+        draftTitle.trim() || branchSlug,
+      );
+      if (branchRes?.success === false) {
+        setFeedback({
+          type: "error",
+          message: branchRes?.message || "Não foi possível criar o rascunho de versão.",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const commitRes = await commitGit(`Checkpoint em ${draftTitle.trim() || branchSlug}`);
+      if (!commitRes || !commitRes.success) {
+        setFeedback({
+          type: "error",
+          message:
+            commitRes?.message || "Falha ao gravar checkpoint no novo rascunho.",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const switchRes = await safeSwitch({
+        ...target,
+        action: "switch",
+      });
+
+      if (switchRes.success) {
+        setSafeModalOpen(false);
+        setPendingTarget(null);
+        setFeedback({
+          type: "success",
+          message:
+            switchRes.message ||
+            `Alterações salvas no rascunho "${draftTitle}" e versão alternada.`,
+        });
+        const [, , newGraph] = await Promise.all([
+          refreshGitStatus?.(),
+          refreshPendingChanges?.(),
+          refreshVersionGraph ? refreshVersionGraph() : loadGraph(),
+        ]);
+        if (newGraph) {
+          if (target.branch) {
+            const bNode = newGraph.nodes?.find((n) => n.name === target.branch);
+            const headOfBranch =
+              bNode?.lastCommit?.hash ||
+              newGraph.commits?.find((c) => c.isHead)?.hash ||
+              newGraph.headHash;
+            setSelectedCommitHash(headOfBranch || null);
+            setSelectedTargetBranch(target.branch);
+          } else if (target.commitHash) {
+            setSelectedCommitHash(target.commitHash);
+            setSelectedTargetBranch(newGraph.currentBranch || null);
+          }
+        } else if (target.branch) {
+          setSelectedTargetBranch(target.branch);
+        }
+      } else {
+        setFeedback({
+          type: "error",
+          message: switchRes.error || "Falha ao alternar após salvar no rascunho.",
+        });
+      }
+    } catch (err) {
+      setFeedback({ type: "error", message: (err as Error).message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // SafeSwitch Confirm: Guardar no stash e alternar
+  const handleConfirmStashAndSwitch = async () => {
+    if (!pendingTarget) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    const target = pendingTarget;
+    try {
+      const res = await safeSwitch({
+        ...target,
+        action: "stash",
+      });
+      if (res.success) {
+        setSafeModalOpen(false);
+        setPendingTarget(null);
+        setFeedback({
+          type: "success",
+          message: res.message || "Alterações guardadas no stash e versão alternada.",
+        });
+        const [, , newGraph] = await Promise.all([
+          refreshGitStatus?.(),
+          refreshPendingChanges?.(),
+          refreshVersionGraph ? refreshVersionGraph() : loadGraph(),
+        ]);
+        if (newGraph && target.branch) {
+          const bNode = newGraph.nodes?.find((n) => n.name === target.branch);
+          const headOfBranch =
+            bNode?.lastCommit?.hash ||
+            newGraph.commits?.find((c) => c.isHead)?.hash ||
+            newGraph.headHash;
+          setSelectedCommitHash(headOfBranch || null);
+          setSelectedTargetBranch(target.branch);
+        }
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Falha ao guardar alterações no stash.",
         });
       }
     } catch (err) {
@@ -593,6 +734,37 @@ export const VersionsCanvasSubView: React.FC<
               setPubSourceBranch(branchName);
               setIsPubModalOpen(true);
             }}
+            onDeleteBranch={async (branchName) => {
+              setIsProcessing(true);
+              try {
+                const res = await API.deleteBranch(branchName, activeRepo?.name);
+                if (res.ok && res.data?.success) {
+                  setFeedback({
+                    type: "success",
+                    message: res.data.message || `Rascunho "${branchName}" excluído.`,
+                  });
+                  setIsDrawerOpen(false);
+                  setSelectedTargetBranch(null);
+                  await Promise.all([
+                    loadGraph(),
+                    refreshGitStatus?.(),
+                    refreshPendingChanges?.(),
+                  ]);
+                } else {
+                  setFeedback({
+                    type: "error",
+                    message: res.data?.error || res.data?.message || "Erro ao excluir rascunho.",
+                  });
+                }
+              } catch (err: any) {
+                setFeedback({
+                  type: "error",
+                  message: err?.message || "Falha ao excluir rascunho.",
+                });
+              } finally {
+                setIsProcessing(false);
+              }
+            }}
             isProcessing={isProcessing}
           />
         )}
@@ -619,7 +791,11 @@ export const VersionsCanvasSubView: React.FC<
               : currentBranch
         }
         uncommittedFiles={uncommittedFiles}
+        isProtectedSource={isProtectedSource}
+        isOfficialSource={isOfficialSource}
         onConfirmCommit={handleConfirmCommitAndSwitch}
+        onConfirmCreateDraftAndSwitch={handleConfirmCreateDraftAndSwitch}
+        onConfirmStash={handleConfirmStashAndSwitch}
         onConfirmDiscard={handleConfirmDiscard}
         isProcessing={isProcessing}
       />

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { GitBranch } from "lucide-react";
+import { AlertCircle, GitBranch } from "lucide-react";
 import { Modal, Button, FormField, Input } from "../ui";
 
 export interface CreateDraftBranchModalProps {
@@ -9,6 +9,8 @@ export interface CreateDraftBranchModalProps {
   currentBranchLabel?: string;
   availableBranches?: Array<{ name: string; displayName?: string; isDefault?: boolean }>;
   suggestedName?: string;
+  subtitle?: string;
+  error?: string | null;
   onConfirmCreate: (params: {
     branchName: string;
     baseBranch: string;
@@ -23,6 +25,8 @@ export const CreateDraftBranchModal: React.FC<CreateDraftBranchModalProps> = ({
   defaultBaseBranch,
   availableBranches = [],
   suggestedName = "",
+  subtitle,
+  error,
   onConfirmCreate,
   isProcessing = false,
 }) => {
@@ -70,7 +74,10 @@ export const CreateDraftBranchModal: React.FC<CreateDraftBranchModalProps> = ({
           <span>Criar Rascunho de Versão</span>
         </span>
       }
-      subtitle="Para proteger a Versão Oficial, suas edições ficam salvas em um rascunho próprio até você decidir publicar."
+      subtitle={
+        subtitle ||
+        "Para proteger a Versão Oficial, suas edições ficam salvas em um rascunho próprio até você decidir publicar."
+      }
       footer={
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", width: "100%" }}>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={isProcessing}>
@@ -89,6 +96,24 @@ export const CreateDraftBranchModal: React.FC<CreateDraftBranchModalProps> = ({
       }
     >
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        {error && (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: "8px",
+              background: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+              color: "#dc2626",
+              fontSize: "12.5px",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "8px",
+            }}
+          >
+            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "1px" }} />
+            <span>{error}</span>
+          </div>
+        )}
         <FormField
           label="Nome deste rascunho de versão"
           required

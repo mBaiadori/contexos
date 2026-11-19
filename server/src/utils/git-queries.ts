@@ -42,9 +42,8 @@ export async function getDefaultBranch(repoDir: string): Promise<string> {
     const headRes = await executeGit(["symbolic-ref", "refs/remotes/origin/HEAD"], repoDir);
     if (headRes.success && headRes.stdout.trim()) {
       const ref = headRes.stdout.trim();
-      const parts = ref.split("/");
-      const branch = parts[parts.length - 1];
-      if (branch) return branch;
+      const branch = ref.replace(/^refs\/remotes\/[^/]+\//, "");
+      if (branch && branch !== ref) return branch;
     }
   } catch {}
 

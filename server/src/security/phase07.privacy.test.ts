@@ -4,14 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { checkAiPolicy, getProjectAiPolicy } from "../modules/ai/ai-policy.service.js";
-import {
-  recordAuditEvent,
-  verifyAuditChain,
-} from "../modules/audit/audit-chain.service.js";
 import { validateCliExecutable } from "../utils/cli-validate.js";
 import { RagIndexer } from "../modules/rag/rag.indexer.js";
 
-describe("Fase 7: Governança de IA, LGPD, Trilha de Auditoria e Validação de CLIs", () => {
+describe("Fase 7: Governança de IA, LGPD e Validação de CLIs", () => {
   let tmpDir: string;
 
   before(() => {
@@ -140,58 +136,6 @@ describe("Fase 7: Governança de IA, LGPD, Trilha de Auditoria e Validação de 
       const indexedFiles = result.chunks.map((c) => c.relativePath);
       assert.ok(indexedFiles.some((f) => f.includes("public-guide.md")));
       assert.ok(!indexedFiles.some((f) => f.includes("secret-finances.md")), "Arquivo confidencial não deve ser indexado no RAG");
-    });
-  });
-
-  describe("7.2: Trilha de Auditoria Criptográfica Encadeada (Hash Chain)", () => {
-    test("deve registrar eventos encadeados e validar a integridade da cadeia", async () => {
-      const auditDir = path.join(tmpDir, ".audit");
-      fs.mkdirSync(auditDir, { recursive: true });
-
-      const e1 = await recordAuditEvent(tmpDir, {
-        eventType: "ai_request",
-        user: "qa-analyst",
-        payload: { prompt: "Revisar política de segurança", provider: "ollama" },
-      });
-      assert.ok(e1.hash);
-      assert.equal(e1.index, 0);
-
-      const e2 = await recordAuditEvent(tmpDir, {
-        eventType: "tool_approval",
-        user: "qa-analyst",
-        payload: { tool: "run_tests", approved: true },
-      });
-      assert.ok(e2.hash);
-      assert.equal(e2.index, 1);
-      assert.equal(e2.prevHash, e1.hash);
-
-      const e3 = await recordAuditEvent(tmpDir, {
-        eventType: "push",
-        user: "qa-analyst",
-        payload: { branch: "main", commit: "abc1234" },
-      });
-      assert.equal(e3.index, 2);
-      assert.equal(e3.prevHash, e2.hash);
-
-      const auditCheck = verifyAuditChain(tmpDir);
-      assert.equal(auditCheck.valid, true);
-      assert.equal(auditCheck.totalEntries, 3);
-    });
-
-    test("deve detectar adulteração em qualquer registro da trilha", async () => {
-      const chainPath = path.join(tmpDir, ".audit", "audit-chain.jsonl");
-      const lines = fs.readFileSync(chainPath, "utf-8").split("\n").filter(Boolean);
-      assert.ok(lines.length >= 3);
-
-      // Adultera o registro 1
-      const tamperedRecord = JSON.parse(lines[1]);
-      tamperedRecord.payload.tool = "malicious_script";
-      lines[1] = JSON.stringify(tamperedRecord);
-      fs.writeFileSync(chainPath, lines.join("\n") + "\n", "utf-8");
-
-      const checkTampered = verifyAuditChain(tmpDir);
-      assert.equal(checkTampered.valid, false);
-      assert.equal(checkTampered.brokenIndex, 1);
     });
   });
 

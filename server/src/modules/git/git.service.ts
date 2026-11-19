@@ -10,6 +10,7 @@ import {
   compareGitBranches,
   createAndCheckoutBranch,
   executeGit,
+  getActiveBearerToken,
   getDefaultBranch,
   getFileBlameDetails,
   getFileContentAtCommit,
@@ -25,7 +26,6 @@ import {
   syncGit,
 } from "../../utils/git.js";
 import { parseRepoRef, resolveRepoDirPath } from "../../utils/repo-ref.js";
-import { recordAuditEvent } from "../audit/audit-chain.service.js";
 import { eventsService } from "../events/events.service.js";
 import { prsService } from "../prs/prs.service.js";
 import { workspaceService } from "../workspace/workspace.service.js";
@@ -42,6 +42,8 @@ interface RepoPRItem {
   merge_commit_sha?: string;
   status?: string;
   merged_at?: string;
+  closed_at?: string;
+  rejection_reason?: string;
   updated_at?: string;
   author?: unknown;
   created_at?: string;
@@ -295,6 +297,38 @@ export class GitService {
     return res;
   }
 
+  private async resolveDefaultBranch(
+    repoName: string,
+    repoDir: string,
+    cfg = loadConfig(),
+  ): Promise<string> {
+    const isTargetActive = !repoName || cfg.active_repo?.name === repoName;
+    const repoObj =
+      cfg.repos?.find((r: any) => r?.name === repoName) ||
+      (isTargetActive ? cfg.active_repo : undefined);
+    const configuredDefault =
+      repoObj?.default_branch ||
+      (isTargetActive ? cfg.active_repo?.default_branch : undefined);
+
+    if (configuredDefault) {
+      const hasLocal = await executeGit(
+        ["show-ref", "--verify", "--quiet", `refs/heads/${configuredDefault}`],
+        repoDir,
+      );
+      const hasRemote = !hasLocal.success
+        ? await executeGit(
+            ["show-ref", "--verify", "--quiet", `refs/remotes/origin/${configuredDefault}`],
+            repoDir,
+          )
+        : { success: false };
+      if (hasLocal.success || hasRemote.success) {
+        return configuredDefault;
+      }
+    }
+
+    return await getDefaultBranch(repoDir);
+  }
+
   async commit(
     message: string,
     files?: string[],
@@ -307,6 +341,45 @@ export class GitService {
     const repoDir = this.getRepoDir(repoName, ownerParam);
     if (!(await isGitRepo(repoDir))) {
       throw new Error(`Repositório ${repoName} não está clonado localmente.`);
+    }
+
+    const headExistsRes = await executeGit(["rev-parse", "--verify", "HEAD"], repoDir);
+    if (headExistsRes.success) {
+      const symRefRes = await executeGit(["symbolic-ref", "-q", "--short", "HEAD"], repoDir);
+      const currentBranch = symRefRes.success ? symRefRes.stdout.trim() : "";
+
+      if (!currentBranch) {
+        return {
+          success: false,
+          message:
+            "Não é possível salvar um checkpoint visualizando o histórico (HEAD desacoplado). Crie um rascunho de versão primeiro.",
+        };
+      }
+
+      const defaultBranch = await this.resolveDefaultBranch(repoName, repoDir, cfg);
+      if (currentBranch === defaultBranch) {
+        return {
+          success: false,
+          message: `Não é permitido salvar checkpoints diretamente na Versão Oficial (${defaultBranch}). Crie um rascunho de versão para suas alterações.`,
+        };
+      }
+
+      try {
+        const repoPRs: RepoPRItem[] = prsService.loadRepoPRs(repoName) || [];
+        const hasMergedPR = repoPRs.some(
+          (p) => p.branch === currentBranch && p.status === "MERGED",
+        );
+        const hasOpenPR = repoPRs.some(
+          (p) => p.branch === currentBranch && p.status === "OPEN",
+        );
+        if (hasMergedPR && !hasOpenPR) {
+          return {
+            success: false,
+            message:
+              "Esta versão já foi publicada na Versão Oficial e está bloqueada para novos checkpoints. Crie um novo rascunho de versão.",
+          };
+        }
+      } catch {}
     }
 
     const res = await commitChanges(repoDir, message, files);
@@ -329,21 +402,6 @@ export class GitService {
 
     const result = await syncGit(repoDir, "origin", targetBranch);
     workspaceService.invalidateTreeCache(repoName);
-
-    if (result.success) {
-      try {
-        await recordAuditEvent(repoName, {
-          eventType: "GIT_SYNC_PUSH",
-          user: cfg.user?.login || "developer",
-          payload: { branch: targetBranch, repo: repoName },
-        });
-      } catch (auditErr) {
-        console.warn(
-          "[GitService] Falha ao registrar evento de auditoria no sync:",
-          auditErr,
-        );
-      }
-    }
 
     try {
       const status = await getGitStatus(repoDir);
@@ -633,7 +691,17 @@ export class GitService {
       const isDefault = branch === defaultBranch;
       const isCurrent = !isDetached && branch === currentBranch;
       const tip = branchTips.get(branch)!;
-      const pr = repoPRs.find((p) => p.branch === branch && p.status !== "DELETED");
+      const branchPRs = repoPRs.filter(
+        (p) => p.branch === branch && p.status !== "DELETED",
+      );
+      const pr =
+        branchPRs.find((p) => p.status === "OPEN") ||
+        branchPRs.find((p) => p.status === "MERGED") ||
+        branchPRs.sort(
+          (a, b) =>
+            new Date(b.closed_at || b.updated_at || b.created_at || 0).getTime() -
+            new Date(a.closed_at || a.updated_at || a.created_at || 0).getTime(),
+        )[0];
 
       const displayName = resolveDisplayName(branch, isDefault, pr);
       const cfgParent = branchConfigParents.get(branch);
@@ -662,7 +730,20 @@ export class GitService {
           ? defaultBranch
           : cfgParent;
 
-      // Commits exclusivos da branch (caminhando pelo first-parent até tocar na linhagem da main)
+      // Ancestrais exclusivos da branch-pai (quando derivada de outro rascunho)
+      // para não duplicar visualmente checkpoints do pai no rascunho filho
+      const parentAncestors = new Set<string>();
+      if (parentBranch && parentBranch !== defaultBranch) {
+        let pCur = branchTips.get(parentBranch)?.hash || "";
+        const pSeen = new Set<string>();
+        while (pCur && !pSeen.has(pCur) && !mainAncestors.has(pCur)) {
+          pSeen.add(pCur);
+          parentAncestors.add(pCur);
+          pCur = commitByHash.get(pCur)?.parents[0] || "";
+        }
+      }
+
+      // Commits exclusivos da branch (caminhando pelo first-parent até tocar na linhagem da main ou da branch-pai)
       const branchCommits: Array<{
         hash: string;
         shortHash: string;
@@ -678,7 +759,7 @@ export class GitService {
         const seen = new Set<string>();
         while (cur && !seen.has(cur)) {
           seen.add(cur);
-          if (mainAncestors.has(cur)) {
+          if (mainAncestors.has(cur) || parentAncestors.has(cur)) {
             baseHash = cur;
             baseDate = commitByHash.get(cur)?.date || "";
             break;
@@ -737,17 +818,21 @@ export class GitService {
 
       const hasLocal = localBranches.has(branch);
       const hasRemote = remoteBranches.has(branch);
+      const isRejectedPR =
+        pr?.status === "CLOSED" || pr?.status === "REJECTED";
       const publicationStatus = isDefault
         ? "official"
         : wasMergedIntoMain
           ? "published"
           : pr?.status === "OPEN"
             ? "open"
-            : hasRemote && !hasLocal
-              ? "remote_only"
-              : hasRemote
-                ? "synced"
-                : "local";
+            : isRejectedPR
+              ? "rejected"
+              : hasRemote && !hasLocal
+                ? "remote_only"
+                : hasRemote
+                  ? "synced"
+                  : "local";
 
       return {
         name: branch,
@@ -770,6 +855,7 @@ export class GitService {
               title: pr.title,
               description: pr.description || "",
               status: pr.status,
+              rejection_reason: pr.rejection_reason || "",
               author: pr.author,
               created_at: pr.created_at,
               approvals_count: Array.isArray(pr.approvals) ? pr.approvals.length : 0,
@@ -1247,6 +1333,127 @@ export class GitService {
       message: res.success
         ? "Todos os rascunhos guardados no stash foram limpos."
         : res.stderr || "Erro ao limpar stashes.",
+    };
+  }
+
+  async deleteBranch(
+    branchNameParam: string,
+    repoNameParam?: string,
+    ownerParam?: string,
+  ) {
+    const cfg = loadConfig();
+    const repoName = repoNameParam || cfg.active_repo?.name || "local";
+    const repoDir = this.getRepoDir(repoName, ownerParam);
+    if (!(await isGitRepo(repoDir))) {
+      throw new Error(`Repositório ${repoName} não está clonado localmente.`);
+    }
+
+    const safeBranch = assertBranchName(branchNameParam.trim(), "Rascunho");
+    const defaultBranch = await this.resolveDefaultBranch(repoName, repoDir, cfg);
+    if (safeBranch === defaultBranch) {
+      throw new Error("A Versão Oficial não pode ser excluída.");
+    }
+
+    const repoPRs: RepoPRItem[] = prsService.loadRepoPRs(repoName) || [];
+    const hasMergedPR = repoPRs.some(
+      (p) => p.branch === safeBranch && p.status === "MERGED",
+    );
+    if (hasMergedPR) {
+      throw new Error("Versões já publicadas na Oficial não podem ser excluídas.");
+    }
+
+    const [status, symRefRes] = await Promise.all([
+      getGitStatus(repoDir),
+      executeGit(["symbolic-ref", "-q", "--short", "HEAD"], repoDir),
+    ]);
+    const activeSymBranch = symRefRes.success ? symRefRes.stdout.trim() : "";
+    if (activeSymBranch === safeBranch || (!activeSymBranch && status.branch === safeBranch)) {
+      if (!status.isClean && status.files.length > 0) {
+        throw new Error(
+          "Salve ou descarte suas alterações locais antes de excluir este rascunho.",
+        );
+      }
+
+      const wsChangesPath = path.join(repoDir, ".workspace_changes.json");
+      let wsChangesBackup: string | null = null;
+      if (fs.existsSync(wsChangesPath)) {
+        try {
+          wsChangesBackup = fs.readFileSync(wsChangesPath, "utf-8");
+          fs.unlinkSync(wsChangesPath);
+        } catch {}
+      }
+
+      try {
+        const switchRes = await createAndCheckoutBranch(repoDir, defaultBranch);
+        if (!switchRes.success) {
+          throw new Error(
+            switchRes.message || "Não foi possível retornar à Versão Oficial.",
+          );
+        }
+      } finally {
+        if (wsChangesBackup && !fs.existsSync(wsChangesPath)) {
+          try {
+            fs.writeFileSync(wsChangesPath, wsChangesBackup, "utf-8");
+          } catch {}
+        }
+      }
+    }
+
+    // Encerra eventual publicação aberta vinculada a este rascunho (local + GitHub)
+    const openPRs = repoPRs.filter(
+      (p) => p.branch === safeBranch && p.status === "OPEN" && p.id !== undefined,
+    );
+    for (const openPR of openPRs) {
+      await prsService.rejectPR(
+        openPR.id!,
+        "Rascunho excluído pelo usuário.",
+        repoName,
+      );
+    }
+
+    const localCheck = await executeGit(
+      ["show-ref", "--verify", "--quiet", `refs/heads/${safeBranch}`],
+      repoDir,
+    );
+    if (localCheck.success) {
+      const delLocal = await executeGit(["branch", "-D", safeBranch], repoDir);
+      if (!delLocal.success) {
+        throw new Error(delLocal.stderr || "Erro ao excluir o rascunho local.");
+      }
+    }
+
+    // Remove a branch remota se existir no origin
+    const remoteCheck = await executeGit(
+      ["show-ref", "--verify", "--quiet", `refs/remotes/origin/${safeBranch}`],
+      repoDir,
+    );
+    if (remoteCheck.success) {
+      const activeToken = getActiveBearerToken(cfg.token);
+      const delRemote = await executeGit(
+        ["push", "origin", "--delete", safeBranch],
+        repoDir,
+        activeToken || undefined,
+      );
+      if (!delRemote.success) {
+        const stderrLower = (delRemote.stderr || "").toLowerCase();
+        if (!stderrLower.includes("remote ref does not exist")) {
+          throw new Error(
+            delRemote.stderr ||
+              `Não foi possível excluir a branch remota "${safeBranch}" no GitHub.`,
+          );
+        }
+      }
+      await executeGit(["fetch", "--prune"], repoDir).catch(() => {});
+    }
+
+    workspaceService.invalidateTreeCache(repoName);
+    eventsService.emitGitChanged(repoName, "branch-deleted", {
+      branch: safeBranch,
+    });
+
+    return {
+      success: true,
+      message: `Rascunho "${safeBranch}" excluído com sucesso.`,
     };
   }
 

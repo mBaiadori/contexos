@@ -324,15 +324,46 @@ export async function createAndCheckoutBranch(
       );
       if (isMainCommit.success) {
         effectiveParent = defaultBranchName;
-      } else if (currentBranchBefore) {
-        effectiveParent = currentBranchBefore;
+      } else {
+        const containsRes = await executeGit(
+          ["branch", "--contains", safeStartPoint, "--format=%(refname:short)"],
+          repoDir,
+        );
+        const candidates = containsRes.success
+          ? containsRes.stdout
+              .split("\n")
+              .map((s) => s.trim())
+              .filter((s) => Boolean(s) && s !== defaultBranchName)
+          : [];
+        if (candidates.length > 0) {
+          effectiveParent = candidates[0];
+        } else if (currentBranchBefore) {
+          effectiveParent = currentBranchBefore;
+        }
       }
     } else if (currentBranchBefore) {
       effectiveParent = currentBranchBefore;
     }
 
-    const args = safeStartPoint
-      ? ["checkout", "-b", safeName, safeStartPoint]
+    let gitStartPoint = safeStartPoint;
+    if (safeStartPoint && !/^[0-9a-f]{7,40}$/i.test(safeStartPoint)) {
+      const localBaseCheck = await executeGit(
+        ["rev-parse", "--verify", `refs/heads/${safeStartPoint}`],
+        repoDir,
+      );
+      if (!localBaseCheck.success) {
+        const remoteBaseCheck = await executeGit(
+          ["rev-parse", "--verify", `refs/remotes/origin/${safeStartPoint}`],
+          repoDir,
+        );
+        if (remoteBaseCheck.success) {
+          gitStartPoint = `origin/${safeStartPoint}`;
+        }
+      }
+    }
+
+    const args = gitStartPoint
+      ? ["checkout", "-b", safeName, gitStartPoint]
       : ["checkout", "-b", safeName];
 
     const createRes = await executeGit(args, repoDir);

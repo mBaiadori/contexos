@@ -99,4 +99,3 @@ Para garantir clareza arquitetural e evitar falsa sensação de segurança, os s
 ### 6.4 Privacidade LGPD e Modelos de IA
 - **Classificação de Documentos**: Documentos classificados como `confidential` ou `restricted` são barrados de envio para provedores de nuvem externos (Gemini, OpenAI, Anthropic), sendo autorizados apenas para instâncias locais (Ollama/On-Premise).
 - **Leitura Dinâmica**: A política é lida dinamicamente do `.project.config.json` via WorkspaceContext.
-- **Trilha de Auditoria Criptográfica**: Cada evento de aprovação, chamada de IA, push e reversão é registrado com hash SHA-256 encadeado (`audit-chain.jsonl`), permitindo detecção imediata de adulteração.

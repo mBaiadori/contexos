@@ -76,6 +76,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const [isDeletingItem, setIsDeletingItem] = useState(false);
   const [governanceRepoTarget, setGovernanceRepoTarget] = useState<Repo | null>(null);
   const [draftBranchPromptOpen, setDraftBranchPromptOpen] = useState(false);
+  const [draftBranchError, setDraftBranchError] = useState<string | null>(null);
   const [isCreatingDraftBranch, setIsCreatingDraftBranch] = useState(false);
   const [pendingTreeAction, setPendingTreeAction] = useState<
     | { type: "create"; parentPath: string; isFolder: boolean }
@@ -1404,14 +1405,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
         isOpen={draftBranchPromptOpen}
         onClose={() => {
           setDraftBranchPromptOpen(false);
+          setDraftBranchError(null);
           setPendingTreeAction(null);
         }}
         defaultBaseBranch={defaultBranch}
-        availableBranches={(versionGraph?.nodes || []).map((n) => ({
-          name: n.name,
-          displayName: n.displayName,
-          isDefault: n.isDefault,
-        }))}
+        availableBranches={(versionGraph?.nodes || [])
+          .filter((n) => n.isDefault || (!n.isMerged && n.hasLocal !== false))
+          .map((n) => ({
+            name: n.name,
+            displayName: n.displayName,
+            isDefault: n.isDefault,
+          }))}
         suggestedName={
           pendingTreeAction?.type === "delete"
             ? `remover-${pendingTreeAction.name.replace(/\.[^/.]+$/, "")}`
@@ -1419,10 +1423,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
               ? `renomear-${pendingTreeAction.name.replace(/\.[^/.]+$/, "")}`
               : "novo-documento"
         }
+        error={draftBranchError}
         isProcessing={isCreatingDraftBranch}
         onConfirmCreate={async (params) => {
           if (!createOrSwitchBranch) return;
           setIsCreatingDraftBranch(true);
+          setDraftBranchError(null);
           try {
             const res = await createOrSwitchBranch(
               params.branchName,
@@ -1437,6 +1443,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
               ]);
               const action = pendingTreeAction;
               setDraftBranchPromptOpen(false);
+              setDraftBranchError(null);
               setPendingTreeAction(null);
               showToast(`Rascunho "${params.displayTitle}" criado.`, "info");
 
@@ -1465,10 +1472,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 setInlineRenameValue(action.name);
               }
             } else {
-              showToast(res?.message || "Não foi possível criar o rascunho.", "warning");
+              setDraftBranchError(res?.message || "Não foi possível criar o rascunho.");
             }
-          } catch {
-            showToast("Erro ao criar rascunho de versão.", "warning");
+          } catch (err: any) {
+            setDraftBranchError(err?.message || "Erro ao criar rascunho de versão.");
           } finally {
             setIsCreatingDraftBranch(false);
           }
