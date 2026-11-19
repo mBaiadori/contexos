@@ -3,6 +3,9 @@ import { prsService } from "./prs.service.js";
 import { prConflictsService } from "./pr-conflicts.service.js";
 import { loadConfig } from "../../config/storage.js";
 
+const errMsg = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err);
+
 export async function prsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/prs", async (request, reply) => {
     const query = request.query as {
@@ -68,8 +71,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
         userLogin,
       );
       return reply.send(fileData);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -93,8 +96,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
         pr,
       );
       return reply.send(mergeability);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: errMsg(err) });
     }
   });
 
@@ -127,8 +130,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
         userLogin,
       );
       return reply.send(bundle);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -171,8 +174,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
       });
       prsService.saveRepoPRs(repoName, prs);
       return reply.send({ success: true, commitHash: res.commitHash });
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -208,8 +211,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
         prsService.saveRepoPRs(repoName, prs);
       }
       return reply.send(res);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -235,8 +238,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
     try {
       const result = await prsService.createPR(request.body as any);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -244,8 +247,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
     try {
       const result = await prsService.createPR(request.body as any);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -260,8 +263,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
     try {
       const result = await prsService.approvePR(body.id || "", body);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -269,8 +272,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
     try {
       const result = await prsService.editPRFile(request.body as any);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -279,8 +282,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
     try {
       const result = await prsService.mergePR(body.id || "", body.repo);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -297,8 +300,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
         body.repo,
       );
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 
@@ -311,8 +314,8 @@ export async function prsRoutes(fastify: FastifyInstance) {
     try {
       const result = await prsService.rollbackRevision(body);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: errMsg(err) });
     }
   });
 }
