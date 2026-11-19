@@ -218,15 +218,22 @@ export function setupAutoUpdater(
     });
   }
 
-  // Executa uma checagem automática 5 segundos após o boot da janela
-  setTimeout(() => {
+  const runUpdateCheck = () => {
     if (process.platform === 'darwin') {
       checkGitHubReleaseForMac(getMainWindow);
     } else {
       autoUpdater.checkForUpdatesAndNotify().catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn('[AutoUpdater] Falha no checkForUpdatesAndNotify inicial:', message);
+        console.warn('[AutoUpdater] Falha no checkForUpdatesAndNotify:', message);
       });
     }
-  }, 5000);
+  };
+
+  // Executa uma checagem automática 5 segundos após o boot da janela
+  setTimeout(runUpdateCheck, 5000);
+
+  // Re-verifica periodicamente a cada 12 horas para sessões de longa duração
+  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+  const periodicCheckTimer = setInterval(runUpdateCheck, TWELVE_HOURS_MS);
+  periodicCheckTimer.unref();
 }
