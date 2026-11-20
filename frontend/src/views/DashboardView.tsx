@@ -23,6 +23,7 @@ import { VersionsCanvasSubView } from "./subviews/VersionsCanvasSubView";
 import { WikiSubView } from "./subviews/WikiSubView";
 import { DictionarySubView } from "./subviews/DictionarySubView";
 import { PRsSubView } from "./subviews/PRsSubView";
+import { TemplatesSubView } from "./subviews/TemplatesSubView";
 import { GovernanceMembersSubView } from "./subviews/GovernanceMembersSubView";
 
 const AICenterSubView = React.lazy(() =>
@@ -46,6 +47,7 @@ const VALID_SUBVIEWS: SubViewType[] = [
   "versions",
   "dictionary",
   "wiki",
+  "templates",
   "skills",
   "aicenter",
   "prs",
@@ -449,6 +451,14 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             {activeSubView === "dictionary" && <DictionarySubView />}
 
             {activeSubView === "wiki" && <WikiSubView />}
+
+            {activeSubView === "templates" && (
+              <TemplatesSubView
+                onApplyTemplate={(tplPath) =>
+                  tplPath ? handleOpenFile(tplPath) : handleSelectView("editor")
+                }
+              />
+            )}
 
             {(activeSubView === "aicenter" || activeSubView === "skills") && (
               <AICenterSubView />
