@@ -164,7 +164,7 @@ jobs:
           
           # Executa o instalador NSIS em modo estritamente silencioso
           # No Windows, executando como Administrador (runneradmin), passamos /currentuser e /D para garantir destino esperado
-          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S /currentuser /D=$defaultUserDir" -PassThru
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList @("/S", "/currentuser", "/D=$defaultUserDir") -PassThru
           
           # Resolução resiliente dos caminhos candidatos de instalação (per-user e per-machine)
           $candidateDirs = @(
@@ -174,7 +174,7 @@ jobs:
           )
 
           $foundDir = $null
-          $timeout = 120
+          $timeout = 240
           
           while ($timeout -gt 0) {
             foreach ($dir in $candidateDirs) {
@@ -189,14 +189,27 @@ jobs:
               Start-Sleep -Seconds 5
               break
             }
+            if ($proc.HasExited) {
+              Start-Sleep -Seconds 2
+              foreach ($dir in $candidateDirs) {
+                $appCandidate = Join-Path $dir "Contexos.exe"
+                $gitCandidate = Join-Path $dir "resources\git\cmd\git.exe"
+                if ((Test-Path $appCandidate) -and (Test-Path $gitCandidate)) {
+                  $foundDir = $dir
+                  break
+                }
+              }
+              break
+            }
             Start-Sleep -Seconds 2
             $timeout -= 2
           }
           
           if (-not $foundDir) {
-            Write-Host "Conteúdo de $env:LOCALAPPDATA\Programs:"
+            Write-Host "Instalador finalizou? $($proc.HasExited) | ExitCode: $($proc.ExitCode)"
+            Write-Host "Conteúdo de ${env:LOCALAPPDATA}\Programs:"
             Get-ChildItem -Path "$env:LOCALAPPDATA\Programs" -ErrorAction SilentlyContinue | Select-Object Name
-            Write-Host "Conteúdo de $env:ProgramFiles:"
+            Write-Host "Conteúdo de ${env:ProgramFiles}:"
             Get-ChildItem -Path "$env:ProgramFiles" -ErrorAction SilentlyContinue | Select-Object Name
             throw "Diretório de instalação do Contexos não encontrado em nenhum local esperado!"
           }
