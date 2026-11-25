@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js';
 import { BASE_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
 import type { RawTurnTelemetryRecord, SessionDataRecord, SessionEventRecord } from './ai.service.js';
+
+const require = createRequire(import.meta.url);
 
 export type ImportConflictStrategy = 'merge' | 'keep_local' | 'overwrite';
 
@@ -64,13 +66,6 @@ interface EventRow {
   timestamp: string;
 }
 
-interface TelemetryRow {
-  turn_id: string;
-  session_id: string;
-  timestamp: string;
-  payload_json: string;
-}
-
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'utf-8');
 
 function sanitizeEvents(events: SessionEventRecord[]): SessionEventRecord[] {
@@ -125,13 +120,56 @@ function computeMetrics(events: Array<{ text: string }>, telemetryTurns: RawTurn
   };
 }
 
+let sharedSqlJsPromise: Promise<SqlJsStatic> | null = null;
+
+async function loadSqlJs(): Promise<SqlJsStatic> {
+  if (!sharedSqlJsPromise) {
+    const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
+    const buf = fs.readFileSync(wasmPath);
+    const wasmBinary = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    sharedSqlJsPromise = initSqlJs({ wasmBinary });
+  }
+  return sharedSqlJsPromise;
+}
+
+function queryAll<T = Record<string, unknown>>(db: Database, sql: string, params: unknown[] = []): T[] {
+  const stmt = db.prepare(sql);
+  try {
+    if (params.length > 0) stmt.bind(params as (string | number | Uint8Array | null)[]);
+    const rows: T[] = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject() as T);
+    }
+    return rows;
+  } finally {
+    stmt.free();
+  }
+}
+
+function queryOne<T = Record<string, unknown>>(db: Database, sql: string, params: unknown[] = []): T | undefined {
+  const rows = queryAll<T>(db, sql, params);
+  return rows[0];
+}
+
+function runStmt(db: Database, sql: string, params: unknown[] = []): number {
+  const stmt = db.prepare(sql);
+  try {
+    stmt.run(params as (string | number | Uint8Array | null)[]);
+    return db.getRowsModified();
+  } finally {
+    stmt.free();
+  }
+}
+
 /**
- * Armazena sessões de chat, mensagens e telemetria em SQLite (`node:sqlite`),
- * com suporte a migração automática de `.sessions/*.json`, exportação nativa (`VACUUM INTO`)
- * e importação com merge transacional (`ATTACH DATABASE`).
+ * Armazena sessões de chat, mensagens e telemetria em SQLite (`sql.js` / WASM),
+ * compatível com Node 20 (Electron) e Node 24+, com migração automática de `.sessions/*.json`,
+ * exportação nativa `.sqlite` e importação com merge transacional.
  */
 export class SessionStoreService {
-  private db: DatabaseSync | null = null;
+  private SQL: SqlJsStatic | null = null;
+  private db: Database | null = null;
+  private initPromise: Promise<void> | null = null;
   private dbPath: string;
   private migratedRepos = new Set<string>();
 
@@ -139,22 +177,45 @@ export class SessionStoreService {
     this.dbPath = customDbPath || path.join(BASE_DIR, 'sessions.db');
   }
 
-  private getDb(): DatabaseSync {
-    if (this.db) return this.db;
-    fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
-    const db = new DatabaseSync(this.dbPath);
-    db.exec(`
-      PRAGMA journal_mode = WAL;
-      PRAGMA foreign_keys = ON;
-      PRAGMA busy_timeout = 5000;
-    `);
-    this.initSchema(db);
-    this.db = db;
-    return db;
+  async init(): Promise<void> {
+    if (this.db) return;
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        this.SQL = await loadSqlJs();
+        fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
+        if (fs.existsSync(this.dbPath)) {
+          const fileBuffer = fs.readFileSync(this.dbPath);
+          this.db = new this.SQL.Database(fileBuffer);
+        } else {
+          this.db = new this.SQL.Database();
+        }
+        this.initSchema(this.db);
+        this.persistToDisk();
+      })();
+    }
+    return this.initPromise;
   }
 
-  private initSchema(db: DatabaseSync): void {
-    db.exec(`
+  private getDb(): Database {
+    if (!this.db) {
+      throw new Error('SessionStoreService não inicializado. Chame init() antes de usar.');
+    }
+    return this.db;
+  }
+
+  private persistToDisk(): void {
+    if (!this.db) return;
+    const data = this.db.export();
+    fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
+    const tmpPath = `${this.dbPath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmpPath, Buffer.from(data));
+    fs.renameSync(tmpPath, this.dbPath);
+  }
+
+  private initSchema(db: Database): void {
+    db.run(`
+      PRAGMA foreign_keys = ON;
+
       CREATE TABLE IF NOT EXISTS chat_sessions (
         session_id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
@@ -203,6 +264,7 @@ export class SessionStoreService {
     if (this.db) {
       this.db.close();
       this.db = null;
+      this.initPromise = null;
     }
   }
 
@@ -213,59 +275,58 @@ export class SessionStoreService {
       : cfg.active_repo?.name || 'default';
   }
 
-  /**
-   * Importa automaticamente arquivos legados de `<repo>/.sessions/*.json` na primeira leitura.
-   */
   migrateLegacyRepoSessions(repoName: string): void {
     const resolvedRepo = this.resolveEffectiveRepo(repoName);
     if (this.migratedRepos.has(resolvedRepo)) return;
 
     const db = this.getDb();
-    const already = db
-      .prepare('SELECT 1 FROM migrated_repos WHERE repo = ?')
-      .get(resolvedRepo);
+    const already = queryOne(db, 'SELECT 1 AS ok FROM migrated_repos WHERE repo = ?', [resolvedRepo]);
     if (already) {
       this.migratedRepos.add(resolvedRepo);
       return;
     }
 
     const sessionsDir = path.join(resolveRepoDir(resolvedRepo), '.sessions');
+    let importedAny = false;
     if (fs.existsSync(sessionsDir)) {
       const files = fs.readdirSync(sessionsDir).filter((f) => f.endsWith('.json'));
       if (files.length > 0) {
-        db.exec('BEGIN IMMEDIATE');
+        db.run('BEGIN TRANSACTION');
         try {
           for (const f of files) {
             try {
               const raw = JSON.parse(fs.readFileSync(path.join(sessionsDir, f), 'utf-8')) as SessionDataRecord;
               const sessionId = raw.session_id || f.replace(/\.json$/, '');
               this.upsertLegacySessionTx(db, resolvedRepo, sessionId, raw);
+              importedAny = true;
             } catch {
               // Ignora arquivos legados corrompidos
             }
           }
-          db.prepare('INSERT OR REPLACE INTO migrated_repos (repo, migrated_at) VALUES (?, ?)').run(
+          runStmt(db, 'INSERT OR REPLACE INTO migrated_repos (repo, migrated_at) VALUES (?, ?)', [
             resolvedRepo,
-            new Date().toISOString()
-          );
-          db.exec('COMMIT');
+            new Date().toISOString(),
+          ]);
+          db.run('COMMIT');
         } catch (err) {
-          db.exec('ROLLBACK');
+          db.run('ROLLBACK');
           throw err;
         }
+        if (importedAny) this.persistToDisk();
         this.migratedRepos.add(resolvedRepo);
         return;
       }
     }
 
-    db.prepare('INSERT OR REPLACE INTO migrated_repos (repo, migrated_at) VALUES (?, ?)').run(
+    runStmt(db, 'INSERT OR REPLACE INTO migrated_repos (repo, migrated_at) VALUES (?, ?)', [
       resolvedRepo,
-      new Date().toISOString()
-    );
+      new Date().toISOString(),
+    ]);
+    this.persistToDisk();
     this.migratedRepos.add(resolvedRepo);
   }
 
-  private upsertLegacySessionTx(db: DatabaseSync, repo: string, sessionId: string, raw: SessionDataRecord): void {
+  private upsertLegacySessionTx(db: Database, repo: string, sessionId: string, raw: SessionDataRecord): void {
     const events = sanitizeEvents(Array.isArray(raw.events) ? raw.events : []);
     const telemetry = Array.isArray(raw.telemetry_turns) ? raw.telemetry_turns : [];
     const now = new Date().toISOString();
@@ -274,39 +335,43 @@ export class SessionStoreService {
     const metrics = raw.metrics || computeMetrics(events, telemetry);
     const preview = buildPreview(events);
 
-    db.prepare(`
-      INSERT OR IGNORE INTO chat_sessions (
+    runStmt(
+      db,
+      `INSERT OR IGNORE INTO chat_sessions (
         session_id, repo, path, created_at, updated_at, author_json, model, metrics_json, preview
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      sessionId,
-      repo,
-      raw.path || 'Global',
-      createdAt,
-      updatedAt,
-      JSON.stringify(raw.author || { name: 'Developer', role: 'Developer' }),
-      raw.model || 'gemini',
-      JSON.stringify(metrics),
-      preview
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        sessionId,
+        repo,
+        raw.path || 'Global',
+        createdAt,
+        updatedAt,
+        JSON.stringify(raw.author || { name: 'Developer', role: 'Developer' }),
+        raw.model || 'gemini',
+        JSON.stringify(metrics),
+        preview,
+      ]
     );
 
-    const insertEv = db.prepare(`
-      INSERT OR IGNORE INTO chat_events (event_id, session_id, seq, role, text, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
     events.forEach((ev, idx) => {
       const ts = ev.timestamp || createdAt;
       const evId = deterministicEventId(sessionId, idx + 1, ts, ev.role || 'user', ev.text || '');
-      insertEv.run(evId, sessionId, idx + 1, ev.role || 'user', ev.text || '', ts);
+      runStmt(
+        db,
+        `INSERT OR IGNORE INTO chat_events (event_id, session_id, seq, role, text, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [evId, sessionId, idx + 1, ev.role || 'user', ev.text || '', ts]
+      );
     });
 
-    const insertTel = db.prepare(`
-      INSERT OR IGNORE INTO chat_telemetry (turn_id, session_id, timestamp, payload_json)
-      VALUES (?, ?, ?, ?)
-    `);
     for (const turn of telemetry) {
       if (!turn?.turn_id) continue;
-      insertTel.run(turn.turn_id, sessionId, turn.timestamp || updatedAt, JSON.stringify(turn));
+      runStmt(
+        db,
+        `INSERT OR IGNORE INTO chat_telemetry (turn_id, session_id, timestamp, payload_json)
+         VALUES (?, ?, ?, ?)`,
+        [turn.turn_id, sessionId, turn.timestamp || updatedAt, JSON.stringify(turn)]
+      );
     }
   }
 
@@ -325,75 +390,90 @@ export class SessionStoreService {
     const db = this.getDb();
     const now = new Date().toISOString();
 
-    db.exec('BEGIN IMMEDIATE');
+    db.run('BEGIN TRANSACTION');
     try {
-      const existing = db
-        .prepare('SELECT session_id, path, model, author_json FROM chat_sessions WHERE session_id = ?')
-        .get(sessionId) as Pick<SessionRow, 'session_id' | 'path' | 'model' | 'author_json'> | undefined;
+      const existing = queryOne<Pick<SessionRow, 'session_id' | 'path' | 'model'>>(
+        db,
+        'SELECT session_id, path, model FROM chat_sessions WHERE session_id = ?',
+        [sessionId]
+      );
 
       if (!existing) {
-        db.prepare(`
-          INSERT INTO chat_sessions (
+        runStmt(
+          db,
+          `INSERT INTO chat_sessions (
             session_id, repo, path, created_at, updated_at, author_json, model, metrics_json, preview
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          sessionId,
-          resolvedRepo,
-          filePath || 'Global',
-          now,
-          now,
-          JSON.stringify({ name: metadata?.author || 'Developer', role: 'Developer' }),
-          metadata?.model || 'gemini',
-          JSON.stringify({ rounds: 0, total_tokens: 0, total_cost_usd: 0, event_count: 0, turns_count: 0 }),
-          buildPreview([{ role, text }])
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            sessionId,
+            resolvedRepo,
+            filePath || 'Global',
+            now,
+            now,
+            JSON.stringify({ name: metadata?.author || 'Developer', role: 'Developer' }),
+            metadata?.model || 'gemini',
+            JSON.stringify({ rounds: 0, total_tokens: 0, total_cost_usd: 0, event_count: 0, turns_count: 0 }),
+            buildPreview([{ role, text }]),
+          ]
         );
       } else {
         const nextModel = metadata?.model || existing.model;
         const nextPath = filePath && (!existing.path || existing.path === 'Global') ? filePath : existing.path;
-        db.prepare('UPDATE chat_sessions SET updated_at = ?, model = ?, path = ? WHERE session_id = ?').run(
+        runStmt(db, 'UPDATE chat_sessions SET updated_at = ?, model = ?, path = ? WHERE session_id = ?', [
           now,
           nextModel,
           nextPath,
-          sessionId
+          sessionId,
+        ]);
+      }
+
+      const maxSeqRow = queryOne<{ max_seq: number }>(
+        db,
+        'SELECT COALESCE(MAX(seq), 0) AS max_seq FROM chat_events WHERE session_id = ?',
+        [sessionId]
+      );
+      const nextSeq = Number(maxSeqRow?.max_seq || 0) + 1;
+
+      runStmt(
+        db,
+        `INSERT INTO chat_events (event_id, session_id, seq, role, text, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [crypto.randomUUID(), sessionId, nextSeq, role, text, now]
+      );
+
+      if (telemetryTurn?.turn_id) {
+        runStmt(
+          db,
+          `INSERT INTO chat_telemetry (turn_id, session_id, timestamp, payload_json)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(turn_id) DO UPDATE SET
+             timestamp = excluded.timestamp,
+             payload_json = excluded.payload_json`,
+          [telemetryTurn.turn_id, sessionId, telemetryTurn.timestamp || now, JSON.stringify(telemetryTurn)]
         );
       }
 
-      const maxSeqRow = db
-        .prepare('SELECT COALESCE(MAX(seq), 0) AS max_seq FROM chat_events WHERE session_id = ?')
-        .get(sessionId) as { max_seq: number };
-      const nextSeq = (maxSeqRow?.max_seq || 0) + 1;
-
-      db.prepare(`
-        INSERT INTO chat_events (event_id, session_id, seq, role, text, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(crypto.randomUUID(), sessionId, nextSeq, role, text, now);
-
-      if (telemetryTurn?.turn_id) {
-        db.prepare(`
-          INSERT INTO chat_telemetry (turn_id, session_id, timestamp, payload_json)
-          VALUES (?, ?, ?, ?)
-          ON CONFLICT(turn_id) DO UPDATE SET
-            timestamp = excluded.timestamp,
-            payload_json = excluded.payload_json
-        `).run(telemetryTurn.turn_id, sessionId, telemetryTurn.timestamp || now, JSON.stringify(telemetryTurn));
-      }
-
       this.recalculateSessionSummaryTx(db, sessionId);
-      db.exec('COMMIT');
+      db.run('COMMIT');
+      this.persistToDisk();
     } catch (err) {
-      db.exec('ROLLBACK');
+      db.run('ROLLBACK');
       throw err;
     }
   }
 
-  private recalculateSessionSummaryTx(db: DatabaseSync, sessionId: string): void {
-    const events = db
-      .prepare('SELECT role, text, timestamp FROM chat_events WHERE session_id = ? ORDER BY timestamp ASC, seq ASC')
-      .all(sessionId) as Array<{ role: string; text: string; timestamp: string }>;
+  private recalculateSessionSummaryTx(db: Database, sessionId: string): void {
+    const events = queryAll<{ role: string; text: string; timestamp: string }>(
+      db,
+      'SELECT role, text, timestamp FROM chat_events WHERE session_id = ? ORDER BY timestamp ASC, seq ASC',
+      [sessionId]
+    );
 
-    const telemetryRows = db
-      .prepare('SELECT payload_json FROM chat_telemetry WHERE session_id = ? ORDER BY timestamp ASC')
-      .all(sessionId) as Array<{ payload_json: string }>;
+    const telemetryRows = queryAll<{ payload_json: string }>(
+      db,
+      'SELECT payload_json FROM chat_telemetry WHERE session_id = ? ORDER BY timestamp ASC',
+      [sessionId]
+    );
 
     const telemetryTurns: RawTurnTelemetryRecord[] = [];
     for (const r of telemetryRows) {
@@ -406,12 +486,12 @@ export class SessionStoreService {
     const preview = buildPreview(events);
     const lastTs = events.length > 0 ? events[events.length - 1].timestamp : new Date().toISOString();
 
-    db.prepare('UPDATE chat_sessions SET metrics_json = ?, preview = ?, updated_at = ? WHERE session_id = ?').run(
+    runStmt(db, 'UPDATE chat_sessions SET metrics_json = ?, preview = ?, updated_at = ? WHERE session_id = ?', [
       JSON.stringify(metrics),
       preview,
       lastTs,
-      sessionId
-    );
+      sessionId,
+    ]);
   }
 
   getChatHistory(repoName: string, sessionId?: string): { session?: SessionDataRecord | null; sessions: SessionListItem[] } {
@@ -440,24 +520,24 @@ export class SessionStoreService {
     }
 
     const db = this.getDb();
-    const rows = db
-      .prepare(`
-        SELECT
-          s.session_id,
-          s.repo,
-          s.path,
-          s.created_at,
-          s.updated_at,
-          s.author_json,
-          s.model,
-          s.metrics_json,
-          s.preview,
-          (SELECT COUNT(*) FROM chat_events e WHERE e.session_id = s.session_id) AS event_count
-        FROM chat_sessions s
-        WHERE s.repo = ?
-        ORDER BY s.updated_at DESC
-      `)
-      .all(resolvedRepo) as unknown as SessionRow[];
+    const rows = queryAll<SessionRow>(
+      db,
+      `SELECT
+        s.session_id,
+        s.repo,
+        s.path,
+        s.created_at,
+        s.updated_at,
+        s.author_json,
+        s.model,
+        s.metrics_json,
+        s.preview,
+        (SELECT COUNT(*) FROM chat_events e WHERE e.session_id = s.session_id) AS event_count
+      FROM chat_sessions s
+      WHERE s.repo = ?
+      ORDER BY s.updated_at DESC`,
+      [resolvedRepo]
+    );
 
     const sessions: SessionListItem[] = rows.map((row) => {
       let author: Record<string, unknown> = { name: 'Developer' };
@@ -473,7 +553,7 @@ export class SessionStoreService {
         session_id: row.session_id,
         repo: row.repo,
         path: row.path || 'Global',
-        event_count: row.event_count ?? metrics.event_count ?? 0,
+        event_count: Number(row.event_count ?? metrics.event_count ?? 0),
         created_at: row.created_at,
         updated_at: row.updated_at,
         timestamp: parseTimestampMs(row.updated_at) || parseTimestampMs(row.created_at),
@@ -494,19 +574,20 @@ export class SessionStoreService {
     this.migrateLegacyRepoSessions(resolvedRepo);
 
     const db = this.getDb();
-    const row = db
-      .prepare('SELECT * FROM chat_sessions WHERE session_id = ?')
-      .get(sessionId) as unknown as SessionRow | undefined;
-
+    const row = queryOne<SessionRow>(db, 'SELECT * FROM chat_sessions WHERE session_id = ?', [sessionId]);
     if (!row) return null;
 
-    const eventRows = db
-      .prepare('SELECT event_id, session_id, seq, role, text, timestamp FROM chat_events WHERE session_id = ? ORDER BY timestamp ASC, seq ASC')
-      .all(sessionId) as unknown as EventRow[];
+    const eventRows = queryAll<EventRow>(
+      db,
+      'SELECT event_id, session_id, seq, role, text, timestamp FROM chat_events WHERE session_id = ? ORDER BY timestamp ASC, seq ASC',
+      [sessionId]
+    );
 
-    const telemetryRows = db
-      .prepare('SELECT turn_id, session_id, timestamp, payload_json FROM chat_telemetry WHERE session_id = ? ORDER BY timestamp ASC')
-      .all(sessionId) as unknown as TelemetryRow[];
+    const telemetryRows = queryAll<{ payload_json: string }>(
+      db,
+      'SELECT payload_json FROM chat_telemetry WHERE session_id = ? ORDER BY timestamp ASC',
+      [sessionId]
+    );
 
     let author: { name: string; role: string } = { name: 'Developer', role: 'Developer' };
     let metrics: SessionDataRecord['metrics'];
@@ -546,8 +627,9 @@ export class SessionStoreService {
     this.migrateLegacyRepoSessions(resolvedRepo);
 
     const db = this.getDb();
-    const info = db.prepare('DELETE FROM chat_sessions WHERE session_id = ?').run(sessionId);
-    if (info.changes > 0) {
+    const changes = runStmt(db, 'DELETE FROM chat_sessions WHERE session_id = ?', [sessionId]);
+    if (changes > 0) {
+      this.persistToDisk();
       return { success: true, message: 'Sessão removida com sucesso.' };
     }
     return { success: false, error: 'Sessão não encontrada.' };
@@ -556,9 +638,10 @@ export class SessionStoreService {
   resetRepo(repoName: string): { success: boolean; message: string } {
     const resolvedRepo = this.resolveEffectiveRepo(repoName);
     const db = this.getDb();
-    db.prepare('DELETE FROM chat_sessions WHERE repo = ?').run(resolvedRepo);
-    db.prepare('DELETE FROM migrated_repos WHERE repo = ?').run(resolvedRepo);
+    runStmt(db, 'DELETE FROM chat_sessions WHERE repo = ?', [resolvedRepo]);
+    runStmt(db, 'DELETE FROM migrated_repos WHERE repo = ?', [resolvedRepo]);
     this.migratedRepos.delete(resolvedRepo);
+    this.persistToDisk();
 
     const legacyDir = path.join(resolveRepoDir(resolvedRepo), '.sessions');
     if (fs.existsSync(legacyDir)) {
@@ -567,54 +650,39 @@ export class SessionStoreService {
     return { success: true, message: 'Histórico de sessões resetado com sucesso.' };
   }
 
-  /**
-   * Exporta um snapshot consistente do SQLite via `VACUUM INTO`.
-   * Se `repoName` for informado (e diferente de 'all'), filtra o arquivo exportado para conter apenas aquele repositório.
-   */
   exportDatabase(repoName?: string): { buffer: Buffer; filename: string } {
     const db = this.getDb();
+    if (!this.SQL) throw new Error('SQL.js não inicializado.');
+
     const resolvedRepo = repoName && repoName !== 'all' ? this.resolveEffectiveRepo(repoName) : null;
     if (resolvedRepo) {
       this.migrateLegacyRepoSessions(resolvedRepo);
     }
 
-    const tmpFile = path.join(os.tmpdir(), `contexos-export-${crypto.randomUUID()}.sqlite`);
-    const escapedPath = tmpFile.replace(/'/g, "''");
+    const rawExport = db.export();
+    let finalBuffer = Buffer.from(rawExport);
 
-    try {
-      db.exec(`VACUUM INTO '${escapedPath}'`);
-
-      if (resolvedRepo) {
-        const exportDb = new DatabaseSync(tmpFile);
-        try {
-          exportDb.exec('PRAGMA foreign_keys = ON;');
-          exportDb.prepare('DELETE FROM chat_sessions WHERE repo != ?').run(resolvedRepo);
-          exportDb.prepare('DELETE FROM migrated_repos').run();
-          exportDb.exec('VACUUM;');
-        } finally {
-          exportDb.close();
-        }
-      }
-
-      const buffer = fs.readFileSync(tmpFile);
-      const safeRepo = (resolvedRepo || 'all').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const dateStr = new Date().toISOString().slice(0, 10);
-      return {
-        buffer,
-        filename: `contexos-history-${safeRepo}-${dateStr}.sqlite`,
-      };
-    } finally {
-      if (fs.existsSync(tmpFile)) {
-        try {
-          fs.unlinkSync(tmpFile);
-        } catch {}
+    if (resolvedRepo) {
+      const exportDb = new this.SQL.Database(rawExport);
+      try {
+        exportDb.run('PRAGMA foreign_keys = ON;');
+        runStmt(exportDb, 'DELETE FROM chat_sessions WHERE repo != ?', [resolvedRepo]);
+        runStmt(exportDb, 'DELETE FROM migrated_repos');
+        exportDb.run('VACUUM;');
+        finalBuffer = Buffer.from(exportDb.export());
+      } finally {
+        exportDb.close();
       }
     }
+
+    const safeRepo = (resolvedRepo || 'all').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    return {
+      buffer: finalBuffer,
+      filename: `contexos-history-${safeRepo}-${dateStr}.sqlite`,
+    };
   }
 
-  /**
-   * Importa um arquivo `.sqlite` externo com suporte a merge aditivo transacional.
-   */
   importDatabase(
     buffer: Buffer,
     options: { targetRepo?: string; conflictStrategy?: ImportConflictStrategy } = {}
@@ -622,6 +690,7 @@ export class SessionStoreService {
     if (!buffer || buffer.length < 100 || !buffer.subarray(0, 16).equals(SQLITE_HEADER)) {
       throw new Error('Arquivo inválido: o arquivo enviado não é um banco SQLite válido.');
     }
+    if (!this.SQL) throw new Error('SQL.js não inicializado.');
 
     const strategy: ImportConflictStrategy = options.conflictStrategy || 'merge';
     const overrideRepo =
@@ -633,60 +702,58 @@ export class SessionStoreService {
       this.migrateLegacyRepoSessions(overrideRepo);
     }
 
-    const tmpFile = path.join(os.tmpdir(), `contexos-import-${crypto.randomUUID()}.sqlite`);
-    fs.writeFileSync(tmpFile, buffer);
-
+    const importedDb = new this.SQL.Database(buffer);
     try {
-      // Validação de schema antes de anexar
-      const probe = new DatabaseSync(tmpFile, { readOnly: true });
-      try {
-        const tables = probe
-          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('chat_sessions', 'chat_events')")
-          .all() as Array<{ name: string }>;
-        if (tables.length < 2) {
-          throw new Error('Schema incompatível: o banco SQLite não contém as tabelas de histórico do Context OS.');
-        }
-      } finally {
-        probe.close();
+      const tables = queryAll<{ name: string }>(
+        importedDb,
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('chat_sessions', 'chat_events')"
+      );
+      if (tables.length < 2) {
+        throw new Error('Schema incompatível: o banco SQLite não contém as tabelas de histórico do Context OS.');
       }
 
-      const db = this.getDb();
-      const escapedPath = tmpFile.replace(/'/g, "''");
-      db.exec(`ATTACH DATABASE '${escapedPath}' AS imported`);
+      const hasTelemetryTable = Boolean(
+        queryOne(importedDb, "SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'chat_telemetry'")
+      );
+      const importedSessions = queryAll<SessionRow>(importedDb, 'SELECT * FROM chat_sessions');
 
+      const db = this.getDb();
       let addedSessions = 0;
       let mergedSessions = 0;
       let overwrittenSessions = 0;
       let skippedSessions = 0;
       let addedEvents = 0;
-      let totalImportedSessions = 0;
 
+      db.run('BEGIN TRANSACTION');
       try {
-        db.exec('BEGIN IMMEDIATE');
-        try {
-          const importedSessions = db
-            .prepare('SELECT * FROM imported.chat_sessions')
-            .all() as unknown as SessionRow[];
-          totalImportedSessions = importedSessions.length;
-
-          const hasTelemetryTable = Boolean(
-            db
-              .prepare("SELECT 1 FROM imported.sqlite_master WHERE type = 'table' AND name = 'chat_telemetry'")
-              .get()
+        for (const imp of importedSessions) {
+          const targetRepo = overrideRepo || imp.repo || 'default';
+          const existing = queryOne<{ session_id: string }>(
+            db,
+            'SELECT session_id FROM chat_sessions WHERE session_id = ?',
+            [imp.session_id]
           );
 
-          for (const imp of importedSessions) {
-            const targetRepo = overrideRepo || imp.repo || 'default';
-            const existing = db
-              .prepare('SELECT session_id, updated_at FROM main.chat_sessions WHERE session_id = ?')
-              .get(imp.session_id) as { session_id: string; updated_at: string } | undefined;
+          const importedEvents = queryAll<EventRow>(
+            importedDb,
+            'SELECT event_id, session_id, seq, role, text, timestamp FROM chat_events WHERE session_id = ? ORDER BY timestamp ASC, seq ASC',
+            [imp.session_id]
+          );
+          const importedTelemetry = hasTelemetryTable
+            ? queryAll<{ turn_id: string; session_id: string; timestamp: string; payload_json: string }>(
+                importedDb,
+                'SELECT turn_id, session_id, timestamp, payload_json FROM chat_telemetry WHERE session_id = ?',
+                [imp.session_id]
+              )
+            : [];
 
-            if (!existing) {
-              db.prepare(`
-                INSERT INTO main.chat_sessions (
-                  session_id, repo, path, created_at, updated_at, author_json, model, metrics_json, preview
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-              `).run(
+          if (!existing) {
+            runStmt(
+              db,
+              `INSERT INTO chat_sessions (
+                session_id, repo, path, created_at, updated_at, author_json, model, metrics_json, preview
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
                 imp.session_id,
                 targetRepo,
                 imp.path || 'Global',
@@ -695,44 +762,44 @@ export class SessionStoreService {
                 imp.author_json,
                 imp.model || 'gemini',
                 imp.metrics_json,
-                imp.preview
+                imp.preview,
+              ]
+            );
+
+            for (const ev of importedEvents) {
+              addedEvents += runStmt(
+                db,
+                'INSERT OR IGNORE INTO chat_events (event_id, session_id, seq, role, text, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+                [ev.event_id, ev.session_id, ev.seq, ev.role, ev.text, ev.timestamp]
               );
-
-              const evInfo = db.prepare(`
-                INSERT OR IGNORE INTO main.chat_events (event_id, session_id, seq, role, text, timestamp)
-                SELECT event_id, session_id, seq, role, text, timestamp
-                FROM imported.chat_events
-                WHERE session_id = ?
-              `).run(imp.session_id);
-              addedEvents += Number(evInfo.changes || 0);
-
-              if (hasTelemetryTable) {
-                db.prepare(`
-                  INSERT OR IGNORE INTO main.chat_telemetry (turn_id, session_id, timestamp, payload_json)
-                  SELECT turn_id, session_id, timestamp, payload_json
-                  FROM imported.chat_telemetry
-                  WHERE session_id = ?
-                `).run(imp.session_id);
-              }
-
-              this.recalculateSessionSummaryTx(db, imp.session_id);
-              addedSessions++;
-              continue;
+            }
+            for (const tel of importedTelemetry) {
+              runStmt(
+                db,
+                'INSERT OR IGNORE INTO chat_telemetry (turn_id, session_id, timestamp, payload_json) VALUES (?, ?, ?, ?)',
+                [tel.turn_id, tel.session_id, tel.timestamp, tel.payload_json]
+              );
             }
 
-            if (strategy === 'keep_local') {
-              skippedSessions++;
-              continue;
-            }
+            this.recalculateSessionSummaryTx(db, imp.session_id);
+            addedSessions++;
+            continue;
+          }
 
-            if (strategy === 'overwrite') {
-              db.prepare('DELETE FROM main.chat_events WHERE session_id = ?').run(imp.session_id);
-              db.prepare('DELETE FROM main.chat_telemetry WHERE session_id = ?').run(imp.session_id);
-              db.prepare(`
-                UPDATE main.chat_sessions
-                SET repo = ?, path = ?, created_at = ?, updated_at = ?, author_json = ?, model = ?, metrics_json = ?, preview = ?
-                WHERE session_id = ?
-              `).run(
+          if (strategy === 'keep_local') {
+            skippedSessions++;
+            continue;
+          }
+
+          if (strategy === 'overwrite') {
+            runStmt(db, 'DELETE FROM chat_events WHERE session_id = ?', [imp.session_id]);
+            runStmt(db, 'DELETE FROM chat_telemetry WHERE session_id = ?', [imp.session_id]);
+            runStmt(
+              db,
+              `UPDATE chat_sessions
+               SET repo = ?, path = ?, created_at = ?, updated_at = ?, author_json = ?, model = ?, metrics_json = ?, preview = ?
+               WHERE session_id = ?`,
+              [
                 targetRepo,
                 imp.path || 'Global',
                 imp.created_at,
@@ -741,82 +808,73 @@ export class SessionStoreService {
                 imp.model || 'gemini',
                 imp.metrics_json,
                 imp.preview,
-                imp.session_id
-              );
+                imp.session_id,
+              ]
+            );
 
-              const evInfo = db.prepare(`
-                INSERT OR IGNORE INTO main.chat_events (event_id, session_id, seq, role, text, timestamp)
-                SELECT event_id, session_id, seq, role, text, timestamp
-                FROM imported.chat_events
-                WHERE session_id = ?
-              `).run(imp.session_id);
-              addedEvents += Number(evInfo.changes || 0);
-
-              if (hasTelemetryTable) {
-                db.prepare(`
-                  INSERT OR IGNORE INTO main.chat_telemetry (turn_id, session_id, timestamp, payload_json)
-                  SELECT turn_id, session_id, timestamp, payload_json
-                  FROM imported.chat_telemetry
-                  WHERE session_id = ?
-                `).run(imp.session_id);
-              }
-
-              this.recalculateSessionSummaryTx(db, imp.session_id);
-              overwrittenSessions++;
-              continue;
-            }
-
-            // Estratégia padrão: 'merge' aditivo sem perda de dados
-            const maxSeqRow = db
-              .prepare('SELECT COALESCE(MAX(seq), 0) AS max_seq FROM main.chat_events WHERE session_id = ?')
-              .get(imp.session_id) as { max_seq: number };
-            let nextSeq = maxSeqRow?.max_seq || 0;
-
-            const importedEvents = db
-              .prepare('SELECT event_id, session_id, seq, role, text, timestamp FROM imported.chat_events WHERE session_id = ? ORDER BY timestamp ASC, seq ASC')
-              .all(imp.session_id) as unknown as EventRow[];
-
-            const insertEv = db.prepare(`
-              INSERT OR IGNORE INTO main.chat_events (event_id, session_id, seq, role, text, timestamp)
-              VALUES (?, ?, ?, ?, ?, ?)
-            `);
-
-            let sessionAddedEvents = 0;
             for (const ev of importedEvents) {
-              nextSeq++;
-              const res = insertEv.run(ev.event_id, ev.session_id, nextSeq, ev.role, ev.text, ev.timestamp);
-              if (Number(res.changes || 0) > 0) {
-                sessionAddedEvents++;
-                addedEvents++;
-              }
+              addedEvents += runStmt(
+                db,
+                'INSERT OR IGNORE INTO chat_events (event_id, session_id, seq, role, text, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+                [ev.event_id, ev.session_id, ev.seq, ev.role, ev.text, ev.timestamp]
+              );
+            }
+            for (const tel of importedTelemetry) {
+              runStmt(
+                db,
+                'INSERT OR IGNORE INTO chat_telemetry (turn_id, session_id, timestamp, payload_json) VALUES (?, ?, ?, ?)',
+                [tel.turn_id, tel.session_id, tel.timestamp, tel.payload_json]
+              );
             }
 
-            if (hasTelemetryTable) {
-              db.prepare(`
-                INSERT OR IGNORE INTO main.chat_telemetry (turn_id, session_id, timestamp, payload_json)
-                SELECT turn_id, session_id, timestamp, payload_json
-                FROM imported.chat_telemetry
-                WHERE session_id = ?
-              `).run(imp.session_id);
-            }
+            this.recalculateSessionSummaryTx(db, imp.session_id);
+            overwrittenSessions++;
+            continue;
+          }
 
-            if (sessionAddedEvents > 0) {
-              this.recalculateSessionSummaryTx(db, imp.session_id);
-              mergedSessions++;
-            } else {
-              skippedSessions++;
+          // Estratégia padrão: merge aditivo
+          const maxSeqRow = queryOne<{ max_seq: number }>(
+            db,
+            'SELECT COALESCE(MAX(seq), 0) AS max_seq FROM chat_events WHERE session_id = ?',
+            [imp.session_id]
+          );
+          let nextSeq = Number(maxSeqRow?.max_seq || 0);
+
+          let sessionAddedEvents = 0;
+          for (const ev of importedEvents) {
+            nextSeq++;
+            const changes = runStmt(
+              db,
+              'INSERT OR IGNORE INTO chat_events (event_id, session_id, seq, role, text, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+              [ev.event_id, ev.session_id, nextSeq, ev.role, ev.text, ev.timestamp]
+            );
+            if (changes > 0) {
+              sessionAddedEvents++;
+              addedEvents++;
             }
           }
 
-          db.exec('COMMIT');
-        } catch (err) {
-          db.exec('ROLLBACK');
-          throw err;
+          for (const tel of importedTelemetry) {
+            runStmt(
+              db,
+              'INSERT OR IGNORE INTO chat_telemetry (turn_id, session_id, timestamp, payload_json) VALUES (?, ?, ?, ?)',
+              [tel.turn_id, tel.session_id, tel.timestamp, tel.payload_json]
+            );
+          }
+
+          if (sessionAddedEvents > 0) {
+            this.recalculateSessionSummaryTx(db, imp.session_id);
+            mergedSessions++;
+          } else {
+            skippedSessions++;
+          }
         }
-      } finally {
-        try {
-          db.exec('DETACH DATABASE imported');
-        } catch {}
+
+        db.run('COMMIT');
+        this.persistToDisk();
+      } catch (err) {
+        db.run('ROLLBACK');
+        throw err;
       }
 
       return {
@@ -826,14 +884,10 @@ export class SessionStoreService {
         overwrittenSessions,
         skippedSessions,
         addedEvents,
-        totalImportedSessions,
+        totalImportedSessions: importedSessions.length,
       };
     } finally {
-      if (fs.existsSync(tmpFile)) {
-        try {
-          fs.unlinkSync(tmpFile);
-        } catch {}
-      }
+      importedDb.close();
     }
   }
 }

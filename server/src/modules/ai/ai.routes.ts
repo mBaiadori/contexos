@@ -43,6 +43,8 @@ function safeJsonStringify(obj: unknown): string {
 }
 
 export async function aiRoutes(fastify: FastifyInstance) {
+  await sessionStoreService.init();
+
   // Parser binário escopado para upload de arquivos .sqlite/.db
   fastify.addContentTypeParser(
     ['application/octet-stream', 'application/x-sqlite3', 'application/vnd.sqlite3'],

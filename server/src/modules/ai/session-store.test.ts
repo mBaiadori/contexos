@@ -10,9 +10,10 @@ function createTempDbPath(name: string): string {
   return path.join(dir, 'sessions.db');
 }
 
-test('SessionStoreService: append, list, detail, delete e reset', () => {
+test('SessionStoreService: append, list, detail, delete e reset', async () => {
   const dbPath = createTempDbPath('crud');
   const store = new SessionStoreService(dbPath);
+  await store.init();
 
   try {
     store.appendEvent('my-repo', 'docs/intro.md', 'sess-1', 'user', 'Olá Copilot', { model: 'gemini-2.5-flash' });
@@ -38,11 +39,12 @@ test('SessionStoreService: append, list, detail, delete e reset', () => {
   }
 });
 
-test('SessionStoreService: exportDatabase e importDatabase com merge aditivo sem perda de dados', () => {
+test('SessionStoreService: exportDatabase e importDatabase com merge aditivo sem perda de dados', async () => {
   const dbPathA = createTempDbPath('store-a');
   const dbPathB = createTempDbPath('store-b');
   const storeA = new SessionStoreService(dbPathA);
   const storeB = new SessionStoreService(dbPathB);
+  await Promise.all([storeA.init(), storeB.init()]);
 
   try {
     // Store A tem sess-shared (1 msg) e sess-only-a
@@ -93,9 +95,10 @@ test('SessionStoreService: exportDatabase e importDatabase com merge aditivo sem
   }
 });
 
-test('SessionStoreService: rejeita arquivo inválido na importação', () => {
+test('SessionStoreService: rejeita arquivo inválido na importação', async () => {
   const dbPath = createTempDbPath('invalid');
   const store = new SessionStoreService(dbPath);
+  await store.init();
   try {
     assert.throws(
       () => store.importDatabase(Buffer.from('not a sqlite file')),
