@@ -327,6 +327,69 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       }
     });
 
+    it('2.5.1 POST /api/session/refresh deve renovar token expirado (inclusive com CONTEXT_OS_DESKTOP=1) e rejeitar token inválido', async () => {
+      const sessionModule = await import('./session.js') as any;
+      const prevDesktop = process.env.CONTEXT_OS_DESKTOP;
+      process.env.CONTEXT_OS_DESKTOP = '1';
+
+      try {
+        // 1. Rejeita sem token
+        const missingRes = await app.inject({
+          method: 'POST',
+          url: '/api/session/refresh',
+          headers: { host: '127.0.0.1:4100' },
+        });
+        assert.strictEqual(missingRes.statusCode, 401);
+
+        // 2. Rejeita token falso
+        const invalidRes = await app.inject({
+          method: 'POST',
+          url: '/api/session/refresh',
+          headers: {
+            host: '127.0.0.1:4100',
+            'x-contextos-token': 'token-falso-que-nao-existe',
+          },
+        });
+        assert.strictEqual(invalidRes.statusCode, 401);
+
+        // 3. Renova token expirado com sucesso
+        const expiredToken = sessionModule.getSessionToken();
+        sessionModule._setSessionExpiryForTesting(Date.now() - 1000);
+
+        const refreshRes = await app.inject({
+          method: 'POST',
+          url: '/api/session/refresh',
+          headers: {
+            host: '127.0.0.1:4100',
+            'x-contextos-token': expiredToken,
+          },
+        });
+        assert.strictEqual(refreshRes.statusCode, 200);
+        const json = JSON.parse(refreshRes.body);
+        assert.ok(json.token, 'Deve retornar novo token');
+        assert.notStrictEqual(json.token, expiredToken, 'Deve rotacionar o token expirado');
+        assert.strictEqual(json.authenticated, true);
+
+        // 4. Novo token deve funcionar normalmente em rotas protegidas
+        const apiRes = await app.inject({
+          method: 'GET',
+          url: '/api/repos',
+          headers: {
+            host: '127.0.0.1:4100',
+            'x-contextos-token': json.token,
+          },
+        });
+        assert.notStrictEqual(apiRes.statusCode, 401);
+      } finally {
+        if (prevDesktop !== undefined) {
+          process.env.CONTEXT_OS_DESKTOP = prevDesktop;
+        } else {
+          delete process.env.CONTEXT_OS_DESKTOP;
+        }
+        sessionModule._resetSessionForTesting();
+      }
+    });
+
     it('2.6 GET /api/health deve responder 200 e GET /health deve redirecionar (C12)', async () => {
       const resApiHealth = await app.inject({
         method: 'GET',

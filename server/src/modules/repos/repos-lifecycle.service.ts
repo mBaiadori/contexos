@@ -19,6 +19,124 @@ import { reposDiagnosisService } from "./repos-diagnosis.service.js";
 import { clearReposCache } from "./repos-query.service.js";
 import type { RepoInitializePayload } from "./repos-types.js";
 
+export interface EnsureMainBranchOptions {
+  repoDir: string;
+  repoName: string;
+  description?: string;
+  user?: { name?: string; login?: string; email?: string } | null;
+  token?: string;
+  pushToOrigin?: boolean;
+  repoFullName?: string;
+  remoteDefaultBranch?: string;
+}
+
+/**
+ * Garante que o repositório tenha a branch `main` criada (com ao menos um commit)
+ * localmente e, quando aplicável, sincronizada com `origin/main`.
+ */
+export async function ensureMainBranchInitialized(
+  opts: EnsureMainBranchOptions,
+): Promise<void> {
+  const {
+    repoDir,
+    repoName,
+    description,
+    user,
+    token,
+    pushToOrigin = false,
+    repoFullName,
+    remoteDefaultBranch,
+  } = opts;
+
+  if (!fs.existsSync(repoDir)) {
+    fs.mkdirSync(repoDir, { recursive: true });
+  }
+
+  if (!(await isGitRepo(repoDir))) {
+    const initRes = await executeGit(["init", "-b", "main"], repoDir);
+    if (!initRes.success) {
+      await executeGit(["init"], repoDir);
+      await executeGit(["symbolic-ref", "HEAD", "refs/heads/main"], repoDir);
+    }
+  }
+
+  const nameCheck = await executeGit(["config", "--get", "user.name"], repoDir);
+  if (!nameCheck.success || !nameCheck.stdout) {
+    const userName = user?.name || user?.login || "Contexos";
+    await executeGit(["config", "user.name", userName], repoDir).catch(() => {});
+  }
+  const emailCheck = await executeGit(["config", "--get", "user.email"], repoDir);
+  if (!emailCheck.success || !emailCheck.stdout) {
+    const userEmail =
+      user?.email ||
+      (user?.login ? `${user.login}@users.noreply.github.com` : "dev@contexos.local");
+    await executeGit(["config", "user.email", userEmail], repoDir).catch(() => {});
+  }
+
+  const headCheck = await executeGit(["rev-parse", "--verify", "HEAD"], repoDir);
+
+  if (!headCheck.success) {
+    await executeGit(["symbolic-ref", "HEAD", "refs/heads/main"], repoDir);
+    const readmePath = path.join(repoDir, "README.md");
+    if (!fs.existsSync(readmePath)) {
+      fs.writeFileSync(
+        readmePath,
+        `# ${repoName}\n\n${description || "Projeto criado no Contexos."}\n`,
+        "utf-8",
+      );
+    }
+    await executeGit(["add", "-A"], repoDir);
+    const commitRes = await executeGit(
+      ["commit", "-m", "Versão oficial inicial"],
+      repoDir,
+    );
+    if (!commitRes.success) {
+      await executeGit(
+        ["commit", "--allow-empty", "-m", "Versão oficial inicial"],
+        repoDir,
+      );
+    }
+  } else {
+    const mainCheck = await executeGit(
+      ["rev-parse", "--verify", "refs/heads/main"],
+      repoDir,
+    );
+    if (!mainCheck.success) {
+      await executeGit(["branch", "-M", "main"], repoDir);
+    } else {
+      const currentBranch = await executeGit(
+        ["rev-parse", "--abbrev-ref", "HEAD"],
+        repoDir,
+      );
+      if (currentBranch.stdout !== "main") {
+        await executeGit(["checkout", "main"], repoDir);
+      }
+    }
+  }
+
+  if (pushToOrigin && token) {
+    const remoteMainCheck = await executeGit(
+      ["rev-parse", "--verify", "refs/remotes/origin/main"],
+      repoDir,
+    );
+    if (!remoteMainCheck.success) {
+      await executeGit(["push", "-u", "origin", "main"], repoDir, token);
+      if (
+        remoteDefaultBranch &&
+        remoteDefaultBranch !== "main" &&
+        repoFullName?.includes("/")
+      ) {
+        await callGitProviderAPI(
+          `/repos/${repoFullName}`,
+          token,
+          "PATCH",
+          { default_branch: "main" },
+        ).catch(() => {});
+      }
+    }
+  }
+}
+
 export class ReposLifecycleService {
   async selectRepo(repo: any) {
     if (!repo || !repo.name) {
@@ -250,29 +368,13 @@ export class ReposLifecycleService {
     const repoDir = resolveRepoDir(repoName, targetOwner);
 
     if (!cfg.authenticated || !cfg.token) {
-      // Criação Local: inicializa com branch main e commit inicial para evitar repositório sem Versão Oficial
-      if (!fs.existsSync(repoDir)) {
-        fs.mkdirSync(repoDir, { recursive: true });
-      }
-      if (!(await isGitRepo(repoDir))) {
-        await executeGit(["init", "-b", "main"], repoDir);
-        const userName = cfg.user?.name || cfg.user?.login || "Contexos";
-        const userEmail = cfg.user?.email || "dev@contexos.local";
-        await executeGit(["config", "user.name", userName], repoDir).catch(() => {});
-        await executeGit(["config", "user.email", userEmail], repoDir).catch(() => {});
-        const readmePath = path.join(repoDir, "README.md");
-        if (!fs.existsSync(readmePath)) {
-          fs.writeFileSync(
-            readmePath,
-            `# ${repoName}\n\n${payload.description || "Projeto criado no Contexos."}\n`,
-            "utf-8",
-          );
-        }
-        await executeGit(["add", "."], repoDir);
-        await executeGit(["commit", "-m", "Versão oficial inicial"], repoDir);
-      } else {
-        await ensureGitRepo(repoDir, cfg.user);
-      }
+      // Criação Local: garante branch main e commit inicial para evitar repositório sem Versão Oficial
+      await ensureMainBranchInitialized({
+        repoDir,
+        repoName,
+        description: payload.description,
+        user: cfg.user,
+      });
       cfg.active_repo = {
         name: repoName,
         full_name: `${targetOwner}/${repoName}`,
@@ -337,7 +439,7 @@ export class ReposLifecycleService {
 
     const ownerLogin = respData.owner?.login || targetOwner;
     const repoFullName = respData.full_name || `${ownerLogin}/${repoName}`;
-    const defaultBranch = respData.default_branch || "main";
+    const remoteDefaultBranch = respData.default_branch;
     const remoteUrl = respData.html_url || `https://github.com/${repoFullName}`;
 
     // Registra a organização na lista de orgs se não existir
@@ -353,13 +455,29 @@ export class ReposLifecycleService {
       }
     }
 
-    // Clona o repositório já com a branch main para a máquina
+    // Clona o repositório e garante que a branch main exista localmente e no remoto
     const cloneUrl = respData.clone_url || (remoteUrl.endsWith(".git") ? remoteUrl : `${remoteUrl}.git`);
     if (!(await isGitRepo(repoDir))) {
-      await cloneGitRepo(repoDir, cloneUrl, cfg.token, cfg.user);
+      const cloneRes = await cloneGitRepo(repoDir, cloneUrl, cfg.token, cfg.user);
+      if (!cloneRes.success && !(await isGitRepo(repoDir))) {
+        throw new Error(cloneRes.message || "Falha ao clonar repositório recém-criado.");
+      }
     } else {
       await ensureGitRepo(repoDir, cfg.user, remoteUrl, cfg.token, repoName);
     }
+
+    await ensureMainBranchInitialized({
+      repoDir,
+      repoName,
+      description: payload.description,
+      user: cfg.user,
+      token: cfg.token,
+      pushToOrigin: true,
+      repoFullName,
+      remoteDefaultBranch,
+    });
+
+    const defaultBranch = "main";
 
     cfg.active_repo = {
       name: repoName,

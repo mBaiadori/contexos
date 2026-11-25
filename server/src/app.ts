@@ -27,6 +27,7 @@ import { wikiRoutes } from "./modules/wiki/wiki.routes.js";
 import { workspaceRoutes } from "./modules/workspace/workspace.routes.js";
 import {
   getSessionToken,
+  rotateSessionToken,
   isValidSessionToken,
   validateSessionToken,
   isValidHostHeader,
@@ -42,6 +43,18 @@ import {
   aiStreamRateLimiter,
 } from "./security/rate-limit.js";
 import { validateRepoName } from "./utils/repo-ref.js";
+
+function extractSessionToken(request: { headers: Record<string, string | string[] | undefined> }): string | undefined {
+  const headerToken = request.headers["x-contextos-token"] as string | undefined;
+  const cookies = parseCookies(request.headers.cookie as string | undefined);
+  const cookieToken = cookies["ctxos_session"];
+  let bearerToken: string | undefined;
+  const authHeader = request.headers.authorization as string | undefined;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    bearerToken = authHeader.substring(7).trim();
+  }
+  return headerToken || cookieToken || bearerToken;
+}
 
 export async function buildApp(): Promise<FastifyInstance> {
   // Inicializa a sessão atômica no boot para persistir o token imediatamente no disco (evita race condition no Desktop)
@@ -217,22 +230,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     // Allowlist explícita de endpoints públicos
     if (
       pathname === "/api/session/bootstrap" ||
+      pathname === "/api/session/refresh" ||
       pathname === "/api/health"
     ) {
       return;
     }
 
     // Extração do token de sessão (Header X-ContextOS-Token, Cookie ctxos_session ou Authorization)
-    const headerToken = request.headers["x-contextos-token"] as string | undefined;
-    const cookies = parseCookies(request.headers.cookie);
-    const cookieToken = cookies["ctxos_session"];
-    let bearerToken: string | undefined;
-    const authHeader = request.headers.authorization;
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      bearerToken = authHeader.substring(7).trim();
-    }
-
-    const candidateToken = headerToken || cookieToken || bearerToken;
+    const candidateToken = extractSessionToken(request);
     const validation = validateSessionToken(candidateToken);
 
     if (!validation.valid) {
@@ -344,6 +349,26 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
 
     const token = getSessionToken();
+    reply.header(
+      "Set-Cookie",
+      `ctxos_session=${token}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL_SEC}`,
+    );
+    return reply.send({ token, authenticated: true });
+  });
+
+  // 3.1 Rota de Renovação de Sessão Local (permite renovar token expirado em Web e Desktop)
+  app.post("/api/session/refresh", async (request, reply) => {
+    const candidateToken = extractSessionToken(request);
+    const validation = validateSessionToken(candidateToken);
+
+    if (!validation.valid && validation.reason !== "expired") {
+      return reply.status(401).send({
+        error: "Não autorizado: Sessão inválida ou não informada.",
+        reason: validation.reason,
+      });
+    }
+
+    const token = rotateSessionToken();
     reply.header(
       "Set-Cookie",
       `ctxos_session=${token}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL_SEC}`,

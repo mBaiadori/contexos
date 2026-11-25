@@ -19,15 +19,10 @@ function getTokenStoragePath(): string {
 }
 
 /**
- * Retorna o token de sessão local ativo com TTL de 12 horas.
+ * Gera e persiste um novo token de sessão local com TTL de 12 horas.
  */
-export function getSessionToken(): string {
+export function rotateSessionToken(): string {
   const now = Date.now();
-  if (activeSessionToken && now < sessionExpiresAt) {
-    return activeSessionToken;
-  }
-
-  // Gera token efêmero em memória
   const newToken = crypto.randomBytes(32).toString('hex');
   activeSessionToken = newToken;
   sessionExpiresAt = now + SESSION_TTL_MS;
@@ -41,6 +36,18 @@ export function getSessionToken(): string {
   }
 
   return activeSessionToken;
+}
+
+/**
+ * Retorna o token de sessão local ativo com TTL de 12 horas.
+ */
+export function getSessionToken(): string {
+  const now = Date.now();
+  if (activeSessionToken && now < sessionExpiresAt) {
+    return activeSessionToken;
+  }
+
+  return rotateSessionToken();
 }
 
 export type TokenValidationResult = {
