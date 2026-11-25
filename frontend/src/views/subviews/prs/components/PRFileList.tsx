@@ -211,7 +211,7 @@ export const PRFileList: React.FC<PRFileListProps> = ({
                         <Badge variant="warning" size="xs">
                           Restrito
                         </Badge>
-                      ) : f.additions > 0 || f.deletions > 0 ? (
+                      ) : (f.additions ?? 0) > 0 || (f.deletions ?? 0) > 0 ? (
                         <>
                           <span
                             style={{

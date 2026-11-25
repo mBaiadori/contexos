@@ -5,10 +5,10 @@ import { TemplatePickerModal } from "../modals/TemplatePickerModal";
 import type { InlineCreatingState } from "./types";
 
 interface InlineCreateRowProps {
-  inlineCreating: InlineCreatingState;
+  inlineCreating: InlineCreatingState | null;
   inlineValue: string;
   setInlineValue: (val: string) => void;
-  selectedTemplate: TemplateItem | null;
+  selectedTemplate: TemplateItem | { id?: string; name?: string; title?: string; [key: string]: unknown } | null;
   setSelectedTemplate: (tpl: TemplateItem | null) => void;
   templatePickerOpen: boolean;
   setTemplatePickerOpen: (open: boolean) => void;
@@ -30,7 +30,7 @@ export const InlineCreateRow: React.FC<InlineCreateRowProps> = ({
   isSubmittingRef,
 }) => {
   const inlineInputRef = useRef<HTMLInputElement>(null);
-  const { isFolder } = inlineCreating;
+  const isFolder = inlineCreating?.isFolder ?? false;
 
   useEffect(() => {
     if (inlineInputRef.current) {
@@ -120,7 +120,7 @@ export const InlineCreateRow: React.FC<InlineCreateRowProps> = ({
               description
             </span>
             {selectedTemplate
-              ? selectedTemplate.title.slice(0, 12)
+              ? String(selectedTemplate.title || selectedTemplate.name || "").slice(0, 12)
               : "Template"}
           </button>
         )}

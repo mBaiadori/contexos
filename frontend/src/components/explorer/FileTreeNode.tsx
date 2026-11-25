@@ -16,7 +16,7 @@ import {
   Copy,
   Lock,
 } from "lucide-react";
-import type { TreeNode, StatusItem, BadgeOption, CategoryOption, TagOption } from "../../types";
+import type { TreeNode, StatusItem, BadgeOption, CategoryOption, TagOption, TemplateItem } from "../../types";
 import type { InlineCreatingState, InlineRenamingState, DraggedItem } from "./types";
 import { InlineCreateRow } from "./InlineCreateRow";
 import { useWorkspace } from "../../context/WorkspaceContext";
@@ -39,8 +39,8 @@ interface FileTreeNodeProps {
   inlineCreating: InlineCreatingState | null;
   inlineValue: string;
   setInlineValue: (val: string) => void;
-  selectedTemplate: { id?: string; name?: string; title?: string; [key: string]: unknown } | null;
-  setSelectedTemplate: (tpl: { id?: string; name?: string; title?: string; [key: string]: unknown } | null) => void;
+  selectedTemplate: TemplateItem | null;
+  setSelectedTemplate: (tpl: TemplateItem | null) => void;
   templatePickerOpen: boolean;
   setTemplatePickerOpen: (open: boolean) => void;
   onConfirmInlineCreate: () => void;
@@ -369,10 +369,12 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
     : "";
 
   const cleanNodePath = node.path ? node.path.replace(/^\/+/, "") : "";
-  const gitFile =
-    gitStatusMap.get(cleanNodePath) || gitStatusMap.get(node.path);
-  const pendingChange =
-    pendingChangesMap.get(cleanNodePath) || pendingChangesMap.get(node.path);
+  const gitFile = (
+    gitStatusMap.get(cleanNodePath) || gitStatusMap.get(node.path)
+  ) as { status?: string } | undefined;
+  const pendingChange = (
+    pendingChangesMap.get(cleanNodePath) || pendingChangesMap.get(node.path)
+  ) as { type?: string } | undefined;
   const gitStatusCode = gitFile
     ? gitFile.status === "??"
       ? "U"
@@ -523,7 +525,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
               }}
             >
               {isLocked ? <Lock size={10} /> : <span style={{ fontSize: "10px" }}>🛡️</span>}
-              <span>{deptObj.name.slice(0, 10)}</span>
+              <span>{(deptObj.name || "").slice(0, 10)}</span>
             </span>
           )}
 

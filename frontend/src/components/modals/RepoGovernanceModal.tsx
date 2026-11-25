@@ -129,7 +129,7 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
       }
 
       if (teamsRes.ok && teamsRes.data?.teams) {
-        setTeams(teamsRes.data.teams);
+        setTeams(teamsRes.data.teams as unknown as RepoTeamInfo[]);
       } else {
         setTeams([]);
       }

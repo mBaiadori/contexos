@@ -84,7 +84,7 @@ export const LinkOrgModal: React.FC<LinkOrgModalProps> = ({
         setSuccessMsg(`Organização '@${res.data.org.login}' vinculada com sucesso!`);
         await loadOrgs?.();
         setTimeout(() => {
-          onLinked(res.data.org);
+          onLinked(res.data!.org as { login: string; full_name?: string });
           onClose();
         }, 800);
       } else {

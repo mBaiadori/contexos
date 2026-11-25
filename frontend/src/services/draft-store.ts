@@ -36,7 +36,7 @@ class DraftStoreService {
           repo,
           filePath,
           body: draftData.body || '',
-          metadata: draftData.metadata || null,
+          metadata: draftData.metadata || undefined,
           rawContent: draftData.rawContent || '',
           timestamp: Date.now(),
           updatedAt: new Date().toISOString()

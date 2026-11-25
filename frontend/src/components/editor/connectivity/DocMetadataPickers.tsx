@@ -91,7 +91,7 @@ export function getTagStyle(tagName: string, customColor?: string) {
 
 export interface DocMetadataPickersProps {
   currentStatus: string;
-  activeStatusObj: StatusItem | undefined;
+  activeStatusObj: StatusItem | null | undefined;
   statusOptions: StatusItem[];
   showStatusPicker: boolean;
   setShowStatusPicker: (v: boolean) => void;
@@ -107,12 +107,12 @@ export interface DocMetadataPickersProps {
   onCategoryChange: (cat: string) => void;
 
   currentTemplateId: string;
-  activeTemplate: { id?: string; title?: string; name?: string; [key: string]: unknown } | undefined;
+  activeTemplate: { id?: string; title?: string; name?: string; category?: string; [key: string]: unknown } | null | undefined;
   showTemplatePicker: boolean;
   setShowTemplatePicker: (v: boolean) => void;
   templateSearchInput: string;
   setTemplateSearchInput: (v: string) => void;
-  filteredTemplates: Array<{ id: string; title?: string; name?: string; badge?: string; [key: string]: unknown }>;
+  filteredTemplates: Array<{ id: string; title?: string; name?: string; badge?: string; category?: string; templateName?: string }>;
   onTemplateChange: (tplId: string) => void;
 
   currentTags: string[];
@@ -124,7 +124,7 @@ export interface DocMetadataPickersProps {
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
 
-  activeDept: { id: string; name: string; color?: string; [key: string]: unknown } | undefined;
+  activeDept: { id: string; name: string; color?: string } | undefined;
   onCloseOtherPickers?: () => void;
 }
 

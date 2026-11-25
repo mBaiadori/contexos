@@ -1,7 +1,7 @@
 import React from "react";
 import { FolderGit2 } from "lucide-react";
 import { Card, Button, Badge } from "../../../../components/ui";
-import type { PR } from "../../../../types";
+import type { PR, User } from "../../../../types";
 import { formatPRDate, renderMarkdownDescription, cleanSemanticTitle } from "../utils/prFormatters";
 import { PRFileList } from "./PRFileList";
 import type {
@@ -13,7 +13,7 @@ import type {
 
 interface PRCardProps {
   pr: PR;
-  user: Record<string, unknown> | null;
+  user: User | null;
   providerLabel: string;
   projectConfig: Record<string, unknown> | null;
   isExpanded: boolean;

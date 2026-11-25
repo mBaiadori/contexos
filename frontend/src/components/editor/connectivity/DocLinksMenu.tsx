@@ -5,6 +5,8 @@ export interface DocLinkItem {
   filePath?: string;
   title?: string;
   name?: string;
+  categories?: string;
+  hash?: string;
   [key: string]: unknown;
 }
 
@@ -218,11 +220,13 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                   gap: "2px",
                 }}
               >
-                {consumers.map((c, i: number) => (
+                {consumers.map((c, i: number) => {
+                  const item = typeof c === "string" ? { path: c } : c;
+                  return (
                   <div
                     key={i}
                     onClick={() => {
-                      onNavigateFile(c.path || c);
+                      onNavigateFile(item.path || "");
                       setShowConsumers(false);
                     }}
                     style={{
@@ -259,10 +263,10 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {c.title || c.path || c}
+                        {item.title || item.path || ""}
                       </span>
                     </div>
-                    {c.categories && (
+                    {item.categories && (
                       <span
                         style={{
                           fontSize: "9.5px",
@@ -273,11 +277,12 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                           flexShrink: 0,
                         }}
                       >
-                        {c.categories}
+                        {item.categories}
                       </span>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -461,11 +466,13 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                   gap: "2px",
                 }}
               >
-                {dependencies.map((d, i: number) => (
+                {dependencies.map((d, i: number) => {
+                  const item = typeof d === "string" ? { path: d } : d;
+                  return (
                   <div
                     key={i}
                     onClick={() => {
-                      onNavigateFile(d.path || d.filePath || d);
+                      onNavigateFile(item.path || item.filePath || "");
                       setShowDeps(false);
                     }}
                     style={{
@@ -490,9 +497,9 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                     >
                       <span
                         className="material-symbols-outlined icon-xs"
-                        style={{ color: d.hash ? "#2563eb" : "#64748b" }}
+                        style={{ color: item.hash ? "#2563eb" : "#64748b" }}
                       >
-                        {d.hash ? "share_location" : "description"}
+                        {item.hash ? "share_location" : "description"}
                       </span>
                       <span
                         style={{
@@ -502,10 +509,10 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {d.title || d.path || d}
+                        {item.title || item.path || ""}
                       </span>
                     </div>
-                    {d.categories && (
+                    {item.categories && (
                       <span
                         style={{
                           fontSize: "9.5px",
@@ -516,11 +523,12 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                           flexShrink: 0,
                         }}
                       >
-                        {d.categories}
+                        {item.categories}
                       </span>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo } from
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 import { useAuth } from './AuthContext';
-import type { DepartmentConfig } from '../types';
+import type { DepartmentConfig, TreeNode } from '../types';
 
 export const DEFAULT_DEPARTMENTS: DepartmentConfig[] = [];
 

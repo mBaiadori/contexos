@@ -104,7 +104,7 @@ export const TemplatesGrid: React.FC<TemplatesGridProps> = ({
           <Tabs
             tabs={tabList}
             activeTab={activeTab}
-            onChange={(tab) => onSelectTab(tab as "project" | "community" | "all")}
+            onChange={(tab) => onSelectTab(tab as TemplateTab)}
             variant="pills"
           />
 

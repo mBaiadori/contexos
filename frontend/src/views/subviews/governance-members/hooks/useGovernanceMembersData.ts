@@ -127,7 +127,7 @@ export function useGovernanceMembersData() {
     try {
       const res = await API.getOrgTeams(orgLogin);
       if (res.ok && res.data?.teams) {
-        setTeams(res.data.teams);
+        setTeams(res.data.teams as unknown as OrganizationTeamInfo[]);
       }
     } catch (err) {
       console.error("Erro ao carregar equipes da org:", err);

@@ -167,7 +167,7 @@ export const AddDictionaryTermModal: React.FC<AddDictionaryTermModalProps> = ({
         {/* Domain Selection with Dynamic Categories from .project.config.json */}
         <FormField label="Domínio / Categoria (do Projeto)" required>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-            {categories.map((cat) => {
+            {categories.map((cat: { name: string; label?: string; color?: string }) => {
               const isSelected = domain.toLowerCase() === (cat.name || "").toLowerCase();
               const color = cat.color || "#3b82f6";
               return (

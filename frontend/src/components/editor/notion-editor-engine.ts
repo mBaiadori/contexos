@@ -1754,7 +1754,7 @@ export class NotionEditorEngine {
   }
 
   recordChange() {
-    clearTimeout(this.historyTimer);
+    if (this.historyTimer) clearTimeout(this.historyTimer);
     this.historyTimer = setTimeout(() => {
       this.pushSnapshot();
     }, 300);

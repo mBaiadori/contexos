@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { AISettingsState, ChatMessage, ChatMediaAttachment, RawTurnTelemetry, RawTurnMetrics } from '../types';
+import type { AISettingsState, ChatMessage, ChatMediaAttachment, RawTurnTelemetry, RawTurnMetrics, ToolCallRecord, TreeNode } from '../types';
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 import { useTemplateStore } from '../stores/templateStore';
@@ -672,17 +672,17 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           } else if (event.type === 'tool_result' && event.toolName) {
             receivedToolCalls.push({
               tool: event.toolName,
-              args: event.toolArgs,
-              result: event.data,
+              args: event.toolArgs || {},
+              result: (event.data as ToolCallRecord['result']) || { success: true },
               timestamp: new Date().toISOString(),
             });
-          } else if (event.type === 'stream_telemetry' && event.data?.telemetry) {
-            receivedTelemetry = event.data.telemetry;
+          } else if (event.type === 'stream_telemetry' && (event.data as Record<string, unknown> | undefined)?.telemetry) {
+            receivedTelemetry = (event.data as Record<string, unknown>).telemetry as RawTurnTelemetry;
           } else if (event.type === 'approval_request') {
             useCopilotStore.getState().setPendingApproval({
-              prompt: event.approvalPrompt || 'Aprovação necessária para prosseguir',
-              sessionId: event.sessionId || currentSessionId,
-              providerId: event.provider,
+              prompt: typeof event.approvalPrompt === 'string' ? event.approvalPrompt : 'Aprovação necessária para prosseguir',
+              sessionId: typeof event.sessionId === 'string' ? event.sessionId : currentSessionId,
+              providerId: typeof event.provider === 'string' ? event.provider : undefined,
             });
           }
         });
@@ -773,15 +773,16 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         const res = await API.sendChatMessage(chatPayload);
 
         if (res.ok && res.data) {
-          let proposedDiff = res.data.diff;
+          let proposedDiff = res.data.diff as ChatMessage['diff'];
           if (!proposedDiff && Array.isArray(res.data.tool_calls)) {
             const diffTool = res.data.tool_calls.find((tc) => tc.tool === 'docs_propose_diff');
             if (diffTool && diffTool.result?.data) {
+              const diffData = diffTool.result.data as Record<string, unknown>;
               proposedDiff = {
-                path: diffTool.result.data.file_path,
-                old_content: diffTool.result.data.original_content,
-                new_content: diffTool.result.data.proposed_content,
-                rationale: diffTool.result.data.rationale,
+                path: String(diffData.file_path || ''),
+                old_content: String(diffData.original_content || ''),
+                new_content: String(diffData.proposed_content || ''),
+                rationale: typeof diffData.rationale === 'string' ? diffData.rationale : undefined,
               };
             }
           }

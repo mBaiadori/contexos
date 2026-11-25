@@ -116,10 +116,10 @@ export const AccessGovernanceManager: React.FC<
       ]);
 
       if (teamsRes.ok && teamsRes.data?.teams) {
-        setOrgTeams(teamsRes.data.teams);
+        setOrgTeams(teamsRes.data.teams as unknown as OrganizationTeamInfo[]);
       }
       if (membersRes.ok && membersRes.data?.members) {
-        setOrgMembers(membersRes.data.members);
+        setOrgMembers(membersRes.data.members as unknown as OrganizationMemberInfo[]);
       }
 
       if (isLiveRepoMode && repoName) {
@@ -129,7 +129,7 @@ export const AccessGovernanceManager: React.FC<
           API.getGovernanceWorkflow(repoName),
         ]);
         if (repoTeamsRes.ok && repoTeamsRes.data?.teams) {
-          setLiveTeams(repoTeamsRes.data.teams);
+          setLiveTeams(repoTeamsRes.data.teams as unknown as RepoTeamInfo[]);
         }
         if (collabRes.ok && collabRes.data?.collaborators) {
           setLiveCollaborators(collabRes.data.collaborators as Parameters<typeof setLiveCollaborators>[0]);
@@ -161,7 +161,7 @@ export const AccessGovernanceManager: React.FC<
     try {
       const res = await API.getOrgTeamMembers(orgLogin, teamSlug);
       if (res.ok && res.data?.members) {
-        setTeamMembersList(res.data.members);
+        setTeamMembersList(res.data.members as unknown as OrgTeamMemberInfo[]);
       }
     } catch {
       setTeamMembersList([]);
@@ -243,7 +243,7 @@ export const AccessGovernanceManager: React.FC<
         setAddTeamMemberUsername("");
         const refreshed = await API.getOrgTeamMembers(orgLogin, teamSlug);
         if (refreshed.ok && refreshed.data?.members) {
-          setTeamMembersList(refreshed.data.members);
+          setTeamMembersList(refreshed.data.members as unknown as OrgTeamMemberInfo[]);
         }
       } else {
         setErrorMsg(res.data?.message || "Falha ao adicionar membro ao time.");

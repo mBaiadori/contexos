@@ -36,11 +36,13 @@ export interface ActiveConflictPR {
   pr: PR;
   filePath: string;
   bundle: {
-    baseContent: string;
-    oursContent: string;
-    theirsContent: string;
-    mergedContentWithMarkers?: string;
+    filePath?: string;
+    base?: string;
+    ours?: string;
+    theirs?: string;
+    merged: string;
     hasConflicts?: boolean;
+    conflictCount?: number;
     [key: string]: unknown;
   };
 }

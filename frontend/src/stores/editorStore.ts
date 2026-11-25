@@ -100,7 +100,7 @@ const performDiskSave = async (
       });
 
       if (res.data?.tree) {
-        useRepoStore.getState().setTreeForRepo(repoName, res.data.tree);
+        useRepoStore.getState().setTreeForRepo(repoName, res.data.tree as import("../types").TreeNode[]);
       }
 
       useEditorStore.setState({ saveStatus: "Salvo no disco" });

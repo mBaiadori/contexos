@@ -193,11 +193,14 @@ export interface DocumentMetadataItem {
   templateId: string;
   prompt?: string;
   department?: string;
+  badge?: string;
+  type?: string;
   [key: string]: unknown;
 }
 
 export interface TaxonomyItem {
   id?: string;
+  key?: string;
   name: string;
   label?: string;
   color: string;
@@ -775,13 +778,16 @@ export interface ProjectSkillsManifest {
 
 export interface ToolCallRecord {
   tool: string;
-  args: Record<string, any>;
+  name?: string;
+  args: Record<string, unknown>;
+  input?: Record<string, unknown>;
   result: {
     success: boolean;
     data?: unknown;
     error?: string;
     message?: string;
   };
+  output?: unknown;
   timestamp: string;
 }
 

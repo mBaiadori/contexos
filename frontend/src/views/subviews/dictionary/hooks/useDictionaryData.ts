@@ -270,32 +270,34 @@ export function useDictionaryData() {
 
       // Validate and normalize structure
       const valid: DictionaryTerm[] = incomingTerms
-        .filter((t) => t && typeof t.term === "string" && t.term.trim().length > 0)
-        .map((t) => ({
-          id: t.id || undefined,
-          term: t.term.trim(),
-          codename:
-            t.codename ||
-            t.code_name ||
-            t.term
-              .trim()
-              .toUpperCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/[\s-]+/g, "_")
-              .replace(/[^A-Z0-9_]/g, ""),
-          domain: t.domain || "geral",
-          category: t.category || "Entity",
-          context: t.context || undefined,
-          definition: t.definition ? String(t.definition).trim() : "Definição não informada.",
-          synonyms: Array.isArray(t.synonyms)
-            ? t.synonyms
-            : Array.isArray(t.aliases)
-              ? t.aliases
-              : typeof t.synonyms === "string"
-                ? t.synonyms.split(",").map((s: string) => s.trim()).filter(Boolean)
-                : [],
-        }));
+        .filter((t): t is Record<string, unknown> => Boolean(t && typeof t === "object" && typeof (t as Record<string, unknown>).term === "string" && String((t as Record<string, unknown>).term).trim().length > 0))
+        .map((t) => {
+          const termStr = String(t.term).trim();
+          return {
+            id: t.id ? String(t.id) : undefined,
+            term: termStr,
+            codename:
+              (typeof t.codename === "string" && t.codename) ||
+              (typeof t.code_name === "string" && t.code_name) ||
+              termStr
+                .toUpperCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[\s-]+/g, "_")
+                .replace(/[^A-Z0-9_]/g, ""),
+            domain: typeof t.domain === "string" && t.domain ? t.domain : "geral",
+            category: typeof t.category === "string" && t.category ? t.category : "Entity",
+            context: typeof t.context === "string" && t.context ? t.context : undefined,
+            definition: t.definition ? String(t.definition).trim() : "Definição não informada.",
+            synonyms: Array.isArray(t.synonyms)
+              ? t.synonyms.map(String)
+              : Array.isArray(t.aliases)
+                ? t.aliases.map(String)
+                : typeof t.synonyms === "string"
+                  ? t.synonyms.split(",").map((s: string) => s.trim()).filter(Boolean)
+                  : [],
+          };
+        });
 
       if (valid.length === 0) {
         throw new Error("Nenhum termo válido encontrado no JSON.");
@@ -322,7 +324,7 @@ export function useDictionaryData() {
     (domainName?: string) => {
       if (!domainName) return "#64748b";
       const cat = categories.find(
-        (c) =>
+        (c: { name?: string; label?: string; color?: string }) =>
           (c.name || "").toLowerCase() === domainName.toLowerCase() ||
           (c.label || "").toLowerCase() === domainName.toLowerCase()
       );

@@ -16,6 +16,7 @@ import {
 import type { Repo, TreeNode } from "../../types";
 import { InlineCreateRow } from "./InlineCreateRow";
 import { FlatTreeList } from "./FlatTreeList";
+import { FileTreeNode } from "./FileTreeNode";
 
 interface RepoTreeItemProps {
   repo: Repo;

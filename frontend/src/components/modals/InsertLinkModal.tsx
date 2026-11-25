@@ -350,7 +350,7 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
         <Tabs
           tabs={tabItems}
           activeTab={activeTab}
-          onChange={(tab) => setActiveTab(tab as 'doc' | 'external' | 'new')}
+          onChange={(tab) => setActiveTab(tab as "doc" | "snippet" | "url")}
           variant="pills"
         />
 

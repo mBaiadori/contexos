@@ -25,7 +25,7 @@ interface RawInspectorSidebarProps {
   onClose: () => void;
   docPath?: string;
   rawPayload?: Record<string, unknown>;
-  rawResponse?: Record<string, unknown>;
+  rawResponse?: Record<string, unknown> | import("../../types").ChatMessage | null;
 }
 
 export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
@@ -593,7 +593,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setDetailTab(tab.id as "prompt" | "context" | "tools" | "response")}
+                  onClick={() => setDetailTab(tab.id as "costs" | "json" | "request" | "response")}
                   style={{
                     flex: 1,
                     padding: "8px 4px",

@@ -65,7 +65,7 @@ export const CloneRepoModal: React.FC<CloneRepoModalProps> = ({
       });
 
       if (res.ok && res.data?.repo) {
-        onCloned(res.data.repo);
+        onCloned(res.data.repo as unknown as import("../../types").Repo);
         onClose();
       } else {
         setErrorMsg(res.data?.error || res.data?.message || "Erro ao clonar repositório.");

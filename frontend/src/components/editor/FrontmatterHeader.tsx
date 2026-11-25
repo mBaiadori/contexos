@@ -42,7 +42,7 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
     (d) => d.id === metadata.department || d.folder === metadata.department,
   );
 
-  const categoryLabel = metadata.categories || metadata.category || "";
+  const categoryLabel = String(metadata.categories || metadata.category || "");
 
   return (
     <div
