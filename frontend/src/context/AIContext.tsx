@@ -28,7 +28,7 @@ interface AIContextType {
       default_provider?: string;
       antigravity_cli_path?: string;
       claude_cli_path?: string;
-      agent_effort?: 'low' | 'medium' | 'high';
+      agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
       agent_model?: string;
       claude_model?: string;
     }
@@ -39,7 +39,7 @@ interface AIContextType {
     default_provider?: string;
     agent_model?: string;
     claude_model?: string;
-    agent_effort?: 'low' | 'medium' | 'high';
+    agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   }) => Promise<boolean>;
   sendMessage: (prompt: string, contextBadges?: string[], attachments?: ChatMediaAttachment[]) => Promise<void>;
   stopGeneration: () => Promise<void>;
@@ -249,7 +249,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       default_provider?: string;
       antigravity_cli_path?: string;
       claude_cli_path?: string;
-      agent_effort?: 'low' | 'medium' | 'high';
+      agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
       agent_model?: string;
       claude_model?: string;
     }
@@ -295,7 +295,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     default_provider?: string;
     agent_model?: string;
     claude_model?: string;
-    agent_effort?: 'low' | 'medium' | 'high';
+    agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   }): Promise<boolean> => {
     try {
       if (payload.default_provider) {

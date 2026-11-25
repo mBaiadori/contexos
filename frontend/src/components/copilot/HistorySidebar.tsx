@@ -144,7 +144,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     if (e) e.stopPropagation();
     const success = await restoreSession(sessionId);
     if (success) {
-      setFeedback("Conversa restaurada no Copilot! ✨");
+      setFeedback("Conversa restaurada no Nexos! ✨");
       setTimeout(() => {
         setFeedback(null);
         onClose();
@@ -962,7 +962,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={(e) => handleRestoreToChat(s.session_id, e)}
-                          title="Restaurar esta conversa no Copilot"
+                          title="Restaurar esta conversa no Nexos"
                           icon={
                             <span
                               className="material-symbols-outlined"
@@ -1022,7 +1022,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 >
                   {searchTerm
                     ? `Nenhum resultado corresponde ao termo "${searchTerm}".`
-                    : "Todas as suas mensagens no Copilot são gravadas e versionadas automaticamente no histórico seguro."}
+                    : "Todas as suas mensagens no Nexos são gravadas e versionadas automaticamente no histórico seguro."}
                 </p>
                 {searchTerm ? (
                   <Button

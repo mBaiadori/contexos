@@ -71,7 +71,21 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       ? (subview as SubViewType)
       : "editor";
 
-  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("contexos_copilot_open") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("contexos_copilot_open", String(isCopilotOpen));
+    } catch {
+      // ignore storage errors
+    }
+  }, [isCopilotOpen]);
   const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<
     "prompt" | "history" | "raw" | "context" | "skills" | null
   >(null);
@@ -254,18 +268,28 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     e.preventDefault();
     isAiDraggingRef.current = true;
     startAiXRef.current = e.clientX;
-    startAiWidthRef.current = aiWidth;
+
+    const aiPane = document.getElementById("global-ai-pane");
+    const layoutEl = aiPane?.parentElement;
+    const sidebarEl = layoutEl?.querySelector(".dash-sidebar-nav") as HTMLElement | null;
+    const sidebarWidth = sidebarEl ? sidebarEl.getBoundingClientRect().width : 0;
+    const maxAiWidth = layoutEl
+      ? Math.max(240, layoutEl.clientWidth - sidebarWidth - 320 - 8)
+      : window.innerWidth - 320;
+
+    startAiWidthRef.current = aiPane
+      ? aiPane.getBoundingClientRect().width
+      : aiWidth;
 
     document.body.classList.add("is-resizing");
+
+    const clampWidth = (raw: number) =>
+      Math.max(240, Math.min(maxAiWidth, raw));
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isAiDraggingRef.current) return;
       const deltaX = moveEvent.clientX - startAiXRef.current;
-      const newWidth = Math.max(
-        240,
-        Math.min(750, startAiWidthRef.current - deltaX),
-      );
-      setAiWidth(newWidth);
+      setAiWidth(clampWidth(startAiWidthRef.current - deltaX));
     };
 
     const handleMouseUp = (upEvent: MouseEvent) => {
@@ -274,10 +298,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       document.body.classList.remove("is-resizing");
 
       const deltaX = upEvent.clientX - startAiXRef.current;
-      const finalWidth = Math.max(
-        240,
-        Math.min(750, startAiWidthRef.current - deltaX),
-      );
+      const finalWidth = clampWidth(startAiWidthRef.current - deltaX);
       setAiWidth(finalWidth);
       try {
         localStorage.setItem(AI_WIDTH_STORAGE_KEY, String(finalWidth));

@@ -21,6 +21,7 @@ import {
 import type { DocumentMetadataItem } from "../../types";
 import type { DictionaryPopoverData } from "../dictionary/DictionaryPopover";
 import { DocConnectivityBar } from "./DocConnectivityBar";
+import type { EditorWidthMode } from "./connectivity/DocConnectivityActions";
 import { DocumentHistoryDrawer } from "./DocumentHistoryDrawer";
 import { EditorFooter } from "./EditorFooter";
 import { EditorModalsContainer } from "./EditorModalsContainer";
@@ -84,6 +85,30 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const refreshGitStatus = useGitStore((s) => s.refreshGitStatus);
   const dictionaryTerms = useGovernanceStore((s) => s.dictionaryTerms);
   const [editorTab, setEditorTab] = useState<"document" | "prompt">("document");
+  const [widthMode, setWidthMode] = useState<EditorWidthMode>(() => {
+    try {
+      const saved = localStorage.getItem("contexos:editor-width-mode");
+      if (saved === "narrow" || saved === "normal" || saved === "wide") {
+        return saved;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return "normal";
+  });
+
+  const cycleWidthMode = useCallback(() => {
+    setWidthMode((prev) => {
+      const next: EditorWidthMode =
+        prev === "normal" ? "wide" : prev === "wide" ? "narrow" : "normal";
+      try {
+        localStorage.setItem("contexos:editor-width-mode", next);
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  }, []);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [titleValue, setTitleValue] = useState<string>("");
@@ -728,6 +753,23 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     [filePath, fileMetadata, updateFileMetadata, handleSave, activeRepo?.name],
   );
 
+  const handleRemoveLinkFromBar = useCallback(
+    async (targetPath: string, type: "dependency" | "consumer") => {
+      if (!filePath || type !== "dependency") return;
+      const currentLinks: string[] = Array.isArray(fileMetadata?.links)
+        ? [...fileMetadata.links]
+        : [];
+      const updatedLinks = currentLinks.filter(
+        (l) => l !== targetPath && l.split("#")[0] !== targetPath,
+      );
+      if (updatedLinks.length !== currentLinks.length) {
+        await updateFileMetadata({ links: updatedLinks });
+        await handleSave();
+      }
+    },
+    [filePath, fileMetadata, updateFileMetadata, handleSave],
+  );
+
   // Initialize & Mount NotionEditorEngine
   useLayoutEffect(() => {
     if (!canvasRef.current || isGitMode) return;
@@ -1132,10 +1174,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             }}
             isHistoryDrawerOpen={isHistoryDrawerOpen}
             onToggleHistoryDrawer={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
+            widthMode={widthMode}
+            onCycleWidthMode={cycleWidthMode}
             onSave={handleSave}
             saveStatus={saveStatus}
             isDirty={isDirty}
             onAddLink={handleAddLinkFromBar}
+            onRemoveLink={handleRemoveLinkFromBar}
           />
         )}
 
@@ -1202,7 +1247,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             />
           </div>
         ) : (
-          <div className="notion-editor-wrapper" id="notion-editor-wrapper">
+          <div
+            className="notion-editor-wrapper"
+            id="notion-editor-wrapper"
+            data-width-mode={widthMode}
+          >
             <div className="notion-editor-scroll-container">
               {/* Título H1 Separado do Markdown (apenas na aba Documento) */}
               {editorTab === "document" && (

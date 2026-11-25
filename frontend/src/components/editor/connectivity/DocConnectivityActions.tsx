@@ -1,5 +1,7 @@
 import React from "react";
 
+export type EditorWidthMode = "narrow" | "normal" | "wide";
+
 export interface DocConnectivityActionsProps {
   onCopyDoc?: () => void;
   onExportDoc?: () => void;
@@ -8,10 +10,21 @@ export interface DocConnectivityActionsProps {
   onToggleGitMode?: () => void;
   isHistoryDrawerOpen?: boolean;
   onToggleHistoryDrawer?: () => void;
+  widthMode?: EditorWidthMode;
+  onCycleWidthMode?: () => void;
   onSave?: (metaOverride?: Record<string, any>) => void;
   saveStatus?: string;
   isDirty?: boolean;
 }
+
+const WIDTH_MODE_META: Record<
+  EditorWidthMode,
+  { label: string; nextLabel: string; icon: string }
+> = {
+  narrow: { label: "Estreito", nextLabel: "Normal", icon: "unfold_less" },
+  normal: { label: "Normal", nextLabel: "Largo", icon: "view_stream" },
+  wide: { label: "Largo", nextLabel: "Estreito", icon: "open_in_full" },
+};
 
 export const DocConnectivityActions: React.FC<DocConnectivityActionsProps> = ({
   onCopyDoc,
@@ -21,12 +34,55 @@ export const DocConnectivityActions: React.FC<DocConnectivityActionsProps> = ({
   onToggleGitMode,
   isHistoryDrawerOpen = false,
   onToggleHistoryDrawer,
+  widthMode = "normal",
+  onCycleWidthMode,
   onSave,
   saveStatus,
   isDirty = false,
 }) => {
+  const widthMeta = WIDTH_MODE_META[widthMode];
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      {onCycleWidthMode && (
+        <button
+          id="btn-cycle-width-mode"
+          className={`btn-icon-action ${widthMode !== "normal" ? "active" : ""}`}
+          type="button"
+          title={`Largura: ${widthMeta.label} (clique para ${widthMeta.nextLabel})`}
+          onClick={onCycleWidthMode}
+          style={{
+            width: "28px",
+            height: "28px",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "6px",
+            border: "1px solid",
+            borderColor:
+              widthMode !== "normal"
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline-variant, #e2e8f0)",
+            background:
+              widthMode !== "normal"
+                ? "var(--color-primary-container, #eff6ff)"
+                : "transparent",
+            cursor: "pointer",
+            color:
+              widthMode !== "normal"
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline, #64748b)",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <span
+            className="material-symbols-outlined icon-xs"
+            style={{ fontSize: "16px" }}
+          >
+            {widthMeta.icon}
+          </span>
+        </button>
+      )}
       {onCopyDoc && (
         <button
           id="btn-copy-doc-content"

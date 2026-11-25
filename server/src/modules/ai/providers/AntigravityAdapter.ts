@@ -235,7 +235,10 @@ export class AntigravityAdapter implements IAgentProvider {
         const model = cfg.settings?.agent_model;
 
         const spawnArgs: string[] = ['--dangerously-skip-permissions'];
-        if (effort) {
+        // Model IDs from `agy models` already encode their effort suffix (e.g. -medium, -high, -xhigh).
+        // Passing --effort alongside an effort-suffixed --model causes `agy` to reject with a conflict error.
+        const hasEmbeddedEffort = Boolean(model && /-(low|medium|high|xhigh|max)$/i.test(model));
+        if (effort && !hasEmbeddedEffort) {
           spawnArgs.push('--effort', effort);
         }
         if (model) {

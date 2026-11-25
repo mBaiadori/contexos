@@ -115,7 +115,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
           type="button"
           className="btn btn-ghost btn-xs"
           onClick={onAskAI}
-          title="Perguntar ao Copilot IA"
+          title="Perguntar ao Nexos"
           style={{ color: 'var(--primary, #2563eb)', borderLeft: '1px solid var(--border-color)', marginLeft: '4px', paddingLeft: '6px' }}
         >
           <span className="material-symbols-outlined icon-xs">auto_awesome</span>

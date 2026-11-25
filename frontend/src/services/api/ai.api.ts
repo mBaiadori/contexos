@@ -258,7 +258,7 @@ export const aiApi = {
     default_provider?: string;
     antigravity_cli_path?: string;
     claude_cli_path?: string;
-    agent_effort?: 'low' | 'medium' | 'high';
+    agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
     agent_model?: string;
     claude_model?: string;
   }): Promise<ApiResponse<any>> {

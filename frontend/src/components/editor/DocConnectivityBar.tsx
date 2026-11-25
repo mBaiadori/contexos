@@ -5,7 +5,10 @@ import { API } from "../../services/api";
 import type { StatusItem, TaxonomyItem } from "../../types";
 import { useTemplateStore } from "../../stores/templateStore";
 import { InsertLinkModal } from "../modals/InsertLinkModal";
-import { DocConnectivityActions } from "./connectivity/DocConnectivityActions";
+import {
+  DocConnectivityActions,
+  type EditorWidthMode,
+} from "./connectivity/DocConnectivityActions";
 import { DocLinksMenu } from "./connectivity/DocLinksMenu";
 import { DocMetadataPickers } from "./connectivity/DocMetadataPickers";
 
@@ -19,10 +22,13 @@ interface DocConnectivityBarProps {
   onToggleGitMode?: () => void;
   isHistoryDrawerOpen?: boolean;
   onToggleHistoryDrawer?: () => void;
+  widthMode?: EditorWidthMode;
+  onCycleWidthMode?: () => void;
   onSave?: (metaOverride?: Record<string, any>) => void;
   saveStatus?: string;
   isDirty?: boolean;
   onAddLink?: (url: string, text: string, type: "dependency" | "consumer") => Promise<void>;
+  onRemoveLink?: (targetPath: string, type: "dependency" | "consumer") => Promise<void>;
 }
 
 export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
@@ -35,10 +41,13 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   onToggleGitMode,
   isHistoryDrawerOpen = false,
   onToggleHistoryDrawer,
+  widthMode,
+  onCycleWidthMode,
   onSave,
   saveStatus,
   isDirty = false,
   onAddLink,
+  onRemoveLink,
 }) => {
   const { fileMetadata, updateFileMetadata, projectMetaOptions, projectConfig } =
     useWorkspace();
@@ -395,6 +404,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           setShowDeps={setShowDeps}
           onNavigateFile={onNavigateFile}
           onOpenAddLinkModal={openAddLinkModal}
+          onRemoveLink={onRemoveLink}
           onCloseOtherPickers={closeOtherPickers}
         />
       </div>
@@ -408,6 +418,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         onToggleGitMode={onToggleGitMode}
         isHistoryDrawerOpen={isHistoryDrawerOpen}
         onToggleHistoryDrawer={onToggleHistoryDrawer}
+        widthMode={widthMode}
+        onCycleWidthMode={onCycleWidthMode}
         onSave={onSave}
         saveStatus={saveStatus}
         isDirty={isDirty}

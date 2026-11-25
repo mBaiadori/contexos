@@ -23,9 +23,22 @@
   box-sizing: border-box;
 }
 
+/* Editor Width Modes: Estreito (narrow), Normal (860px), Largo (wide) */
+.notion-editor-wrapper[data-width-mode="narrow"] .notion-doc-header-block,
+.notion-editor-wrapper[data-width-mode="narrow"] .notion-doc-title-divider,
+.notion-editor-wrapper[data-width-mode="narrow"] .notion-canvas {
+  max-width: 680px;
+}
+
+.notion-editor-wrapper[data-width-mode="wide"] .notion-doc-header-block,
+.notion-editor-wrapper[data-width-mode="wide"] .notion-doc-title-divider,
+.notion-editor-wrapper[data-width-mode="wide"] .notion-canvas {
+  max-width: 100%;
+}
+
 /* Notion Document Top Title Header */
 .notion-doc-header-block {
-  max-width: 860px;
+  max-width: 1040px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -33,6 +46,7 @@
   border: none;
   cursor: text;
   box-sizing: border-box;
+  transition: max-width 0.2s ease;
 }
 
 .notion-doc-title-row {
@@ -92,12 +106,13 @@
 
 /* Divider separando Título H1 do corpo Markdown (.md) */
 .notion-doc-title-divider {
-  max-width: 860px;
+  max-width: 1040px;
   margin: 16px auto;
   height: 1px;
   background: var(--border-subtle, #e2e8f0);
   border: none;
   opacity: 0.75;
+  transition: max-width 0.2s ease;
 }
 
 .notion-doc-title-meta {
@@ -118,11 +133,12 @@
 
 /* Notion Canvas (ContentEditable & Blocks) */
 .notion-canvas {
-  max-width: 860px;
+  max-width: 1040px;
   margin: 0 auto;
   min-height: calc(100vh - 260px);
   padding: 0 16px 120px 16px;
   box-sizing: border-box;
+  transition: max-width 0.2s ease;
   color: var(--text-main, #1e293b);
   font-family:
     "Inter",

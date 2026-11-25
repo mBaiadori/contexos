@@ -64,7 +64,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   } = useAI();
   const { activeRepo, setFileContent } = useWorkspace();
   const [inputText, setInputText] = useState("");
-  const [pendingAttachments, setPendingAttachments] = useState<ChatMediaAttachment[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    ChatMediaAttachment[]
+  >([]);
   const [isDraggingMedia, setIsDraggingMedia] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,9 +109,11 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     aiSettings?.active_provider || aiSettings?.provider || "gemini";
   const isApiConfigured = Boolean(
     aiSettings?.providers?.[activeApiProv]?.configured ||
-      Object.values(aiSettings?.providers || {}).some((p) => p?.configured),
+    Object.values(aiSettings?.providers || {}).some((p) => p?.configured),
   );
-  const activeCliInfo = detectedProviders.find((p) => p.id === activeProviderId);
+  const activeCliInfo = detectedProviders.find(
+    (p) => p.id === activeProviderId,
+  );
   const isActiveConnectionReady =
     isRawMode || activeProviderId === "direct-api"
       ? isApiConfigured
@@ -143,8 +147,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     const s = sec % 60;
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
-
-
 
   // Scroll state
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -409,58 +411,69 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     };
   }, []);
 
-  const readFilesAsAttachments = useCallback(async (files: File[]) => {
-    if (!files || files.length === 0) return;
-    setAttachmentError(null);
+  const readFilesAsAttachments = useCallback(
+    async (files: File[]) => {
+      if (!files || files.length === 0) return;
+      setAttachmentError(null);
 
-    const MAX_FILES = 10;
-    const MAX_BYTES = 20 * 1024 * 1024;
-    const availableSlots = MAX_FILES - pendingAttachments.length;
-    if (availableSlots <= 0) {
-      setAttachmentError("Limite máximo de 10 anexos por mensagem atingido.");
-      return;
-    }
-
-    const toProcess = files.slice(0, availableSlots);
-    const loaded: ChatMediaAttachment[] = [];
-
-    for (const file of toProcess) {
-      if (file.size > MAX_BYTES) {
-        setAttachmentError(`"${file.name || "Arquivo"}" excede o limite de 20 MB.`);
-        continue;
+      const MAX_FILES = 10;
+      const MAX_BYTES = 20 * 1024 * 1024;
+      const availableSlots = MAX_FILES - pendingAttachments.length;
+      if (availableSlots <= 0) {
+        setAttachmentError("Limite máximo de 10 anexos por mensagem atingido.");
+        return;
       }
 
-      try {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result || ""));
-          reader.onerror = () => reject(new Error("Falha ao ler arquivo"));
-          reader.readAsDataURL(file);
-        });
+      const toProcess = files.slice(0, availableSlots);
+      const loaded: ChatMediaAttachment[] = [];
 
-        const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-        const mimeType = file.type || base64Match?.[1] || "application/octet-stream";
-        const dataBase64 = base64Match?.[2] || dataUrl;
-        const fallbackExt = mimeType.split("/")[1]?.split("+")[0] || "bin";
-        const fileName = file.name || `colado-${Date.now()}.${fallbackExt}`;
+      for (const file of toProcess) {
+        if (file.size > MAX_BYTES) {
+          setAttachmentError(
+            `"${file.name || "Arquivo"}" excede o limite de 20 MB.`,
+          );
+          continue;
+        }
 
-        loaded.push({
-          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          name: fileName,
-          mimeType,
-          size: file.size,
-          dataBase64,
-          previewUrl: mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("audio/") ? dataUrl : undefined,
-        });
-      } catch {
-        setAttachmentError(`Não foi possível ler "${file.name || "mídia"}".`);
+        try {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("Falha ao ler arquivo"));
+            reader.readAsDataURL(file);
+          });
+
+          const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+          const mimeType =
+            file.type || base64Match?.[1] || "application/octet-stream";
+          const dataBase64 = base64Match?.[2] || dataUrl;
+          const fallbackExt = mimeType.split("/")[1]?.split("+")[0] || "bin";
+          const fileName = file.name || `colado-${Date.now()}.${fallbackExt}`;
+
+          loaded.push({
+            id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: fileName,
+            mimeType,
+            size: file.size,
+            dataBase64,
+            previewUrl:
+              mimeType.startsWith("image/") ||
+              mimeType.startsWith("video/") ||
+              mimeType.startsWith("audio/")
+                ? dataUrl
+                : undefined,
+          });
+        } catch {
+          setAttachmentError(`Não foi possível ler "${file.name || "mídia"}".`);
+        }
       }
-    }
 
-    if (loaded.length > 0) {
-      setPendingAttachments((prev) => [...prev, ...loaded]);
-    }
-  }, [pendingAttachments.length]);
+      if (loaded.length > 0) {
+        setPendingAttachments((prev) => [...prev, ...loaded]);
+      }
+    },
+    [pendingAttachments.length],
+  );
 
   const handlePaste = useCallback(
     async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -533,7 +546,8 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if ((!inputText.trim() && pendingAttachments.length === 0) || isThinking) return;
+    if ((!inputText.trim() && pendingAttachments.length === 0) || isThinking)
+      return;
     if (isRawMode && !isApiConfigured) {
       openSettingsModal();
       return;
@@ -555,7 +569,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSend();
     }
@@ -589,9 +603,10 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          gap: "6px",
-          padding: "6px 10px",
+          justifyContent: "flex-start",
+          flexWrap: "wrap",
+          gap: "8px",
+          padding: "6px 8px",
           background: "#ffffff",
           borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
           fontSize: "11px",
@@ -601,294 +616,241 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           minHeight: "40px",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            position: "relative",
-            minWidth: 0,
-          }}
-        >
-          {/* Harness / RAW Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsRawMode(!isRawMode)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: "4px 8px",
-              borderRadius: "8px",
-              fontSize: "11px",
-              fontWeight: 600,
-              cursor: "pointer",
-              border: isRawMode
-                ? "1px solid var(--color-warning, #d97706)"
-                : "1px solid transparent",
-              background: isRawMode
-                ? "var(--color-warning-container, #fef7e0)"
-                : "var(--color-surface-container, #f1f3f4)",
-              color: isRawMode
-                ? "var(--color-warning, #b45309)"
-                : "var(--text-muted, #64748b)",
-              transition: "all 0.15s ease",
-              whiteSpace: "nowrap",
-            }}
-            title={
-              isRawMode
-                ? "Modo RAW Ativo: Chamada direta sem ferramentas"
-                : "Modo Agente Ativo: Com ferramentas e raciocínio multi-passos"
-            }
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "14px" }}
-            >
+        {/* Harness / RAW Toggle */}
+        <IconButton
+          size="sm"
+          variant="ghost"
+          onClick={() => setIsRawMode(!isRawMode)}
+          title={
+            isRawMode
+              ? "Modo RAW Ativo: Chamada direta sem ferramentas (clique para voltar ao Harness)"
+              : "Modo Harness Ativo: Com ferramentas e raciocínio multi-passos (clique para RAW)"
+          }
+          icon={
+            <span className="material-symbols-outlined icon-sm">
               {isRawMode ? "bolt" : "psychology"}
             </span>
-            {isRawMode ? "RAW" : "Harness"}
-          </button>
+          }
+        />
 
-          {/* RAG Search Button */}
-          <button
-            type="button"
-            onClick={() => {
-              const { isRagModalOpen, closeRagModal } = useCopilotStore.getState();
-              if (isRagModalOpen) {
-                closeRagModal();
-              } else {
-                openRagModal();
-              }
-            }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: "4px 8px",
-              borderRadius: "8px",
-              fontSize: "11px",
-              fontWeight: 600,
-              cursor: "pointer",
-              border:
-                ragReferences.length > 0 || isAutoRagEnabled
-                  ? "1px solid rgba(59, 130, 246, 0.35)"
-                  : "1px solid transparent",
-              background:
-                ragReferences.length > 0 || isAutoRagEnabled
-                  ? "rgba(37, 99, 235, 0.12)"
-                  : "var(--color-surface-container, #f1f3f4)",
-              color:
-                ragReferences.length > 0 || isAutoRagEnabled
-                  ? "#2563eb"
-                  : "var(--text-muted, #64748b)",
-              transition: "all 0.15s ease",
-              whiteSpace: "nowrap",
-            }}
-            title="Buscar e anexar fragmentos de outros documentos do projeto (Mini-RAG Local)"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{
-                fontSize: "14px",
-                color:
-                  ragReferences.length > 0 || isAutoRagEnabled
-                    ? "#2563eb"
-                    : "#64748b",
-              }}
-            >
-              manage_search
-            </span>
-            <span>
-              RAG
-              {ragReferences.length > 0
-                ? ` (${ragReferences.length})`
-                : isAutoRagEnabled
-                  ? " (Auto)"
-                  : ""}
-            </span>
-          </button>
-        </div>
-
-        {/* Right Header Action Icons */}
-        <div
-          className="ai-copilot-header-right"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            flexShrink: 0,
+        {/* RAG Search Button */}
+        <IconButton
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            const { isRagModalOpen, closeRagModal } =
+              useCopilotStore.getState();
+            if (isRagModalOpen) {
+              closeRagModal();
+            } else {
+              openRagModal();
+            }
           }}
-        >
-          <IconButton
-            size="sm"
-            variant="ghost"
-            title="Novo Chat — Iniciar nova conversa (arquiva a anterior no histórico)"
-            onClick={newChatSession}
-            icon={
+          style={
+            ragReferences.length > 0 || isAutoRagEnabled
+              ? {
+                  background: "rgba(37, 99, 235, 0.12)",
+                  color: "var(--color-primary, #2563eb)",
+                }
+              : undefined
+          }
+          title={
+            ragReferences.length > 0
+              ? `RAG (${ragReferences.length} referência(s)) — Buscar e anexar fragmentos de documentos`
+              : isAutoRagEnabled
+                ? "RAG (Auto) — Busca automática ativa"
+                : "RAG — Buscar e anexar fragmentos de outros documentos do projeto"
+          }
+          icon={
+            <span style={{ position: "relative", display: "inline-flex" }}>
               <span className="material-symbols-outlined icon-sm">
-                add_comment
+                manage_search
               </span>
-            }
-          />
+              {ragReferences.length > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "-4px",
+                    right: "-6px",
+                    minWidth: "14px",
+                    height: "14px",
+                    padding: "0 3px",
+                    borderRadius: "999px",
+                    background: "var(--color-primary, #2563eb)",
+                    color: "#ffffff",
+                    fontSize: "9px",
+                    fontWeight: 700,
+                    lineHeight: "14px",
+                    textAlign: "center",
+                  }}
+                >
+                  {ragReferences.length}
+                </span>
+              )}
+            </span>
+          }
+        />
 
-          <IconButton
-            size="sm"
-            variant="ghost"
-            title="Telemetria & Logs (Tokens, custos, payloads e chamadas de ferramentas)"
-            onClick={onOpenRaw}
-            icon={
-              <span className="material-symbols-outlined icon-sm">
-                query_stats
-              </span>
-            }
-          />
-
-          <IconButton
-            size="sm"
-            variant="ghost"
-            title="Linha de Raciocínio & Histórico de Sessões"
-            onClick={onOpenHistory}
-            icon={
-              <span className="material-symbols-outlined icon-sm">history</span>
-            }
-          />
-
-          <IconButton
-            size="sm"
-            variant="ghost"
-            title="Recolher Assistente"
-            onClick={onClose}
-            icon={
-              <span className="material-symbols-outlined icon-sm">close</span>
-            }
-          />
-        </div>
-      </div>
-
-      {/* 2. Unified Lightweight Context, Prompts & Skills Bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-          padding: "5px 10px",
-          borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
-          background: "var(--color-surface, #ffffff)",
-          position: "relative",
-          zIndex: 20,
-          flexWrap: "wrap",
-        }}
-      >
         {/* Contexto */}
-        <button
-          type="button"
+        <IconButton
+          size="sm"
+          variant="ghost"
           onClick={onOpenContext}
+          style={
+            referencedDocs.length > 0 && !isGlobalScope
+              ? {
+                  background: "rgba(37, 99, 235, 0.12)",
+                  color: "var(--color-primary, #2563eb)",
+                }
+              : undefined
+          }
           title={
             referencedDocs.length > 0 && !isGlobalScope
-              ? `${referencedDocs.length} item(ns) no contexto. Clique para gerenciar.`
-              : "Anexar arquivos ou pastas ao contexto"
+              ? `Contexto (${referencedDocs.length} item(ns)) — Clique para gerenciar`
+              : "Contexto — Anexar arquivos ou pastas ao contexto"
           }
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            padding: "3px 8px",
-            borderRadius: "7px",
-            border: "none",
-            background:
-              referencedDocs.length > 0 && !isGlobalScope
-                ? "rgba(37, 99, 235, 0.08)"
-                : "transparent",
-            color:
-              referencedDocs.length > 0 && !isGlobalScope
-                ? "var(--color-primary, #2563eb)"
-                : "var(--color-on-surface-variant, #475569)",
-            fontSize: "11.5px",
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-            attachment
-          </span>
-          <span>
-            Contexto
-            {referencedDocs.length > 0 && !isGlobalScope
-              ? ` (${referencedDocs.length})`
-              : ""}
-          </span>
-        </button>
+          icon={
+            <span style={{ position: "relative", display: "inline-flex" }}>
+              <span className="material-symbols-outlined icon-sm">
+                attachment
+              </span>
+              {referencedDocs.length > 0 && !isGlobalScope && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "-4px",
+                    right: "-6px",
+                    minWidth: "14px",
+                    height: "14px",
+                    padding: "0 3px",
+                    borderRadius: "999px",
+                    background: "var(--color-primary, #2563eb)",
+                    color: "#ffffff",
+                    fontSize: "9px",
+                    fontWeight: 700,
+                    lineHeight: "14px",
+                    textAlign: "center",
+                  }}
+                >
+                  {referencedDocs.length}
+                </span>
+              )}
+            </span>
+          }
+        />
 
         {/* Prompts */}
-        <button
-          type="button"
+        <IconButton
+          size="sm"
+          variant="ghost"
           onClick={onOpenPrompt}
-          title="Abrir instruções e prompts do documento/template"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            padding: "3px 8px",
-            borderRadius: "7px",
-            border: "none",
-            background:
-              (templatePrompt && isTemplatePromptEnabled) ||
-              (docPrompt && isDocPromptEnabled)
-                ? "rgba(37, 99, 235, 0.08)"
-                : "transparent",
-            color:
-              (templatePrompt && isTemplatePromptEnabled) ||
-              (docPrompt && isDocPromptEnabled)
-                ? "var(--color-primary, #2563eb)"
-                : "var(--color-on-surface-variant, #475569)",
-            fontSize: "11.5px",
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-            tune
-          </span>
-          <span>Prompts</span>
-        </button>
+          style={
+            (templatePrompt && isTemplatePromptEnabled) ||
+            (docPrompt && isDocPromptEnabled)
+              ? {
+                  background: "rgba(37, 99, 235, 0.12)",
+                  color: "var(--color-primary, #2563eb)",
+                }
+              : undefined
+          }
+          title="Prompts — Abrir instruções e prompts do documento/template"
+          icon={<span className="material-symbols-outlined icon-sm">tune</span>}
+        />
 
         {/* Skills */}
-        <button
-          type="button"
+        <IconButton
+          size="sm"
+          variant="ghost"
           onClick={() => {
             if (onOpenSkills) onOpenSkills();
             else openSkillsModal();
           }}
-          title="Gerenciar skills ativas do Copilot"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            padding: "3px 8px",
-            borderRadius: "7px",
-            border: "none",
-            background:
-              activeSkillIds.length > 0
-                ? "rgba(37, 99, 235, 0.08)"
-                : "transparent",
-            color:
-              activeSkillIds.length > 0
-                ? "var(--color-primary, #2563eb)"
-                : "var(--color-on-surface-variant, #475569)",
-            fontSize: "11.5px",
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-            auto_awesome
-          </span>
-          <span>
-            Skills
-            {activeSkillIds.length > 0 ? ` (${activeSkillIds.length})` : ""}
-          </span>
-        </button>
+          style={
+            activeSkillIds.length > 0
+              ? {
+                  background: "rgba(37, 99, 235, 0.12)",
+                  color: "var(--color-primary, #2563eb)",
+                }
+              : undefined
+          }
+          title={
+            activeSkillIds.length > 0
+              ? `Skills (${activeSkillIds.length} ativa(s)) — Gerenciar skills do Nexos`
+              : "Skills — Gerenciar skills ativas do Nexos"
+          }
+          icon={
+            <span style={{ position: "relative", display: "inline-flex" }}>
+              <span className="material-symbols-outlined icon-sm">
+                extension
+              </span>
+              {activeSkillIds.length > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "-4px",
+                    right: "-6px",
+                    minWidth: "14px",
+                    height: "14px",
+                    padding: "0 3px",
+                    borderRadius: "999px",
+                    background: "var(--color-primary, #2563eb)",
+                    color: "#ffffff",
+                    fontSize: "9px",
+                    fontWeight: 700,
+                    lineHeight: "14px",
+                    textAlign: "center",
+                  }}
+                >
+                  {activeSkillIds.length}
+                </span>
+              )}
+            </span>
+          }
+        />
+        <IconButton
+          size="sm"
+          variant="ghost"
+          title="Novo Chat — Iniciar nova conversa (arquiva a anterior no histórico)"
+          onClick={newChatSession}
+          icon={
+            <span className="material-symbols-outlined icon-sm">
+              add_comment
+            </span>
+          }
+        />
+
+        <IconButton
+          size="sm"
+          variant="ghost"
+          title="Telemetria & Logs (Tokens, custos, payloads e chamadas de ferramentas)"
+          onClick={onOpenRaw}
+          icon={
+            <span className="material-symbols-outlined icon-sm">
+              query_stats
+            </span>
+          }
+        />
+
+        <IconButton
+          size="sm"
+          variant="ghost"
+          title="Linha de Raciocínio & Histórico de Sessões"
+          onClick={onOpenHistory}
+          icon={
+            <span className="material-symbols-outlined icon-sm">history</span>
+          }
+        />
+
+        <IconButton
+          size="sm"
+          variant="ghost"
+          style={{ marginLeft: "auto" }}
+          title="Recolher Assistente"
+          onClick={onClose}
+          icon={
+            <span className="material-symbols-outlined icon-sm">close</span>
+          }
+        />
       </div>
 
       {/* 3. Scrollable Message History Stream with Robust Scroll Management */}
@@ -904,114 +866,125 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             <p style={{ margin: 0 }}>
               {isGlobalScope || referencedDocs.length === 0
                 ? "🌐 Operando em Modo Global. Posso responder sobre todo o repositório, cruzar arquivos ou criar novas especificações. Para focar em um arquivo específico, anexe-o na barra acima!"
-                : `Pareando com você em ${referencedDocs.length > 1 ? `${referencedDocs.length} documentos` : referencedDocs[0]}. Pergunte, solicite refatorações ou use o alvo (🎯) para capturar trechos da tela!`}
+                : `Pareando com você em ${referencedDocs.length > 1 ? `${referencedDocs.length} documentos` : referencedDocs[0]}. Pergunte, solicite refatorações capture trechos da tela!`}
             </p>
           </div>
         </div>
 
         {/* Guided Connection Card when no CLI or API Key is ready */}
-        {messages.length === 0 && !isActiveConnectionReady && !isCheckingProviders && (
-          <div
-            style={{
-              margin: "8px 4px",
-              padding: "12px 14px",
-              borderRadius: "10px",
-              border: "1px solid var(--color-outline-variant, #cbd5e1)",
-              background: "var(--color-surface-container, #f8fafc)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-              fontSize: "12px",
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: "13px" }}>
-              {isRawMode ? "Modo RAW requer uma Chave de API" : "Conecte uma IA para começar"}
-            </div>
-            <p
+        {messages.length === 0 &&
+          !isActiveConnectionReady &&
+          !isCheckingProviders && (
+            <div
               style={{
-                margin: 0,
-                color: "var(--text-muted, #64748b)",
-                lineHeight: 1.45,
+                margin: "8px 4px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                background: "var(--color-surface-container, #f8fafc)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                fontSize: "12px",
               }}
             >
-              {isRawMode
-                ? "O modo RAW faz chamadas diretas via API sem usar o harness da CLI. Informe uma Chave de API para continuar ou volte para o modo Harness."
-                : "Use uma CLI instalada no computador (com agentes e harness) ou informe uma Chave de API."}
-            </p>
+              <div style={{ fontWeight: 600, fontSize: "13px" }}>
+                {isRawMode
+                  ? "Modo RAW requer uma Chave de API"
+                  : "Conecte uma IA para começar"}
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--text-muted, #64748b)",
+                  lineHeight: 1.45,
+                }}
+              >
+                {isRawMode
+                  ? "O modo RAW faz chamadas diretas via API sem usar o harness da CLI. Informe uma Chave de API para continuar ou volte para o modo Harness."
+                  : "Use uma CLI instalada no computador (com agentes e harness) ou informe uma Chave de API."}
+              </p>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {["antigravity", "claude-code"].map((id) => {
-                const p = detectedProviders.find((item) => item.id === id);
-                const ok = Boolean(p?.isAvailable && p?.isAuthenticated);
-                const label = id === "antigravity" ? "Antigravity (agy)" : "Claude Code (claude)";
-                return (
-                  <span
-                    key={id}
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: "999px",
-                      fontSize: "11px",
-                      fontWeight: 500,
-                      background: ok ? "rgba(34, 197, 94, 0.14)" : "rgba(148, 163, 184, 0.16)",
-                      color: ok ? "#16a34a" : "var(--text-muted, #64748b)",
-                    }}
-                  >
-                    {ok ? "✓" : "○"} {label}
-                  </span>
-                );
-              })}
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  fontSize: "11px",
-                  fontWeight: 500,
-                  background: isApiConfigured
-                    ? "rgba(34, 197, 94, 0.14)"
-                    : "rgba(148, 163, 184, 0.16)",
-                  color: isApiConfigured ? "#16a34a" : "var(--text-muted, #64748b)",
-                }}
-              >
-                {isApiConfigured ? "✓" : "○"} Chave de API
-              </span>
-            </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {["antigravity", "claude-code"].map((id) => {
+                  const p = detectedProviders.find((item) => item.id === id);
+                  const ok = Boolean(p?.isAvailable && p?.isAuthenticated);
+                  const label =
+                    id === "antigravity"
+                      ? "Antigravity (agy)"
+                      : "Claude Code (claude)";
+                  return (
+                    <span
+                      key={id}
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        fontSize: "11px",
+                        fontWeight: 500,
+                        background: ok
+                          ? "rgba(34, 197, 94, 0.14)"
+                          : "rgba(148, 163, 184, 0.16)",
+                        color: ok ? "#16a34a" : "var(--text-muted, #64748b)",
+                      }}
+                    >
+                      {ok ? "✓" : "○"} {label}
+                    </span>
+                  );
+                })}
+                <span
+                  style={{
+                    padding: "2px 8px",
+                    borderRadius: "999px",
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    background: isApiConfigured
+                      ? "rgba(34, 197, 94, 0.14)"
+                      : "rgba(148, 163, 184, 0.16)",
+                    color: isApiConfigured
+                      ? "#16a34a"
+                      : "var(--text-muted, #64748b)",
+                  }}
+                >
+                  {isApiConfigured ? "✓" : "○"} Chave de API
+                </span>
+              </div>
 
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={openSettingsModal}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#10b981",
-                  color: "#ffffff",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Configurar Conexão
-              </button>
-              <button
-                type="button"
-                onClick={checkProviders}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                  background: "transparent",
-                  color: "inherit",
-                  fontSize: "12px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                }}
-              >
-                Verificar novamente
-              </button>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={openSettingsModal}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: "#10b981",
+                    color: "#ffffff",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Configurar Conexão
+                </button>
+                <button
+                  type="button"
+                  onClick={checkProviders}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                    background: "transparent",
+                    color: "inherit",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Verificar novamente
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Dynamic Messages */}
         {messages.map((msg) => (
@@ -1038,8 +1011,15 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                       />
                     </a>
                   ) : (
-                    <span key={att.id} className="chat-bubble-attachment-file" title={att.mimeType}>
-                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                    <span
+                      key={att.id}
+                      className="chat-bubble-attachment-file"
+                      title={att.mimeType}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "14px" }}
+                      >
                         {att.mimeType.startsWith("video/")
                           ? "movie"
                           : att.mimeType.startsWith("audio/")
@@ -1050,7 +1030,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                       </span>
                       <span>{att.name}</span>
                     </span>
-                  )
+                  ),
                 )}
               </div>
             )}
@@ -1376,7 +1356,10 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           <div id="ai-inspector-toast-banner">
             <span
               className="material-symbols-outlined"
-              style={{ color: "var(--color-primary, #2563eb)", fontSize: "18px" }}
+              style={{
+                color: "var(--color-primary, #2563eb)",
+                fontSize: "18px",
+              }}
             >
               ads_click
             </span>
@@ -1391,7 +1374,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
               ESC
             </span>
           </div>,
-          document.body
+          document.body,
         )}
 
       {/* 5. Full-Width Prompt Container */}
@@ -1486,9 +1469,17 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         {pendingAttachments.length > 0 && (
           <div className="ai-media-preview-strip">
             {pendingAttachments.map((att) => (
-              <div key={att.id} className="ai-media-chip" title={`${att.name} (${att.mimeType})`}>
+              <div
+                key={att.id}
+                className="ai-media-chip"
+                title={`${att.name} (${att.mimeType})`}
+              >
                 {att.mimeType.startsWith("image/") && att.previewUrl ? (
-                  <img src={att.previewUrl} alt={att.name} className="ai-media-chip-thumb" />
+                  <img
+                    src={att.previewUrl}
+                    alt={att.name}
+                    className="ai-media-chip-thumb"
+                  />
                 ) : (
                   <span className="material-symbols-outlined ai-media-chip-icon">
                     {att.mimeType.startsWith("video/")
@@ -1507,7 +1498,10 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   onClick={() => removePendingAttachment(att.id)}
                   title="Remover anexo"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "13px" }}
+                  >
                     close
                   </span>
                 </button>
@@ -1569,7 +1563,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         <textarea
           ref={textareaRef}
           className="ai-copilot-textarea"
-          placeholder="Mensagem para o Agente... (Cole imagens/mídias ou Shift+Enter para nova linha)"
+          placeholder="Mensagem para o Agente... (Cole imagens/mídias ou Cmd+Enter para enviar)"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -1653,7 +1647,10 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                         agent_model: modelId,
                         ...(effort ? { agent_effort: effort } : {}),
                       }
-                    : { default_provider: "claude-code", claude_model: modelId },
+                    : {
+                        default_provider: "claude-code",
+                        claude_model: modelId,
+                      },
                 );
               }}
               onSelectEffort={(effort) =>
@@ -1664,7 +1661,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           </div>
 
           <div className="ai-input-actions-right">
-            {!isThinking && <span className="ai-input-hint">Enter ↵</span>}
+            {!isThinking && <span className="ai-input-hint">⌘ + Enter ↵</span>}
             {isThinking ? (
               <IconButton
                 size="sm"
@@ -1693,7 +1690,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 title={
                   isRawMode && !isApiConfigured
                     ? "Configure uma Chave de API para usar o modo RAW"
-                    : "Enviar mensagem (Enter)"
+                    : "Enviar mensagem (Cmd+Enter)"
                 }
                 icon={
                   <span

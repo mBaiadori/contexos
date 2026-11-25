@@ -101,7 +101,7 @@ export class BubbleMenuEngine {
         <span>Link do Trecho</span>
       </button>
       <div class="bubble-divider"></div>
-      <button type="button" class="bubble-btn ai-btn" data-action="ask-ai" title="Consultar / Refatorar com IA Copilot" style="color: var(--primary, #2563eb); display: inline-flex; align-items: center; gap: 3px; font-weight: 600; font-size: 11.5px; padding: 2px 7px;">
+      <button type="button" class="bubble-btn ai-btn" data-action="ask-ai" title="Consultar / Refatorar com Nexos" style="color: var(--primary, #2563eb); display: inline-flex; align-items: center; gap: 3px; font-weight: 600; font-size: 11.5px; padding: 2px 7px;">
         <span class="material-symbols-outlined icon-xs">auto_awesome</span>
         <span>Perguntar à IA</span>
       </button>

@@ -507,7 +507,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
               <div className="ui-empty-state" style={{ padding: "30px 16px" }}>
                 <span className="ui-text-muted" style={{ fontSize: "12px" }}>
                   {currentTurns.length === 0
-                    ? "Nenhuma mensagem registrada nesta sessão do Copilot ainda."
+                    ? "Nenhuma mensagem registrada nesta sessão do Nexos ainda."
                     : "Nenhuma mensagem corresponde à busca."}
                 </span>
               </div>

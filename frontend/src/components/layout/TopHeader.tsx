@@ -336,9 +336,9 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
             size="sm"
             leftIcon={<Sparkles size={16} />}
             onClick={onToggleCopilot}
-            title="Abrir Assistente & Copilot IA em Qualquer Tela"
+            title="Abrir Nexos em Qualquer Tela"
           >
-            Copilot IA
+            Nexos
           </Button>
 
           <Button

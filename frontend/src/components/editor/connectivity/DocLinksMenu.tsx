@@ -19,6 +19,7 @@ export interface DocLinksMenuProps {
   setShowDeps: (show: boolean) => void;
   onNavigateFile: (path: string) => void;
   onOpenAddLinkModal: (type: "dependency" | "consumer") => void;
+  onRemoveLink?: (targetPath: string, type: "dependency" | "consumer") => void;
   onCloseOtherPickers?: () => void;
 }
 
@@ -31,6 +32,7 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
   setShowDeps,
   onNavigateFile,
   onOpenAddLinkModal,
+  onRemoveLink,
 }) => {
   return (
     <>
@@ -266,20 +268,50 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                         {item.title || item.path || ""}
                       </span>
                     </div>
-                    {item.categories && (
-                      <span
-                        style={{
-                          fontSize: "9.5px",
-                          padding: "1px 4px",
-                          borderRadius: "3px",
-                          background: "rgba(0,0,0,0.06)",
-                          color: "#64748b",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {item.categories}
-                      </span>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                      {item.categories && (
+                        <span
+                          style={{
+                            fontSize: "9.5px",
+                            padding: "1px 4px",
+                            borderRadius: "3px",
+                            background: "rgba(0,0,0,0.06)",
+                            color: "#64748b",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.categories}
+                        </span>
+                      )}
+                      {onRemoveLink && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const targetPath = item.path || item.filePath || "";
+                            if (targetPath) {
+                              onRemoveLink(targetPath, "dependency");
+                            }
+                          }}
+                          title="Remover link"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "none",
+                            background: "transparent",
+                            color: "#94a3b8",
+                            borderRadius: "4px",
+                            padding: "2px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                            close
+                          </span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   );
                 })}
@@ -512,20 +544,50 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                         {item.title || item.path || ""}
                       </span>
                     </div>
-                    {item.categories && (
-                      <span
-                        style={{
-                          fontSize: "9.5px",
-                          padding: "1px 4px",
-                          borderRadius: "3px",
-                          background: "rgba(0,0,0,0.06)",
-                          color: "#64748b",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {item.categories}
-                      </span>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                      {item.categories && (
+                        <span
+                          style={{
+                            fontSize: "9.5px",
+                            padding: "1px 4px",
+                            borderRadius: "3px",
+                            background: "rgba(0,0,0,0.06)",
+                            color: "#64748b",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.categories}
+                        </span>
+                      )}
+                      {onRemoveLink && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const targetPath = item.path || item.filePath || "";
+                            if (targetPath) {
+                              onRemoveLink(targetPath, "dependency");
+                            }
+                          }}
+                          title="Remover link"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "none",
+                            background: "transparent",
+                            color: "#94a3b8",
+                            borderRadius: "4px",
+                            padding: "2px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                            close
+                          </span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   );
                 })}

@@ -22,13 +22,62 @@ interface ProviderGroup {
   models: ModelItem[];
 }
 
+export type AgentEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
+const EFFORT_ORDER: Record<string, number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+  xhigh: 3,
+  max: 4,
+};
+
+function parseEffortFromBadge(badge?: string): AgentEffort | undefined {
+  if (!badge) return undefined;
+  const normalized = badge.trim().toLowerCase();
+  if (normalized in EFFORT_ORDER) {
+    return normalized as AgentEffort;
+  }
+  return undefined;
+}
+
+interface AgyModelGroup {
+  name: string;
+  variants: ModelItem[];
+  hasEffortVariants: boolean;
+}
+
+function groupAgyModels(models: ModelItem[]): AgyModelGroup[] {
+  const groups = new Map<string, ModelItem[]>();
+  for (const model of models) {
+    const existing = groups.get(model.name);
+    if (existing) {
+      existing.push(model);
+    } else {
+      groups.set(model.name, [model]);
+    }
+  }
+
+  return Array.from(groups.entries()).map(([name, variants]) => {
+    const hasEffortVariants = variants.some((v) => Boolean(parseEffortFromBadge(v.badge)));
+    const sortedVariants = hasEffortVariants
+      ? [...variants].sort((a, b) => {
+          const ordA = EFFORT_ORDER[(a.badge || "").trim().toLowerCase()] ?? 99;
+          const ordB = EFFORT_ORDER[(b.badge || "").trim().toLowerCase()] ?? 99;
+          return ordA - ordB;
+        })
+      : variants;
+    return { name, variants: sortedVariants, hasEffortVariants };
+  });
+}
+
 interface CopilotModelSelectorProps {
   activeModel: string;
   activeProvider: string;
   activeProviderId: string;
   agentModel?: string;
   claudeModel?: string;
-  agentEffort?: "low" | "medium" | "high";
+  agentEffort?: AgentEffort;
   detectedProviders?: DetectedProviderInfo[];
   isApiConfigured?: boolean;
   onSelectModel: (provider: string, modelId: string) => void;
@@ -36,9 +85,9 @@ interface CopilotModelSelectorProps {
   onSelectCliModel: (
     providerId: "antigravity" | "claude-code",
     modelId: string,
-    effort?: "low" | "medium" | "high",
+    effort?: AgentEffort,
   ) => void;
-  onSelectEffort?: (effort: "low" | "medium" | "high") => void;
+  onSelectEffort?: (effort: AgentEffort) => void;
   onOpenSettings: () => void;
 }
 
@@ -144,21 +193,31 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
       ? claudeInfo.models
       : FALLBACK_CLAUDE_CLI_MODELS;
 
+  const agyGroups = groupAgyModels(agyModels);
+
   const isCliMode =
     activeProviderId === "antigravity" || activeProviderId === "claude-code";
 
-  const formatEffortLabel = (eff: "low" | "medium" | "high") =>
-    eff.charAt(0).toUpperCase() + eff.slice(1);
+  const formatEffortLabel = (eff: AgentEffort) =>
+    eff.toLowerCase() === "xhigh"
+      ? "XHigh"
+      : eff.charAt(0).toUpperCase() + eff.slice(1);
 
   // Resolve human-readable label for the trigger pill
   const getTriggerLabel = (): { prefix: string; label: string } => {
     if (activeProviderId === "antigravity") {
       const found = agyModels.find((m) => m.id === agentModel);
+      if (found) {
+        return {
+          prefix: "agy",
+          label: found.badge ? `${found.name} ${found.badge}` : found.name,
+        };
+      }
       const effortLabel = formatEffortLabel(agentEffort);
-      const label = found
-        ? `${found.name} ${effortLabel}`
-        : `${agentModel || "Modelo padrão"} ${effortLabel}`;
-      return { prefix: "agy", label };
+      return {
+        prefix: "agy",
+        label: `${agentModel || "Modelo padrão"} ${effortLabel}`,
+      };
     }
     if (activeProviderId === "claude-code") {
       const found = claudeModels.find((m) => m.id === claudeModel);
@@ -484,24 +543,46 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
 
             {activeProviderId === "antigravity" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                {agyModels.map((m) => {
-                  const isSelected = agentModel === m.id;
-                  const isSubmenuOpen = hoveredAgyModelId === m.id;
-                  const effortLabel = formatEffortLabel(agentEffort);
+                {agyGroups.map((group) => {
+                  const selectedVariant = group.variants.find((v) => v.id === agentModel);
+                  const isSelected = Boolean(selectedVariant);
+                  const hasMultipleVariants = group.variants.length > 1;
+                  const isSubmenuOpen = hasMultipleVariants && hoveredAgyModelId === group.name;
+
+                  const pickDefaultVariant = (): ModelItem => {
+                    if (selectedVariant) return selectedVariant;
+                    if (group.hasEffortVariants) {
+                      const matchingEffort = group.variants.find(
+                        (v) => parseEffortFromBadge(v.badge) === agentEffort,
+                      );
+                      if (matchingEffort) return matchingEffort;
+                      const mediumVariant = group.variants.find(
+                        (v) => parseEffortFromBadge(v.badge) === "medium",
+                      );
+                      if (mediumVariant) return mediumVariant;
+                    }
+                    return group.variants[0];
+                  };
+
+                  const activeBadge = selectedVariant?.badge ?? (!hasMultipleVariants ? group.variants[0]?.badge : undefined);
 
                   return (
                     <div
-                      key={m.id}
+                      key={group.name}
                       style={{ position: "relative" }}
-                      onMouseEnter={() => setHoveredAgyModelId(m.id)}
+                      onMouseEnter={() => {
+                        if (hasMultipleVariants) setHoveredAgyModelId(group.name);
+                      }}
                       onMouseLeave={() =>
-                        setHoveredAgyModelId((prev) => (prev === m.id ? null : prev))
+                        setHoveredAgyModelId((prev) => (prev === group.name ? null : prev))
                       }
                     >
                       <button
                         type="button"
                         onClick={() => {
-                          onSelectCliModel("antigravity", m.id);
+                          const targetVariant = pickDefaultVariant();
+                          const targetEffort = parseEffortFromBadge(targetVariant.badge);
+                          onSelectCliModel("antigravity", targetVariant.id, targetEffort);
                           setIsOpen(false);
                           setHoveredAgyModelId(null);
                         }}
@@ -545,21 +626,25 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                               whiteSpace: "nowrap",
                             }}
                           >
-                            {m.name}
+                            {group.name}
                           </span>
-                          {isSelected && (
+                          {activeBadge && (
                             <span
                               style={{
                                 fontSize: "9.5px",
                                 padding: "1px 6px",
                                 borderRadius: "999px",
-                                background: "rgba(37, 99, 235, 0.12)",
-                                color: "var(--color-primary, #2563eb)",
+                                background: isSelected
+                                  ? "rgba(37, 99, 235, 0.12)"
+                                  : "rgba(15, 23, 42, 0.06)",
+                                color: isSelected
+                                  ? "var(--color-primary, #2563eb)"
+                                  : "var(--text-muted, #64748b)",
                                 flexShrink: 0,
                                 fontWeight: 500,
                               }}
                             >
-                              {effortLabel}
+                              {activeBadge}
                             </span>
                           )}
                         </div>
@@ -576,20 +661,22 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                               check
                             </span>
                           )}
-                          <span
-                            className="material-symbols-outlined"
-                            style={{
-                              fontSize: "15px",
-                              color: "var(--text-muted, #94a3b8)",
-                            }}
-                          >
-                            chevron_right
-                          </span>
+                          {hasMultipleVariants && (
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: "15px",
+                                color: "var(--text-muted, #94a3b8)",
+                              }}
+                            >
+                              chevron_right
+                            </span>
+                          )}
                         </div>
                       </button>
 
-                      {/* Thinking Effort Submenu (opens to the left so it never clips off the right edge) */}
-                      {isSubmenuOpen && onSelectEffort && (
+                      {/* Dynamic Variants / Effort Submenu from harness model list */}
+                      {isSubmenuOpen && (
                         <div
                           style={{
                             position: "absolute",
@@ -615,18 +702,18 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                               padding: "3px 8px 5px",
                             }}
                           >
-                            Thinking effort
+                            {group.hasEffortVariants ? "Thinking effort" : "Variante"}
                           </div>
-                          {(["low", "medium", "high"] as const).map((eff) => {
-                            const isEffActive = isSelected && agentEffort === eff;
-                            const isCurrentEffort = agentEffort === eff;
+                          {group.variants.map((variant) => {
+                            const isVariantActive = agentModel === variant.id;
+                            const variantEffort = parseEffortFromBadge(variant.badge);
                             return (
                               <button
-                                key={eff}
+                                key={variant.id}
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onSelectCliModel("antigravity", m.id, eff);
+                                  onSelectCliModel("antigravity", variant.id, variantEffort);
                                   setIsOpen(false);
                                   setHoveredAgyModelId(null);
                                 }}
@@ -637,28 +724,26 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                                   padding: "6px 8px",
                                   borderRadius: "7px",
                                   border: "none",
-                                  background: isEffActive
+                                  background: isVariantActive
                                     ? "rgba(37, 99, 235, 0.08)"
                                     : "transparent",
-                                  color: isEffActive
+                                  color: isVariantActive
                                     ? "var(--color-primary, #2563eb)"
                                     : "var(--color-on-surface, #1e293b)",
                                   fontSize: "12px",
-                                  fontWeight: isEffActive ? 600 : 400,
+                                  fontWeight: isVariantActive ? 600 : 400,
                                   cursor: "pointer",
                                   textAlign: "left",
                                   width: "100%",
                                 }}
                               >
-                                <span style={{ textTransform: "capitalize" }}>{eff}</span>
-                                {isCurrentEffort && (
+                                <span>{variant.badge || variant.id}</span>
+                                {isVariantActive && (
                                   <span
                                     className="material-symbols-outlined"
                                     style={{
                                       fontSize: "15px",
-                                      color: isEffActive
-                                        ? "var(--color-primary, #2563eb)"
-                                        : "var(--text-muted, #64748b)",
+                                      color: "var(--color-primary, #2563eb)",
                                     }}
                                   >
                                     check
