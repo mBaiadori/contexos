@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import * as esbuild from 'esbuild';
 import bytenode from 'bytenode';
 
@@ -46,6 +47,11 @@ async function compileProjectBytecode() {
         '@napi-rs/keyring-*',
       ],
     });
+
+    // 1.5. Copiar sql-wasm.wasm para junto do bundle de produção (necessário para sql.js)
+    const serverRequire = createRequire(path.resolve(serverSrcDir, '../package.json'));
+    const sqlWasmSrc = serverRequire.resolve('sql.js/dist/sql-wasm.wasm');
+    fs.copyFileSync(sqlWasmSrc, path.join(serverDistDir, 'sql-wasm.wasm'));
 
     // 2. Compilação adicional para V8 Bytecode (.jsc)
     console.log('  🔒 2/2 Compilando binário V8 Bytecode (.jsc)...');

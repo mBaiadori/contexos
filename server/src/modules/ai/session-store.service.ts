@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js';
 import { BASE_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
@@ -124,7 +125,10 @@ let sharedSqlJsPromise: Promise<SqlJsStatic> | null = null;
 
 async function loadSqlJs(): Promise<SqlJsStatic> {
   if (!sharedSqlJsPromise) {
-    const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
+    const localWasmPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'sql-wasm.wasm');
+    const wasmPath = fs.existsSync(localWasmPath)
+      ? localWasmPath
+      : require.resolve('sql.js/dist/sql-wasm.wasm');
     const buf = fs.readFileSync(wasmPath);
     const wasmBinary = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     sharedSqlJsPromise = initSqlJs({ wasmBinary });
