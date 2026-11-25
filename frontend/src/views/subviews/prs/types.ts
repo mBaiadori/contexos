@@ -35,5 +35,12 @@ export interface ActionFeedbackState {
 export interface ActiveConflictPR {
   pr: PR;
   filePath: string;
-  bundle: any;
+  bundle: {
+    baseContent: string;
+    oursContent: string;
+    theirsContent: string;
+    mergedContentWithMarkers?: string;
+    hasConflicts?: boolean;
+    [key: string]: unknown;
+  };
 }

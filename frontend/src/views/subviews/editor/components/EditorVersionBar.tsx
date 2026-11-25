@@ -166,8 +166,8 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
       } else {
         setFeedback({ type: "error", text: res?.message || "Não foi possível salvar o checkpoint." });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", text: err?.message || "Erro ao salvar checkpoint." });
+    } catch (err: unknown) {
+      setFeedback({ type: "error", text: err instanceof Error ? err.message : "Erro ao salvar checkpoint." });
     } finally {
       setIsSavingCheckpoint(false);
     }
@@ -230,8 +230,8 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
         const errMsg = res?.message || "Não foi possível criar o rascunho de versão.";
         setDraftError(errMsg);
       }
-    } catch (err: any) {
-      setDraftError(err?.message || "Erro ao criar rascunho de versão.");
+    } catch (err: unknown) {
+      setDraftError(err instanceof Error ? err.message : "Erro ao criar rascunho de versão.");
     } finally {
       setIsBranchBusy(false);
     }

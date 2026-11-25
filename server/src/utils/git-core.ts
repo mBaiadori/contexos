@@ -239,11 +239,11 @@ export function getActiveBearerToken(explicitToken?: string): string | null {
       return cfg.token.trim();
     }
     if (Array.isArray(cfg?.accounts) && cfg.accounts.length > 0) {
-      const active = cfg.accounts.find((a: any) => a.isActive && a.token);
+      const active = cfg.accounts.find((a: { isActive?: boolean; token?: string }) => a.isActive && a.token);
       if (active?.token && active.token.trim() && active.token !== "local_mode") {
         return active.token.trim();
       }
-      const firstWithToken = cfg.accounts.find((a: any) => a.token && a.token.trim() && a.token !== "local_mode");
+      const firstWithToken = cfg.accounts.find((a: { isActive?: boolean; token?: string }) => a.token && a.token.trim() && a.token !== "local_mode");
       if (firstWithToken?.token) {
         return firstWithToken.token.trim();
       }
@@ -284,13 +284,14 @@ export async function executeGit(
       stderr: redactTokens(stderr, activeToken, base64Token).trim(),
       success: true,
     };
-  } catch (error: any) {
-    const stdout = error.stdout
-      ? redactTokens(String(error.stdout), activeToken, base64Token).trim()
+  } catch (error: unknown) {
+    const execErr = error as { stdout?: unknown; stderr?: unknown; message?: string };
+    const stdout = execErr.stdout
+      ? redactTokens(String(execErr.stdout), activeToken, base64Token).trim()
       : "";
-    const stderr = error.stderr
-      ? redactTokens(String(error.stderr), activeToken, base64Token).trim()
-      : redactTokens(error.message || String(error), activeToken, base64Token).trim();
+    const stderr = execErr.stderr
+      ? redactTokens(String(execErr.stderr), activeToken, base64Token).trim()
+      : redactTokens(execErr.message || String(error), activeToken, base64Token).trim();
     return {
       stdout,
       stderr,
@@ -303,9 +304,9 @@ export async function callGitHubAPI(
   endpoint: string,
   token?: string,
   method: string = "GET",
-  data: any = null,
+  data: unknown = null,
   requestOptions?: { silentStatuses?: number[]; timeoutMs?: number },
-): Promise<{ statusCode: number; data: any }> {
+): Promise<{ statusCode: number; data: Record<string, any> }> {
   const url = endpoint.startsWith("http://") || endpoint.startsWith("https://")
     ? endpoint
     : `https://api.github.com${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
@@ -366,7 +367,7 @@ export async function callGitHubAPI(
   try {
     const res = await fetch(url, options);
     clearTimeout(timer);
-    let resData: any = {};
+    let resData: Record<string, any> = {};
     const text = await res.text();
     try {
       resData = text ? JSON.parse(text) : {};
@@ -390,9 +391,10 @@ export async function callGitHubAPI(
       statusCode: res.status,
       data: resData,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearTimeout(timer);
-    const isTimeout = err.name === "AbortError" || err.message?.includes("aborted");
+    const errObj = err as { name?: string; message?: string };
+    const isTimeout = errObj.name === "AbortError" || errObj.message?.includes("aborted");
     if (isTimeout) {
       console.warn(`[GitHub API Timeout] ${method} ${url} excedeu ${timeoutMs}ms.`);
       return {
@@ -402,7 +404,7 @@ export async function callGitHubAPI(
     }
     return {
       statusCode: 500,
-      data: { message: err.message || "Erro de conexão com o GitHub" },
+      data: { message: errObj.message || "Erro de conexão com o GitHub" },
     };
   }
 }
@@ -414,7 +416,7 @@ export async function applyBranchProtection(
   branch: string,
   token: string,
   requiredApprovals: number = 1,
-): Promise<{ statusCode: number; data: any }> {
+): Promise<{ statusCode: number; data: Record<string, any> }> {
   const endpoint = `/repos/${repoFullName}/branches/${branch}/protection`;
   const body = {
     required_status_checks: null,
@@ -445,8 +447,8 @@ export async function checkBranchProtection(
       return { isProtected: true, details: "Proteção ativa no GitHub" };
     }
     return { isProtected: false, details: "Sem proteção ativa" };
-  } catch (e: any) {
-    return { isProtected: false, details: e.message || "Não foi possível verificar" };
+  } catch (e: unknown) {
+    return { isProtected: false, details: e instanceof Error ? e.message : "Não foi possível verificar" };
   }
 }
 

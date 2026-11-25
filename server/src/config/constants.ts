@@ -13,7 +13,10 @@ import {
 
 // Root path of the project (2 levels up from server/src/config or desktop app resources)
 export const USER_DATA_DIR = process.env.CONTEXT_OS_USER_DATA || '';
-export const RESOURCES_DIR = process.env.CONTEXT_OS_RESOURCES || (process as any).resourcesPath || '';
+export const RESOURCES_DIR =
+  process.env.CONTEXT_OS_RESOURCES ||
+  (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ||
+  '';
 
 export interface AISettings {
   provider: string;
@@ -121,13 +124,13 @@ export const DOCS_DIR = path.join(PROJECT_ROOT, "docs");
  * SEMPRE projects/<owner>/<repo>.
  * Determinístico, seguro e livre de heurísticas destrutivas.
  */
-export function resolveRepoDir(repoName: string, ownerOrOrg?: string | { login?: string } | any): string {
+export function resolveRepoDir(repoName: string, ownerOrOrg?: string | { login?: string } | null): string {
   const cleanRepo = (repoName || "").trim();
   const rawOwner =
     typeof ownerOrOrg === "string"
       ? ownerOrOrg
-      : typeof (ownerOrOrg as any)?.login === "string"
-        ? (ownerOrOrg as any).login
+      : typeof ownerOrOrg?.login === "string"
+        ? ownerOrOrg.login
         : undefined;
 
   // Importacao dinamica segura ou construcao direta do path canonico
@@ -239,31 +242,34 @@ export function getCommunityTemplatesPath(): string {
 }
 
 function sanitizeTemplateItem(
-  item: any,
+  item: Partial<ProjectTemplate> & { name?: string; categories?: string; created_at?: string },
   defaultSource: "local" | "community" = "local",
 ): ProjectTemplate {
   const id =
-    item.id ||
+    (typeof item.id === "string" ? item.id : "") ||
     (item.templateName
       ? String(item.templateName).toLowerCase().replace(/\s+/g, "-")
       : `tpl-${Date.now()}`);
-  const templateName = item.templateName || item.name || id;
-  const title = item.title || templateName;
-  const ext = item.ext || "md";
-  const category = item.category || item.categories || "";
+  const templateName = String(item.templateName || item.name || id);
+  const title = String(item.title || templateName);
+  const ext = String(item.ext || "md");
+  const category = String(item.category || item.categories || "");
   const tags = Array.isArray(item.tags)
-    ? item.tags
+    ? item.tags.map(String)
     : item.tags
-      ? [item.tags]
+      ? [String(item.tags)]
       : [];
   const updated_at =
-    item.updated_at || item.created_at || new Date().toISOString();
-  const content = item.content || "";
-  const prompt =
-    item.prompt || item.systemPrompt || item.assistant_prompt || "";
-  const source = item.source || defaultSource;
-  const description = item.description || "";
-  const badge = item.badge || (source === "community" ? "Comunidade" : "Local");
+    String(item.updated_at || item.created_at || new Date().toISOString());
+  const content = String(item.content || "");
+  const prompt = String(
+    item.prompt || item.systemPrompt || item.assistant_prompt || "",
+  );
+  const source = String(item.source || defaultSource);
+  const description = String(item.description || "");
+  const badge = String(
+    item.badge || (source === "community" ? "Comunidade" : "Local"),
+  );
   const skills = Array.isArray(item.skills) ? item.skills : [];
 
   return {
@@ -331,7 +337,10 @@ export function saveProjectTemplates(
   const repoDir = resolveRepoDir(repoName, ownerOrOrg);
   const filePath = path.join(repoDir, ".templates.json");
   const sanitized = items.map((t) =>
-    sanitizeTemplateItem(t, (t.source as any) || "local"),
+    sanitizeTemplateItem(
+      t,
+      t.source === "community" ? "community" : "local",
+    ),
   );
 
   // 1. Grava no .templates.json (compatibilidade e fallback legado)
@@ -387,7 +396,7 @@ export function saveProjectTemplatesMetadata(
   repoName: string,
   items: TemplatesMetadataItem[],
 ): void {
-  saveProjectTemplates(repoName, items as any);
+  saveProjectTemplates(repoName, items as ProjectTemplate[]);
 }
 
 export function loadCanonicalTemplates(): ProjectTemplate[] {

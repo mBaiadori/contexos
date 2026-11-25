@@ -173,11 +173,11 @@ return {
       } else {
         setActionFeedback({
           ok: false,
-          msg: (res.data as any)?.message || "Falha ao instalar skill.",
+          msg: (res.data as { message?: string } | undefined)?.message || "Falha ao instalar skill.",
         });
       }
-    } catch (err: any) {
-      setActionFeedback({ ok: false, msg: err.message || "Erro de conexão." });
+    } catch (err: unknown) {
+      setActionFeedback({ ok: false, msg: err instanceof Error ? err.message : "Erro de conexão." });
     }
   };
 
@@ -194,8 +194,8 @@ return {
         if (activeSkillId === skillId) setActiveSkillId(null);
         setTimeout(() => setActionFeedback(null), 3500);
       }
-    } catch (err: any) {
-      setActionFeedback({ ok: false, msg: err.message || "Erro de conexão." });
+    } catch (err: unknown) {
+      setActionFeedback({ ok: false, msg: err instanceof Error ? err.message : "Erro de conexão." });
     }
   };
 
@@ -217,11 +217,11 @@ return {
       } else {
         setActionFeedback({
           ok: false,
-          msg: (res.data as any)?.message || "Falha ao instalar agente.",
+          msg: (res.data as { message?: string } | undefined)?.message || "Falha ao instalar agente.",
         });
       }
-    } catch (err: any) {
-      setActionFeedback({ ok: false, msg: err.message || "Erro de conexão." });
+    } catch (err: unknown) {
+      setActionFeedback({ ok: false, msg: err instanceof Error ? err.message : "Erro de conexão." });
     }
   };
 
@@ -236,8 +236,8 @@ return {
         if (selectedAgent?.id === agentId) setSelectedAgent(null);
         setTimeout(() => setActionFeedback(null), 3500);
       }
-    } catch (err: any) {
-      setActionFeedback({ ok: false, msg: err.message || "Erro de conexão." });
+    } catch (err: unknown) {
+      setActionFeedback({ ok: false, msg: err instanceof Error ? err.message : "Erro de conexão." });
     }
   };
 
@@ -269,11 +269,11 @@ return {
       } else {
         setToolTestResult({
           success: false,
-          error: (res.data as any)?.error || "Erro na execução da tool.",
+          error: (res.data as { error?: string } | undefined)?.error || "Erro na execução da tool.",
         });
       }
-    } catch (err: any) {
-      setToolTestResult({ success: false, error: err.message });
+    } catch (err: unknown) {
+      setToolTestResult({ success: false, error: err instanceof Error ? err.message : String(err) });
     } finally {
       setIsExecutingTool(false);
     }
@@ -298,10 +298,10 @@ return {
         await loadAllData();
         setTimeout(() => setActionFeedback(null), 3500);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionFeedback({
         ok: false,
-        msg: err.message || "Erro ao salvar MCP.",
+        msg: err instanceof Error ? err.message : "Erro ao salvar MCP.",
       });
     }
   };
@@ -331,10 +331,10 @@ return {
         await loadAllData();
         setTimeout(() => setActionFeedback(null), 3500);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionFeedback({
         ok: false,
-        msg: err.message || "Erro ao cadastrar MCP.",
+        msg: err instanceof Error ? err.message : "Erro ao cadastrar MCP.",
       });
     }
   };
@@ -349,8 +349,8 @@ return {
         await loadAllData();
         setTimeout(() => setActionFeedback(null), 3500);
       }
-    } catch (err: any) {
-      setActionFeedback({ ok: false, msg: err.message || "Erro ao remover." });
+    } catch (err: unknown) {
+      setActionFeedback({ ok: false, msg: err instanceof Error ? err.message : "Erro ao remover." });
     }
   };
 
@@ -406,7 +406,7 @@ return {
         2,
       ),
     );
-    const sampleArgs: any = {};
+    const sampleArgs: Record<string, string> = {};
     if (tool.parameters?.properties) {
       Object.keys(tool.parameters.properties).forEach((k) => {
         sampleArgs[k] = "";
@@ -449,7 +449,7 @@ return {
         name: editingCustomTool.name.trim().replace(/[^a-zA-Z0-9_]/g, "_"),
         title: editingCustomTool.title?.trim() || editingCustomTool.name.trim(),
         description: editingCustomTool.description.trim(),
-        parameters: parsedParams as any,
+        parameters: parsedParams as CustomToolItem["parameters"],
       };
 
       const res = await API.saveCustomTool(payload, activeRepo?.name);
@@ -464,13 +464,13 @@ return {
       } else {
         setActionFeedback({
           ok: false,
-          msg: (res.data as any)?.error || "Erro ao salvar ferramenta.",
+          msg: (res.data as { error?: string } | undefined)?.error || "Erro ao salvar ferramenta.",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionFeedback({
         ok: false,
-        msg: err.message || "Erro de conexão ao salvar ferramenta.",
+        msg: err instanceof Error ? err.message : "Erro de conexão ao salvar ferramenta.",
       });
     }
   };
@@ -493,13 +493,13 @@ return {
       } else {
         setActionFeedback({
           ok: false,
-          msg: (res.data as any)?.error || "Erro ao excluir.",
+          msg: (res.data as { error?: string } | undefined)?.error || "Erro ao excluir.",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionFeedback({
         ok: false,
-        msg: err.message || "Erro de conexão ao excluir ferramenta.",
+        msg: err instanceof Error ? err.message : "Erro de conexão ao excluir ferramenta.",
       });
     }
   };
@@ -530,7 +530,7 @@ return {
 
     const toolPayload: Partial<CustomToolItem> = {
       ...editingCustomTool,
-      parameters: parsedParams as any,
+      parameters: parsedParams as CustomToolItem["parameters"],
     };
 
     try {
@@ -540,9 +540,9 @@ return {
         activeRepo?.name,
       );
       setCustomToolTestOutput(res.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setCustomToolTestOutput({
-        error: err.message || "Erro de execução da ferramenta.",
+        error: err instanceof Error ? err.message : "Erro de execução da ferramenta.",
       });
     } finally {
       setIsTestingCustomTool(false);

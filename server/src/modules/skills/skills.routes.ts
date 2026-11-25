@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { skillsService } from './skills.service.js';
 import { loadConfig } from '../../config/storage.js';
+import type { CustomToolDefinition, MCPServerDefinition } from './skills.types.js';
 
 export async function skillsRoutes(fastify: FastifyInstance) {
   // 1. Listar catálogo global (Hub ECC)
@@ -72,8 +73,8 @@ export async function skillsRoutes(fastify: FastifyInstance) {
         message: `Skill '${body.skill_id}' instalada com sucesso no projeto '${repoName}'.`,
         skill: result.skill,
       });
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -87,8 +88,8 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     try {
       const result = skillsService.uninstallSkill(repoName, params.id);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -113,8 +114,8 @@ export async function skillsRoutes(fastify: FastifyInstance) {
         message: `Skill '${params.id}' customizada com sucesso.`,
         skill: result.skill,
       });
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -142,8 +143,8 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     try {
       const result = aiCenterService.installAgent(repoName, body.agent_id);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -156,8 +157,8 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     try {
       const result = aiCenterService.uninstallAgent(repoName, params.id);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -182,8 +183,8 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     try {
       const result = await aiCenterService.executeToolTest(body.tool_name, body.args || {}, repoName);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -204,15 +205,15 @@ export async function skillsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/aicenter/mcp/save', async (request, reply) => {
-    const body = request.body as { server: any; repo?: string };
+    const body = request.body as { server: MCPServerDefinition; repo?: string };
     const cfg = loadConfig();
     const repoName = body.repo || cfg.active_repo?.name || 'local';
     const { aiCenterService } = await import('./aicenter.service.js');
     try {
       const result = aiCenterService.saveProjectMcpServer(repoName, body.server);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -225,8 +226,8 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     try {
       const result = aiCenterService.removeProjectMcpServer(repoName, params.id);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -341,7 +342,7 @@ export async function skillsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/aicenter/custom-tools', async (request, reply) => {
-    const body = request.body as { tool: any; repo?: string };
+    const body = request.body as { tool: CustomToolDefinition; repo?: string };
     if (!body?.tool?.name || !body?.tool?.description) {
       return reply.status(400).send({ error: 'Nome e descrição da ferramenta são obrigatórios.' });
     }
@@ -351,8 +352,8 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     try {
       const result = customToolsService.saveCustomTool(repoName, body.tool);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -365,21 +366,21 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     try {
       const result = customToolsService.deleteCustomTool(repoName, params.id);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
   fastify.post('/api/aicenter/custom-tools/test', async (request, reply) => {
-    const body = request.body as { tool: any; args?: Record<string, any>; repo?: string };
+    const body = request.body as { tool: CustomToolDefinition; args?: Record<string, unknown>; repo?: string };
     const cfg = loadConfig();
     const repoName = body.repo || cfg.active_repo?.name || 'local';
     const { customToolsService } = await import('./custom-tools.service.js');
     try {
       const result = await customToolsService.executeCustomTool(body.tool, body.args || {}, { repoName });
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 }

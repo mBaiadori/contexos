@@ -6,6 +6,17 @@ import { docsMetadataService } from "../../workspace/docs-metadata.service.js";
 import { dictionaryService } from "../../dictionary/dictionary.service.js";
 import { templatesService } from "../../templates/templates.service.js";
 import { customToolsService } from "../../skills/custom-tools.service.js";
+import type { CustomToolDefinition } from "../../skills/skills.types.js";
+
+interface DictionaryTermEntry {
+  term?: string;
+  name?: string;
+  definition?: string;
+  domain?: string;
+  category?: string;
+  code_name?: string;
+  aliases?: string[];
+}
 import { wikiService } from "../../wiki/wiki.service.js";
 
 import { resolveRepoDir } from "../../../config/constants.js";
@@ -90,8 +101,9 @@ export const nativeTools: AgentTool[] = [
             })),
           },
         };
-      } catch (err: any) {
-        return { success: false, error: `Erro ao obter grafo: ${err.message}` };
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        return { success: false, error: `Erro ao obter grafo: ${errMessage}` };
       }
     },
   },
@@ -133,10 +145,11 @@ export const nativeTools: AgentTool[] = [
             })),
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return {
           success: false,
-          error: `Erro ao filtrar por status: ${err.message}`,
+          error: `Erro ao filtrar por status: ${errMessage}`,
         };
       }
     },
@@ -181,8 +194,9 @@ export const nativeTools: AgentTool[] = [
             size_bytes: Buffer.byteLength(content, "utf-8"),
           },
         };
-      } catch (err: any) {
-        return { success: false, error: `Erro ao ler arquivo: ${err.message}` };
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        return { success: false, error: `Erro ao ler arquivo: ${errMessage}` };
       }
     },
   },
@@ -238,10 +252,11 @@ export const nativeTools: AgentTool[] = [
             timestamp: new Date().toISOString(),
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return {
           success: false,
-          error: `Erro ao gerar proposta de diff: ${err.message}`,
+          error: `Erro ao gerar proposta de diff: ${errMessage}`,
         };
       }
     },
@@ -265,8 +280,8 @@ export const nativeTools: AgentTool[] = [
     execute: async (args, context): Promise<ToolResult> => {
       try {
         const dict = dictionaryService.getDictionary(context.repoName);
-        const terms: any[] = dict.terms || [];
-        const foundTerms: any[] = [];
+        const terms: DictionaryTermEntry[] = dict.terms || [];
+        const foundTerms: Array<{ term?: string; definition?: string; domain?: string }> = [];
         const missingOrMisused: string[] = [];
 
         const lowerText = (args.text_sample || "").toLowerCase();
@@ -290,10 +305,11 @@ export const nativeTools: AgentTool[] = [
             alerts: missingOrMisused,
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return {
           success: false,
-          error: `Erro ao validar termos no dicionário: ${err.message}`,
+          error: `Erro ao validar termos no dicionário: ${errMessage}`,
         };
       }
     },
@@ -365,12 +381,12 @@ export const nativeTools: AgentTool[] = [
 
         const normalizedTermName = args.term.trim();
         const existingIndex = dict.terms.findIndex(
-          (t: any) =>
+          (t: DictionaryTermEntry) =>
             (t.term || t.name || "").toLowerCase() ===
             normalizedTermName.toLowerCase(),
         );
 
-        const updatedEntry: any = {
+        const updatedEntry: DictionaryTermEntry = {
           term: normalizedTermName,
           definition: args.definition.trim(),
           ...(args.domain ? { domain: args.domain.trim() } : {}),
@@ -379,7 +395,7 @@ export const nativeTools: AgentTool[] = [
           ...(Array.isArray(args.aliases)
             ? {
                 aliases: args.aliases
-                  .map((a: any) => String(a).trim())
+                  .map((a: unknown) => String(a).trim())
                   .filter(Boolean),
               }
             : {}),
@@ -415,10 +431,11 @@ export const nativeTools: AgentTool[] = [
             message: `Termo '${normalizedTermName}' ${action === "created" ? "adicionado" : "atualizado"} com sucesso no dicionário.`,
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return {
           success: false,
-          error: `Erro ao salvar termo no dicionário: ${err.message}`,
+          error: `Erro ao salvar termo no dicionário: ${errMessage}`,
         };
       }
     },
@@ -461,10 +478,11 @@ export const nativeTools: AgentTool[] = [
             prompt: tpl.prompt,
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return {
           success: false,
-          error: `Erro ao buscar template: ${err.message}`,
+          error: `Erro ao buscar template: ${errMessage}`,
         };
       }
     },
@@ -507,8 +525,9 @@ export const nativeTools: AgentTool[] = [
             })),
           },
         };
-      } catch (err: any) {
-        return { success: false, error: `Erro ao buscar na Wiki: ${err.message}` };
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        return { success: false, error: `Erro ao buscar na Wiki: ${errMessage}` };
       }
     },
   },
@@ -544,8 +563,9 @@ export const nativeTools: AgentTool[] = [
           success: true,
           data: page,
         };
-      } catch (err: any) {
-        return { success: false, error: `Erro ao ler nota da Wiki: ${err.message}` };
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        return { success: false, error: `Erro ao ler nota da Wiki: ${errMessage}` };
       }
     },
   },
@@ -593,8 +613,9 @@ export const nativeTools: AgentTool[] = [
             page: result.page,
           },
         };
-      } catch (err: any) {
-        return { success: false, error: `Erro ao salvar nota na Wiki: ${err.message}` };
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        return { success: false, error: `Erro ao salvar nota na Wiki: ${errMessage}` };
       }
     },
   },
@@ -624,10 +645,11 @@ export const nativeTools: AgentTool[] = [
             })),
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return {
           success: false,
-          error: `Erro ao listar ferramentas do projeto: ${err.message}`,
+          error: `Erro ao listar ferramentas do projeto: ${errMessage}`,
         };
       }
     },
@@ -696,10 +718,10 @@ export const nativeTools: AgentTool[] = [
           name: args.name,
           title: args.title || args.name,
           description: args.description,
-          category: args.category as any,
+          category: args.category as CustomToolDefinition["category"],
           handler_type: args.handler_type,
           handler_code: args.handler_code,
-          parameters: parsedParameters as any,
+          parameters: parsedParameters as CustomToolDefinition["parameters"],
         });
 
         return {
@@ -709,10 +731,11 @@ export const nativeTools: AgentTool[] = [
             message: `Ferramenta customizada '${res.tool.name}' salva com sucesso no projeto!`,
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return {
           success: false,
-          error: `Erro ao salvar ferramenta no projeto: ${err.message}`,
+          error: `Erro ao salvar ferramenta no projeto: ${errMessage}`,
         };
       }
     },
@@ -742,10 +765,11 @@ export const nativeTools: AgentTool[] = [
           success: res.success,
           data: { message: res.message },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
         return {
           success: false,
-          error: `Erro ao remover ferramenta: ${err.message}`,
+          error: `Erro ao remover ferramenta: ${errMessage}`,
         };
       }
     },

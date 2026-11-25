@@ -392,10 +392,10 @@ export async function createAndCheckoutBranch(
       success: false,
       message: createRes.stderr || "Erro ao criar branch.",
     };
-  } catch (e: any) {
+  } catch (e: unknown) {
     return {
       success: false,
-      message: e?.message || "Erro ao criar branch.",
+      message: e instanceof Error ? e.message : "Erro ao criar branch.",
     };
   }
 }

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type Content, type Part } from '@google/generative-ai';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { PROJECTS_DIR, DEFAULT_GLOBAL_SYSTEM_PROMPT, resolveRepoDir } from '../../config/constants.js';
@@ -54,15 +54,15 @@ export interface RawTurnTelemetryRecord {
     context_files?: Array<{ path: string; size?: number; snippet?: string }>;
     dynamic_context?: string;
     history_messages?: Array<{ role: string; content?: string; text?: string }>;
-    tools_schema?: any[];
-    full_payload?: any;
+    tools_schema?: unknown[];
+    full_payload?: unknown;
   };
   response: {
     reply: string;
-    tool_calls?: any[];
-    stream_events?: any[];
+    tool_calls?: unknown[];
+    stream_events?: unknown[];
     finish_reason?: string;
-    raw_response?: any;
+    raw_response?: unknown;
   };
   metrics: RawTurnMetrics;
 }
@@ -75,10 +75,38 @@ export interface AIExecutionResult {
   steps_count?: number;
   duration_ms?: number;
   usage?: RawTurnMetrics;
-  raw_response?: any;
+  raw_response?: unknown;
 }
 
-export function sanitizeSessionEvents(events: any[]): any[] {
+export interface SessionEventRecord {
+  role: string;
+  text: string;
+  timestamp?: string;
+  content?: string;
+  [key: string]: unknown;
+}
+
+export interface SessionDataRecord {
+  session_id: string;
+  path: string;
+  created_at: string;
+  updated_at: string;
+  author: { name: string; role: string };
+  model: string;
+  events: SessionEventRecord[];
+  telemetry_turns: RawTurnTelemetryRecord[];
+  metrics?: {
+    rounds: number;
+    total_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_cost_usd: number;
+    event_count: number;
+    turns_count: number;
+  };
+}
+
+export function sanitizeSessionEvents(events: SessionEventRecord[]): SessionEventRecord[] {
   if (!Array.isArray(events)) return [];
   return events.map((ev) => {
     if (typeof ev?.text === 'string' && ev.text.includes('Converting circular structure to JSON')) {
@@ -194,14 +222,14 @@ export class AIService {
         ? [{ functionDeclarations: toolRegistry.toGeminiFunctionDeclarations(activeTools) }]
         : undefined;
 
-      const contents: any[] = history
+      const contents: Content[] = history
         .filter((h) => (h.content || h.text) && h.role !== 'system')
         .map((h) => ({
           role: h.role === 'model' || h.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: h.content || h.text || '' }],
         }));
 
-      const geminiUserParts: any[] = [{ text: fullUserPrompt }];
+      const geminiUserParts: Part[] = [{ text: fullUserPrompt }];
       for (const att of attachments) {
         geminiUserParts.push({
           inlineData: {
@@ -223,7 +251,7 @@ export class AIService {
         tools: geminiTools,
       });
 
-      let lastError: any = null;
+      let lastError: unknown = null;
       const maxAttempts = 2;
       let promptTokensReported = 0;
       let completionTokensReported = 0;
@@ -257,12 +285,12 @@ export class AIService {
               parts: response.candidates?.[0]?.content?.parts || [],
             });
 
-            const functionResponseParts = [];
+            const functionResponseParts: Part[] = [];
             for (const call of functionCalls) {
               const toolResult = await toolRegistry.executeTool(call.name, call.args || {}, executionContext);
               executedToolRecords.push({
                 tool: call.name,
-                args: call.args as Record<string, any>,
+                args: call.args as Record<string, unknown>,
                 result: toolResult,
                 timestamp: new Date().toISOString(),
               });
@@ -270,7 +298,7 @@ export class AIService {
               functionResponseParts.push({
                 functionResponse: {
                   name: call.name,
-                  response: toolResult,
+                  response: toolResult as unknown as object,
                 },
               });
             }
@@ -304,9 +332,9 @@ export class AIService {
               duration_ms: durationMs,
             },
           };
-        } catch (err: any) {
+        } catch (err: unknown) {
           lastError = err;
-          const errMsg = String(err?.message || err);
+          const errMsg = err instanceof Error ? err.message : String(err);
           const isOverloaded = errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('429') || errMsg.includes('ResourceExhausted');
 
           if (isOverloaded && attempt < maxAttempts) {
@@ -317,9 +345,11 @@ export class AIService {
         }
       }
 
+      const lastErrMsg =
+        lastError instanceof Error ? lastError.message : String(lastError);
       const durationMs = Date.now() - startTime;
       return {
-        reply: `Erro ao comunicar com Google Gemini (${selectedModelName}): ${lastError?.message || String(lastError)}`,
+        reply: `Erro ao comunicar com Google Gemini (${selectedModelName}): ${lastErrMsg}`,
         provider: 'gemini',
         model: selectedModelName,
         duration_ms: durationMs,
@@ -351,23 +381,23 @@ export class AIService {
       try {
         const client = new OpenAI({ apiKey });
         const openAITools = activeTools.length > 0 ? toolRegistry.toOpenAITools(activeTools) : undefined;
-        const openAIUserContent: any =
+        const openAIUserContent: OpenAI.Chat.ChatCompletionContentPart[] | string =
           attachments.length > 0
             ? [
-                { type: 'text', text: fullUserPrompt },
+                { type: 'text' as const, text: fullUserPrompt },
                 ...attachments.map((att) => {
                   if (att.mimeType.startsWith('image/')) {
                     return {
-                      type: 'image_url',
+                      type: 'image_url' as const,
                       image_url: { url: `data:${att.mimeType};base64,${att.dataBase64}` },
                     };
                   }
                   if (att.mimeType.startsWith('text/') || att.mimeType === 'application/json') {
                     const decoded = Buffer.from(att.dataBase64, 'base64').toString('utf-8');
-                    return { type: 'text', text: `\n[Arquivo anexado: ${att.name}]\n${decoded}` };
+                    return { type: 'text' as const, text: `\n[Arquivo anexado: ${att.name}]\n${decoded}` };
                   }
                   return {
-                    type: 'text',
+                    type: 'text' as const,
                     text: `\n[Mídia anexada: ${att.name} (${att.mimeType}) — não suportada nativamente neste endpoint]`,
                   };
                 }),
@@ -379,7 +409,7 @@ export class AIService {
           ...history
             .filter((h) => h.content || h.text)
             .map((h) => ({
-              role: (h.role === 'model' ? 'assistant' : h.role) as any,
+              role: (h.role === 'model' ? 'assistant' : h.role) as 'user' | 'assistant' | 'system',
               content: h.content || h.text || '',
             })),
           { role: 'user', content: openAIUserContent },
@@ -459,10 +489,10 @@ export class AIService {
             duration_ms: durationMs,
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         const durationMs = Date.now() - startTime;
         return {
-          reply: `Erro OpenAI: ${err.message || String(err)}`,
+          reply: `Erro OpenAI: ${err instanceof Error ? err.message : String(err)}`,
           provider: 'openai',
           model,
           duration_ms: durationMs,
@@ -487,40 +517,40 @@ export class AIService {
       try {
         const client = new Anthropic({ apiKey });
         const anthropicTools = activeTools.length > 0 ? toolRegistry.toAnthropicTools(activeTools) : undefined;
-        const anthropicUserContent: any =
+        const anthropicUserContent: Anthropic.MessageParam['content'] =
           attachments.length > 0
             ? [
                 ...attachments.map((att) => {
                   if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(att.mimeType)) {
                     return {
-                      type: 'image',
+                      type: 'image' as const,
                       source: {
-                        type: 'base64',
-                        media_type: att.mimeType,
+                        type: 'base64' as const,
+                        media_type: att.mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
                         data: att.dataBase64,
                       },
                     };
                   }
                   if (att.mimeType === 'application/pdf') {
                     return {
-                      type: 'document',
+                      type: 'document' as const,
                       source: {
-                        type: 'base64',
-                        media_type: 'application/pdf',
+                        type: 'base64' as const,
+                        media_type: 'application/pdf' as const,
                         data: att.dataBase64,
                       },
                     };
                   }
                   if (att.mimeType.startsWith('text/') || att.mimeType === 'application/json') {
                     const decoded = Buffer.from(att.dataBase64, 'base64').toString('utf-8');
-                    return { type: 'text', text: `[Arquivo anexado: ${att.name}]\n${decoded}` };
+                    return { type: 'text' as const, text: `[Arquivo anexado: ${att.name}]\n${decoded}` };
                   }
                   return {
-                    type: 'text',
+                    type: 'text' as const,
                     text: `[Mídia anexada: ${att.name} (${att.mimeType}) — não suportada nativamente neste endpoint]`,
                   };
                 }),
-                { type: 'text', text: fullUserPrompt },
+                { type: 'text' as const, text: fullUserPrompt },
               ]
             : fullUserPrompt;
 
@@ -555,20 +585,26 @@ export class AIService {
           }
 
           if (response.stop_reason !== 'tool_use') {
-            const textBlock = response.content.find((c: any) => c.type === 'text') as any;
+            const textBlock = response.content.find(
+              (c): c is Anthropic.TextBlock => c.type === 'text',
+            );
             finalReply = textBlock?.text || '';
             break;
           }
 
           messages.push({
             role: 'assistant',
-            content: response.content as any,
+            content: response.content,
           });
 
-          const toolResultBlocks: any[] = [];
+          const toolResultBlocks: Anthropic.ToolResultBlockParam[] = [];
           for (const block of response.content) {
             if (block.type === 'tool_use') {
-              const toolResult = await toolRegistry.executeTool(block.name, (block.input as any) || {}, executionContext);
+              const toolResult = await toolRegistry.executeTool(
+                block.name,
+                (block.input as Record<string, unknown>) || {},
+                executionContext,
+              );
               executedToolRecords.push({
                 tool: block.name,
                 args: block.input as Record<string, any>,
@@ -612,10 +648,10 @@ export class AIService {
             duration_ms: durationMs,
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         const durationMs = Date.now() - startTime;
         return {
-          reply: `Erro Anthropic: ${err.message || String(err)}`,
+          reply: `Erro Anthropic: ${err instanceof Error ? err.message : String(err)}`,
           provider: 'anthropic',
           model,
           duration_ms: durationMs,
@@ -634,23 +670,23 @@ export class AIService {
           apiKey: apiKey || 'ollama',
         });
 
-        const openAIUserContent: any =
+        const openAIUserContent: OpenAI.Chat.ChatCompletionContentPart[] | string =
           attachments.length > 0
             ? [
-                { type: 'text', text: fullUserPrompt },
+                { type: 'text' as const, text: fullUserPrompt },
                 ...attachments.map((att) => {
                   if (att.mimeType.startsWith('image/')) {
                     return {
-                      type: 'image_url',
+                      type: 'image_url' as const,
                       image_url: { url: `data:${att.mimeType};base64,${att.dataBase64}` },
                     };
                   }
                   if (att.mimeType.startsWith('text/') || att.mimeType === 'application/json') {
                     const decoded = Buffer.from(att.dataBase64, 'base64').toString('utf-8');
-                    return { type: 'text', text: `\n[Arquivo anexado: ${att.name}]\n${decoded}` };
+                    return { type: 'text' as const, text: `\n[Arquivo anexado: ${att.name}]\n${decoded}` };
                   }
                   return {
-                    type: 'text',
+                    type: 'text' as const,
                     text: `\n[Mídia anexada: ${att.name} (${att.mimeType}) — não suportada nativamente neste endpoint]`,
                   };
                 }),
@@ -662,7 +698,7 @@ export class AIService {
           ...history
             .filter((h) => h.content || h.text)
             .map((h) => ({
-              role: (h.role === 'model' ? 'assistant' : h.role) as any,
+              role: (h.role === 'model' ? 'assistant' : h.role) as 'user' | 'assistant' | 'system',
               content: h.content || h.text || '',
             })),
           { role: 'user', content: openAIUserContent },
@@ -692,10 +728,10 @@ export class AIService {
             duration_ms: durationMs,
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         const durationMs = Date.now() - startTime;
         return {
-          reply: `Erro Ollama Local (${endpoint}): ${err.message || String(err)}`,
+          reply: `Erro Ollama Local (${endpoint}): ${err instanceof Error ? err.message : String(err)}`,
           provider: 'ollama',
           model,
           duration_ms: durationMs,
@@ -725,7 +761,7 @@ export class AIService {
     fs.mkdirSync(sessionsDir, { recursive: true });
 
     const sessionFile = path.join(sessionsDir, `${sessionId}.json`);
-    let sessionData: any = {
+    let sessionData: SessionDataRecord = {
       session_id: sessionId,
       path: filePath,
       created_at: new Date().toISOString(),
@@ -761,7 +797,7 @@ export class AIService {
 
     if (telemetryTurn) {
       // Verifica se já existe o turno pelo turn_id ou substitui/adiciona
-      const existingIdx = sessionData.telemetry_turns.findIndex((t: any) => t.turn_id === telemetryTurn.turn_id);
+      const existingIdx = sessionData.telemetry_turns.findIndex((t) => t.turn_id === telemetryTurn.turn_id);
       if (existingIdx >= 0) {
         sessionData.telemetry_turns[existingIdx] = telemetryTurn;
       } else {
@@ -771,12 +807,12 @@ export class AIService {
 
     // Calcula métricas consolidadas
     const rounds = Math.ceil(sessionData.events.length / 2);
-    const approxTokens = sessionData.events.reduce((acc: number, ev: any) => acc + Math.ceil((ev.text?.length || 0) / 4), 0);
+    const approxTokens = sessionData.events.reduce((acc, ev) => acc + Math.ceil((ev.text?.length || 0) / 4), 0);
     
-    const totalPromptTokens = sessionData.telemetry_turns.reduce((acc: number, t: any) => acc + (t.metrics?.prompt_tokens || 0), 0);
-    const totalCompletionTokens = sessionData.telemetry_turns.reduce((acc: number, t: any) => acc + (t.metrics?.completion_tokens || 0), 0);
+    const totalPromptTokens = sessionData.telemetry_turns.reduce((acc, t) => acc + (t.metrics?.prompt_tokens || 0), 0);
+    const totalCompletionTokens = sessionData.telemetry_turns.reduce((acc, t) => acc + (t.metrics?.completion_tokens || 0), 0);
     const totalTokens = (totalPromptTokens + totalCompletionTokens) || approxTokens;
-    const totalCostUsd = sessionData.telemetry_turns.reduce((acc: number, t: any) => acc + (t.metrics?.cost_usd || 0), 0);
+    const totalCostUsd = sessionData.telemetry_turns.reduce((acc, t) => acc + (t.metrics?.cost_usd || 0), 0);
 
     sessionData.metrics = {
       rounds,
@@ -843,7 +879,7 @@ export class AIService {
         }
 
         const lastEvent = data.events && data.events.length > 0 ? data.events[data.events.length - 1] : null;
-        const firstUserEvent = data.events ? data.events.find((e: any) => e.role === 'user') : null;
+        const firstUserEvent = data.events ? data.events.find((e: SessionEventRecord) => e.role === 'user') : null;
 
         const mtimeIso = stats.mtime.toISOString();
         const rawUpdated = data.updated_at || lastEvent?.timestamp || mtimeIso;
@@ -923,8 +959,8 @@ export class AIService {
       try {
         fs.unlinkSync(sessionFile);
         return { success: true, message: 'Sessão removida com sucesso.' };
-      } catch (err: any) {
-        return { success: false, error: err.message };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
       }
     }
     return { success: false, error: 'Sessão não encontrada.' };
@@ -936,9 +972,9 @@ export class AIService {
 
     let generatedSummary = summary;
     if (!generatedSummary && sessionData && sessionData.events?.length > 0) {
-      const userQuestions = sessionData.events
-        .filter((e: any) => e.role === 'user')
-        .map((e: any) => `- ${e.text.slice(0, 140)}`)
+      const userQuestions = (sessionData.events as SessionEventRecord[])
+        .filter((e) => e.role === 'user')
+        .map((e) => `- ${e.text.slice(0, 140)}`)
         .join('\n');
       generatedSummary = `### Decisões e Tópicos Discutidos:\n${userQuestions || 'Sessão de pareamento.'}`;
     }

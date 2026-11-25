@@ -24,7 +24,7 @@ interface SelectedMember {
 interface CreateRepoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreated: (repo: Repo, isReady?: boolean, diagnosis?: any) => void;
+  onCreated: (repo: Repo, isReady?: boolean, diagnosis?: Record<string, unknown>) => void;
   defaultOwner?: string;
 }
 
@@ -65,8 +65,9 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
     for (const o of contextOrgs || []) {
       if (o.login && !seen.has(o.login.toLowerCase())) {
         seen.add(o.login.toLowerCase());
-        const orgLabel = (o as any).name || (o as any).full_name || o.login;
-        const role = (o as any).role;
+        const orgMeta = o as { name?: string; full_name?: string; role?: string };
+        const orgLabel = orgMeta.name || orgMeta.full_name || o.login;
+        const role = orgMeta.role;
         const roleSuffix = role ? ` • ${role === 'admin' ? 'Admin' : 'Membro'}` : '';
         list.push({
           id: o.login,
@@ -123,8 +124,9 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
       .then((res) => {
         if (!cancelled && res.ok && Array.isArray(res.data?.members)) {
           setOrgMembers(
-            res.data.members.filter(
-              (m: any) => m?.login && m.login.toLowerCase() !== user?.login?.toLowerCase(),
+            (res.data.members as Array<{ login?: string; avatar_url?: string }>).filter(
+              (m): m is { login: string; avatar_url?: string } =>
+                Boolean(m?.login) && m.login!.toLowerCase() !== user?.login?.toLowerCase(),
             ),
           );
         }
@@ -191,15 +193,16 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
         onCreated(res.data.repo, res.data.is_ready, res.data.diagnosis);
         onClose();
       } else {
+        const errObj = res.data as { message?: string; error?: string } | undefined;
         setErrorMessage(
-          (res.data as any)?.message ||
-            (res.data as any)?.error ||
+          errObj?.message ||
+            errObj?.error ||
             "Não foi possível criar o repositório no GitHub.",
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrorMessage(
-        err?.message || "Ocorreu um erro ao comunicar com a API do GitHub.",
+        err instanceof Error ? err.message : "Ocorreu um erro ao comunicar com a API do GitHub.",
       );
     } finally {
       setIsSubmitting(false);

@@ -6,7 +6,7 @@ export const systemApi = {
     return res.json();
   },
 
-  async saveSettings(settings: any): Promise<ApiResponse<any>> {
+  async saveSettings(settings: Record<string, unknown>): Promise<ApiResponse<{ success?: boolean; error?: string }>> {
     const res = await fetch('/api/settings/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -46,7 +46,7 @@ export const systemApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async activateLicense(key: string): Promise<ApiResponse<{ success: boolean; message: string; license: any }>> {
+  async activateLicense(key: string): Promise<ApiResponse<{ success: boolean; message: string; license: Record<string, unknown> }>> {
     const res = await fetch('/api/system/license/activate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

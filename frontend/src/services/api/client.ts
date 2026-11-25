@@ -181,17 +181,17 @@ if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
   bootstrapSession();
 }
 
-export async function safeParseJson<T = any>(res: Response, fallback: T = {} as T): Promise<T> {
+export async function safeParseJson<T = Record<string, unknown>>(res: Response, fallback: T = {} as T): Promise<T> {
   try {
     const text = await res.text();
     if (!text || !text.trim()) {
       if (!res.ok) {
-        return { error: `Servidor indisponível (${res.status} ${res.statusText || 'Sem resposta'})` } as any;
+        return { error: `Servidor indisponível (${res.status} ${res.statusText || 'Sem resposta'})` } as unknown as T;
       }
       return fallback;
     }
     return JSON.parse(text);
   } catch {
-    return { error: `Resposta inválida do servidor (${res.status})` } as any;
+    return { error: `Resposta inválida do servidor (${res.status})` } as unknown as T;
   }
 }

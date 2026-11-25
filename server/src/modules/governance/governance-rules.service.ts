@@ -134,10 +134,10 @@ export class GovernanceRulesService {
             );
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn(
           "[GovernanceService] Erro ao aplicar regra de branch protection no GitHub:",
-          err?.message || err,
+          err instanceof Error ? err.message : err,
         );
       }
     }
@@ -386,9 +386,9 @@ jobs:
         message:
           "Workflow de governança do GitHub Actions instalado com sucesso em .github/workflows/governance-check.yml",
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       throw new Error(
-        `Falha ao instalar workflow de GitHub Actions: ${err.message}`,
+        `Falha ao instalar workflow de GitHub Actions: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

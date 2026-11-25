@@ -28,13 +28,45 @@ export interface WorkspaceChange {
   timestamp: string;
 }
 
+export interface ConfigUser {
+  login?: string;
+  name?: string;
+  avatar_url?: string;
+  html_url?: string;
+  email?: string;
+  [key: string]: unknown;
+}
+
+export interface ConfigOrg {
+  login?: string;
+  avatar_url?: string;
+  description?: string;
+  id?: number | string;
+  [key: string]: unknown;
+}
+
+export interface ConfigRepo {
+  name: string;
+  owner?: string;
+  full_name?: string;
+  default_branch?: string;
+  is_local?: boolean;
+  html_url?: string;
+  clone_url?: string;
+  private?: boolean;
+  is_private?: boolean;
+  description?: string;
+  permissions?: { pull?: boolean; push?: boolean; admin?: boolean };
+  [key: string]: unknown;
+}
+
 export interface SavedAccount {
   id: string; // e.g. "github:mBaiadori"
-  user: any;
+  user: ConfigUser | null;
   token: string;
   git_provider: 'github' | 'local';
   git_provider_url?: string;
-  orgs?: any[];
+  orgs?: ConfigOrg[];
   last_active?: string;
 }
 
@@ -42,11 +74,11 @@ export interface AppConfig {
   authenticated: boolean;
   token: string;
   mode?: 'local' | 'remote';
-  user: any;
-  orgs: any[];
-  repos?: any[];
-  active_repo: any;
-  active_org?: any;
+  user: ConfigUser | null;
+  orgs: ConfigOrg[];
+  repos?: ConfigRepo[];
+  active_repo: ConfigRepo | null;
+  active_org?: ConfigOrg | string | null;
   accounts?: SavedAccount[];
   ai_settings: {
     provider: string;
@@ -67,8 +99,8 @@ export interface AppConfig {
     default_provider?: string;
   };
   workspace_changes: Record<string, WorkspaceChange[]>;
-  templates?: any[];
-  workflows?: any[];
+  templates?: unknown[];
+  workflows?: Array<Record<string, unknown>>;
   git_provider?: 'github' | 'local';
   git_provider_url?: string;
   governance?: {
@@ -113,7 +145,7 @@ export function loadProjectsMasterConfig(): Record<string, any> {
   };
 }
 
-export function saveProjectsMasterConfig(cfg: any): void {
+export function saveProjectsMasterConfig(cfg: Record<string, unknown>): void {
   writeJsonAtomic(PROJECTS_CONFIG_PATH, cfg);
 }
 
@@ -137,7 +169,7 @@ export function loadConfig(force = false): AppConfig {
   }
 
   const canonical = loadCanonicalTemplates();
-  let cfg: any = {};
+  let cfg: Partial<AppConfig> & Record<string, unknown> = {};
 
   if (fs.existsSync(CONFIG_PATH)) {
     try {
@@ -173,7 +205,7 @@ export function loadConfig(force = false): AppConfig {
     for (const [rName, list] of Object.entries(cfg.workspace_changes)) {
       if (Array.isArray(list)) {
         cfg.workspace_changes[rName] = list.filter(
-          (c: any) => c?.path && !isPathHidden(c.path)
+          (c: WorkspaceChange) => c?.path && !isPathHidden(c.path)
         );
       }
     }
@@ -219,8 +251,8 @@ export function loadConfig(force = false): AppConfig {
   // Fallback: se cfg.token não estiver preenchido, recupera da conta ativa ou primeira conta disponível
   if (!isExplicitLocal && !cfg.token && Array.isArray(cfg.accounts) && cfg.accounts.length > 0) {
     const activeAcc = cfg.user?.login
-      ? cfg.accounts.find((a: any) => a.user?.login?.toLowerCase() === cfg.user?.login?.toLowerCase() && a.token)
-      : cfg.accounts.find((a: any) => a.token);
+      ? cfg.accounts.find((a: SavedAccount) => a.user?.login?.toLowerCase() === cfg.user?.login?.toLowerCase() && a.token)
+      : cfg.accounts.find((a: SavedAccount) => a.token);
     const candidateToken = activeAcc?.token || cfg.accounts[0]?.token;
     if (candidateToken) {
       cfg.token = candidateToken;
@@ -231,8 +263,9 @@ export function loadConfig(force = false): AppConfig {
   // Auto-seed active user into accounts if missing
   if (cfg.user?.login) {
     const currentId = `github:${cfg.user.login}`;
+    const userLogin = cfg.user.login;
 
-    if (!cfg.accounts.some((a: any) => a.id === currentId || a.user?.login === cfg.user.login)) {
+    if (!cfg.accounts.some((a: SavedAccount) => a.id === currentId || a.user?.login === userLogin)) {
       cfg.accounts.push({
         id: currentId,
         user: cfg.user,
@@ -246,7 +279,7 @@ export function loadConfig(force = false): AppConfig {
   }
 
   if (!cfg.ai_settings) {
-    cfg.ai_settings = {} as any;
+    cfg.ai_settings = { ...DEFAULT_AI_SETTINGS };
   }
   const vaultAiKey = vaultService.getSecret(VAULT_KEYS.AI_API_KEY);
   if (vaultAiKey) {
@@ -306,7 +339,7 @@ export function saveConfig(cfg: AppConfig): void {
     }
 
     // 2. Cria cópia para persistência em disco
-    const sanitizedToDisk: any = {
+    const sanitizedToDisk: Record<string, unknown> = {
       authenticated: Boolean(cfg.authenticated && cfg.token),
       token: "",
       user: cfg.user || null,
@@ -358,7 +391,7 @@ export function loadRepoWorkspaceChanges(repoName: string, ownerOrOrg?: string):
       const list = JSON.parse(data);
       if (Array.isArray(list)) {
         const repoDir = resolveRepoDir(repoName, ownerOrOrg);
-        return list.filter((c: any) => c?.path && !isPathHidden(c.path, loadHiddenFiles(repoDir)));
+        return list.filter((c: WorkspaceChange) => c?.path && !isPathHidden(c.path, loadHiddenFiles(repoDir)));
       }
     } catch (e) {
       console.error(`Erro ao carregar workspace_changes para ${repoName}:`, e);
@@ -646,7 +679,7 @@ function verifyAndRepairStructure(
     return;
   }
 
-  let targetJson: any;
+  let targetJson: Record<string, any> | unknown[];
 
   try {
     targetJson = JSON.parse(targetContent);
@@ -666,7 +699,7 @@ function verifyAndRepairStructure(
     }
   }
 
-  let srcJson: any = {};
+  let srcJson: Record<string, any> | unknown[] = {};
   try {
     srcJson = JSON.parse(fs.readFileSync(srcPath, "utf-8"));
   } catch {}
@@ -685,9 +718,11 @@ function verifyAndRepairStructure(
       targetJson = { ...srcJson };
       modified = true;
     } else {
-      if (!targetJson.project || typeof targetJson.project !== "object") {
-        targetJson.project = {
-          ...(srcJson.project || {
+      const tObj = targetJson as Record<string, any>;
+      const sObj = srcJson as Record<string, any>;
+      if (!tObj.project || typeof tObj.project !== "object") {
+        tObj.project = {
+          ...(sObj.project || {
             name: repoName,
             description: "",
             version: "1.0.0",
@@ -695,34 +730,34 @@ function verifyAndRepairStructure(
         };
         modified = true;
       }
-      if (!targetJson.project.name) {
-        targetJson.project.name = repoName;
+      if (!tObj.project.name) {
+        tObj.project.name = repoName;
         modified = true;
       }
-      if (!Array.isArray(targetJson.categories)) {
-        targetJson.categories = Array.isArray(srcJson.categories) ? srcJson.categories : [];
+      if (!Array.isArray(tObj.categories)) {
+        tObj.categories = Array.isArray(sObj.categories) ? sObj.categories : [];
         modified = true;
       }
-      if (!Array.isArray(targetJson.tags)) {
-        targetJson.tags = Array.isArray(srcJson.tags) ? srcJson.tags : [];
+      if (!Array.isArray(tObj.tags)) {
+        tObj.tags = Array.isArray(sObj.tags) ? sObj.tags : [];
         modified = true;
       }
-      if (!Array.isArray(targetJson.statuses)) {
-        targetJson.statuses = Array.isArray(srcJson.statuses) ? srcJson.statuses : [];
+      if (!Array.isArray(tObj.statuses)) {
+        tObj.statuses = Array.isArray(sObj.statuses) ? sObj.statuses : [];
         modified = true;
       }
-      if (!Array.isArray(targetJson.badges)) {
-        targetJson.badges = Array.isArray(srcJson.badges) ? srcJson.badges : [];
+      if (!Array.isArray(tObj.badges)) {
+        tObj.badges = Array.isArray(sObj.badges) ? sObj.badges : [];
         modified = true;
       }
-      if (!targetJson.governance_rules) {
-        targetJson.governance_rules = srcJson.governance_rules || {
+      if (!tObj.governance_rules) {
+        tObj.governance_rules = sObj.governance_rules || {
           min_approvals_default: 1,
         };
         modified = true;
       }
-      if (!Array.isArray(targetJson.reviewers)) {
-        targetJson.reviewers = srcJson.reviewers || [];
+      if (!Array.isArray(tObj.reviewers)) {
+        tObj.reviewers = sObj.reviewers || [];
         modified = true;
       }
     }
@@ -947,8 +982,8 @@ export async function ensureDefaultRepoFiles(
 .github/ @${ownerLogin}
 `;
       fs.writeFileSync(codeownersPath, codeownersContent, "utf-8");
-    } catch (err: any) {
-      console.warn(`[Storage] Aviso ao criar .github/CODEOWNERS em ${repoName}:`, err.message);
+    } catch (err: unknown) {
+      console.warn(`[Storage] Aviso ao criar .github/CODEOWNERS em ${repoName}:`, err instanceof Error ? err.message : String(err));
     }
   }
 }

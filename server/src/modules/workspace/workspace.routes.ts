@@ -3,13 +3,17 @@ import { workspaceService } from "./workspace.service.js";
 import { docsMetadataService } from "./docs-metadata.service.js";
 import { loadConfig } from "../../config/storage.js";
 
+function getErrMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get("/api/project/tree", async (request, reply) => {
     try {
       const query = request.query as { repo?: string; org?: string; owner?: string };
       return reply.send(await workspaceService.getTree(query.repo, query.org || query.owner));
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err) });
     }
   });
 
@@ -21,8 +25,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
     try {
       return reply.send(workspaceService.getFile(filePath, query.repo));
-    } catch (err: any) {
-      return reply.status(404).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(404).send({ error: getErrMsg(err) });
     }
   });
 
@@ -44,8 +48,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
           `inline; filename="${encodeURIComponent(filename)}"`,
         )
         .send(buffer);
-    } catch (err: any) {
-      return reply.status(404).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(404).send({ error: getErrMsg(err) });
     }
   });
 
@@ -55,8 +59,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       const cfg = loadConfig();
       const repoName = query.repo || cfg.active_repo?.name || "local";
       return reply.send(docsMetadataService.loadDocsMetadata(repoName));
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err) });
     }
   });
 
@@ -68,8 +72,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       return reply.send(
         docsMetadataService.getProjectMetadataOptions(repoName),
       );
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err) });
     }
   });
 
@@ -82,8 +86,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       return reply.send(
         docsMetadataService.buildDocumentContextBundle(repoName, filePath),
       );
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err) });
     }
   });
 
@@ -93,15 +97,19 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       const cfg = loadConfig();
       const repoName = query.repo || cfg.active_repo?.name || "local";
       return reply.send(docsMetadataService.getProjectConfig(repoName));
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err) });
     }
   });
 
   fastify.post("/api/project/config", async (request, reply) => {
     try {
-      const body = request.body as { config?: any; repo?: string } | any;
-      const configData = body.config || body;
+      const body = (request.body || {}) as {
+        config?: Record<string, unknown>;
+        repo?: string;
+        [key: string]: unknown;
+      };
+      const configData = (body.config || body) as Parameters<typeof docsMetadataService.saveProjectConfig>[1];
       const cfg = loadConfig();
       const repoName = body.repo || cfg.active_repo?.name || "local";
       const result = docsMetadataService.saveProjectConfig(
@@ -109,13 +117,13 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         configData,
       );
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
   fastify.patch("/api/project/metadata/item", async (request, reply) => {
-    const body = request.body as { path?: string; meta?: any; repo?: string };
+    const body = request.body as { path?: string; meta?: Record<string, unknown>; repo?: string };
     const cleanPath = (body.path || "").trim().replace(/^\/+/, "");
     if (!cleanPath) {
       return reply.status(400).send({ error: "Parâmetro path é obrigatório" });
@@ -135,8 +143,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         meta: result.meta,
         tree,
       });
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -147,8 +155,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       const repoName = body.repo || cfg.active_repo?.name || "local";
       const result = await docsMetadataService.syncMetadataToFrontmatters(repoName);
       return reply.send({ success: true, ...result });
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err) });
     }
   });
 
@@ -159,8 +167,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       const repoName = body.repo || cfg.active_repo?.name || "local";
       docsMetadataService.scheduleBackgroundReconciliation(repoName);
       return reply.send({ success: true, message: "Reconciliação iniciada em segundo plano." });
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err) });
     }
   });
 
@@ -168,7 +176,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     const body = request.body as {
       path?: string;
       content?: string;
-      meta?: any;
+      meta?: Record<string, unknown>;
       repo?: string;
     };
     if (!body.path) {
@@ -183,8 +191,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
           body.repo,
         ),
       );
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -194,7 +202,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       content?: string;
       is_folder?: boolean;
       isFolder?: boolean;
-      meta?: any;
+      meta?: { templateId?: string; prompt?: string; [key: string]: unknown };
       templateId?: string;
       repo?: string;
     };
@@ -236,8 +244,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         systemPrompt: templatePrompt,
         templateId,
       });
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -250,7 +258,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         relativePath?: string;
         content?: string;
         base64?: string;
-        meta?: any;
+        meta?: Record<string, unknown>;
       }>;
       repo?: string;
     };
@@ -269,8 +277,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         body.repo,
       );
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -302,8 +310,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       return reply.send(
         await workspaceService.renameFile(oldPath, newPath, sourceRepo),
       );
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -330,8 +338,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
           targetRepo,
         ),
       );
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -341,8 +349,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       return reply.send(
         await workspaceService.deleteFile(query.path || "", query.repo),
       );
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -352,8 +360,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       return reply.send(
         await workspaceService.duplicateFile(body.path || "", body.repo),
       );
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -441,8 +449,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         path: fullRelPath,
         tree: created.tree,
       });
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -451,8 +459,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     try {
       const result = workspaceService.revealInOS(body?.path, body?.repo);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 
@@ -461,8 +469,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     try {
       const result = workspaceService.revealInOS(body?.path, body?.repo);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: getErrMsg(err) });
     }
   });
 }

@@ -27,8 +27,10 @@ export async function translationsRoutes(fastify: FastifyInstance) {
     try {
       const data = translationsService.listTranslations(repoName, query.path);
       return reply.send(data);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err?.message || 'Falha ao listar traduções.' });
+    } catch (err: unknown) {
+      return reply.status(500).send({
+        error: err instanceof Error ? err.message : 'Falha ao listar traduções.',
+      });
     }
   });
 
@@ -47,8 +49,10 @@ export async function translationsRoutes(fastify: FastifyInstance) {
     try {
       const data = translationsService.getTranslation(repoName, query.lang, query.path);
       return reply.send(data);
-    } catch (err: any) {
-      return reply.status(404).send({ error: err?.message || 'Arquivo de tradução não encontrado.' });
+    } catch (err: unknown) {
+      return reply.status(404).send({
+        error: err instanceof Error ? err.message : 'Arquivo de tradução não encontrado.',
+      });
     }
   });
 
@@ -78,8 +82,10 @@ export async function translationsRoutes(fastify: FastifyInstance) {
         body.engineId
       );
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err?.message || 'Falha ao traduzir documento.' });
+    } catch (err: unknown) {
+      return reply.status(500).send({
+        error: err instanceof Error ? err.message : 'Falha ao traduzir documento.',
+      });
     }
   });
 
@@ -104,8 +110,10 @@ export async function translationsRoutes(fastify: FastifyInstance) {
     try {
       const result = translationsService.saveTranslation(repoName, body.lang, body.path, body.content);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err?.message || 'Falha ao salvar tradução.' });
+    } catch (err: unknown) {
+      return reply.status(500).send({
+        error: err instanceof Error ? err.message : 'Falha ao salvar tradução.',
+      });
     }
   });
 
@@ -129,8 +137,10 @@ export async function translationsRoutes(fastify: FastifyInstance) {
     try {
       const result = translationsService.deleteTranslation(repoName, body.lang, body.path);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err?.message || 'Falha ao deletar tradução.' });
+    } catch (err: unknown) {
+      return reply.status(500).send({
+        error: err instanceof Error ? err.message : 'Falha ao deletar tradução.',
+      });
     }
   });
 
@@ -164,8 +174,10 @@ export async function translationsRoutes(fastify: FastifyInstance) {
         body.engineId
       );
       return reply.send(preview);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err?.message || 'Falha ao gerar sincronização para idioma principal.' });
+    } catch (err: unknown) {
+      return reply.status(500).send({
+        error: err instanceof Error ? err.message : 'Falha ao gerar sincronização para idioma principal.',
+      });
     }
   });
 
@@ -189,8 +201,10 @@ export async function translationsRoutes(fastify: FastifyInstance) {
     try {
       const result = translationsService.applyToMain(repoName, body.path, body.content);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err?.message || 'Falha ao aplicar alterações no documento principal.' });
+    } catch (err: unknown) {
+      return reply.status(500).send({
+        error: err instanceof Error ? err.message : 'Falha ao aplicar alterações no documento principal.',
+      });
     }
   });
 }

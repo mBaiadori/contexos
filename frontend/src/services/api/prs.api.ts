@@ -17,7 +17,7 @@ export const prsApi = {
     counts?: { all: number; open: number; merged: number; closed: number };
     repoOpenCounts?: Record<string, number>;
     available_repos?: Array<{ name: string; count: number }>;
-    governance?: any; 
+    governance?: Record<string, unknown>;
   }> {
     const q = new URLSearchParams();
     if (repo) q.set('repo', repo);

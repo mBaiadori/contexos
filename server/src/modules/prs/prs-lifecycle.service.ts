@@ -34,23 +34,23 @@ import { workspaceService } from "../workspace/workspace.service.js";
 import { healRepositoryState } from "../../utils/git-health.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { prsStorageService } from "./prs-storage.service.js";
-import type { PRApprovalAudit } from "./prs-types.js";
+import type { PRApprovalAudit, PRRecord } from "./prs-types.js";
 
 export class PRsLifecycleService {
   afterPRHeadChanged(
     repoName: string,
-    pr: any,
+    pr: PRRecord,
     ctx: { actor: string; file?: string; newHead?: string },
   ): void {
     const newHead = ctx.newHead || pr.head_sha || "";
     const prevApprovals = Array.isArray(pr.approvals) ? pr.approvals : [];
 
     // Invalidate prior approvals
-    pr.approvals = prevApprovals.map((app: any) => {
+    pr.approvals = prevApprovals.map((app) => {
       if (typeof app === "string") {
         return {
           user: app,
-          status: "INVALIDATED",
+          status: "INVALIDATED" as const,
           timestamp: new Date().toISOString(),
           invalidated_at: new Date().toISOString(),
           invalidated_by_commit: newHead,
@@ -60,7 +60,7 @@ export class PRsLifecycleService {
       if (app.status === "APPROVED" || !app.status) {
         return {
           ...app,
-          status: "INVALIDATED",
+          status: "INVALIDATED" as const,
           invalidated_at: new Date().toISOString(),
           invalidated_by_commit: newHead,
           comment:
@@ -85,7 +85,7 @@ export class PRsLifecycleService {
     });
 
     const prs = prsStorageService.loadRepoPRs(repoName);
-    const idx = prs.findIndex((p: any) => String(p.id) === String(pr.id));
+    const idx = prs.findIndex((p) => String(p.id) === String(pr.id));
     if (idx >= 0) {
       prs[idx] = { ...prs[idx], ...pr };
       prsStorageService.saveRepoPRs(repoName, prs);
@@ -118,7 +118,7 @@ export class PRsLifecycleService {
     const hiddenList = loadHiddenFiles(repoDir);
     const gitStatus = await getGitStatus(repoDir);
     const repoObj =
-      cfg.repos?.find((r: any) => r?.name === repoName) ||
+      cfg.repos?.find((r) => r?.name === repoName) ||
       (activeRepo?.name === repoName ? activeRepo : undefined);
     const defaultBranch =
       repoObj?.default_branch || (await getDefaultBranch(repoDir));
@@ -342,7 +342,7 @@ export class PRsLifecycleService {
 
     // 1. Posiciona na branch de trabalho (ou cria a partir da oficial se estiver na main)
     let headSha = "";
-    let githubPRData: any = null;
+    let githubPRData: { id?: number; number?: number; html_url?: string } | null = null;
     let prHtmlUrl = activeRepo?.html_url
       ? `${activeRepo.html_url}/pull/${newId}`
       : "";
@@ -466,7 +466,7 @@ export class PRsLifecycleService {
             );
             if (listRes.statusCode === 200 && Array.isArray(listRes.data) && listRes.data.length > 0) {
               githubPRData = listRes.data[0];
-              prHtmlUrl = githubPRData.html_url || prHtmlUrl;
+              prHtmlUrl = githubPRData?.html_url || prHtmlUrl;
             } else {
               throw new Error(
                 `Já existe uma publicação aberta para esta versão. Atualize-a em vez de criar uma nova.`,
@@ -538,7 +538,7 @@ export class PRsLifecycleService {
       }));
     }
 
-    const newPR: any = {
+    const newPR: PRRecord = {
       id: githubPRData?.number || newId,
       github_id: githubPRData?.id,
       github_number: githubPRData?.number,
@@ -580,7 +580,7 @@ export class PRsLifecycleService {
         repo: repoName,
         title: `Novo Pull Request aberto: ${newPR.title}`,
         message: `O PR #${newPR.id} foi aberto por ${newPR.author} e requer revisão e assinaturas para atingir o quorum de governança.`,
-        prNumber: newPR.id,
+        prNumber: Number(newPR.id) || undefined,
         author: String(newPR.author || '').replace(/^@/, ""),
         actionUrl: prHtmlUrl || undefined,
         severity: "warning",
@@ -606,8 +606,9 @@ export class PRsLifecycleService {
     const cfg = loadConfig();
     const passedRepo =
       payloadOrApprover &&
-      typeof payloadOrApprover === "object" &&
-      (payloadOrApprover as any).repo;
+      typeof payloadOrApprover === "object"
+        ? payloadOrApprover.repo
+        : undefined;
     const foundData = prsStorageService.findPRAcrossRepos(prId, passedRepo);
     if (!foundData) {
       throw new Error(`PR #${prId} não encontrado.`);
@@ -694,7 +695,7 @@ export class PRsLifecycleService {
       comment: approverComment || "",
     };
 
-    const existingIdx = target.approvals.findIndex((app: any) => {
+    const existingIdx = target.approvals.findIndex((app) => {
       const u = typeof app === "string" ? app : app.user;
       return u?.toLowerCase() === approver.toLowerCase();
     });
@@ -725,7 +726,7 @@ export class PRsLifecycleService {
     const validCount = validApprovers.size;
     const quorumReached = govRules.is_solo
       ? validCount >= 1
-      : validCount >= minApprovals;
+      : validCount >= Number(minApprovals);
 
     target.status = "OPEN";
 
@@ -766,7 +767,7 @@ export class PRsLifecycleService {
           repo: repoName,
           title: `Quorum de Governança Atingido: ${target.title}`,
           message: `O PR #${target.id} atingiu o quorum mínimo de aprovações (${validCount}/${govRules.is_solo ? 1 : minApprovals}) com o voto de @${approver}. O merge foi liberado!`,
-          prNumber: target.id,
+          prNumber: Number(target.id) || undefined,
           author: String(target.author || '').replace(/^@/, ""),
           actionUrl: target.html_url || undefined,
           severity: "info",
@@ -808,7 +809,7 @@ export class PRsLifecycleService {
     const repoName = payload.repo || cfg.active_repo?.name || "local";
     const login = userLogin || payload.author || cfg.user?.login || "local_user";
     const prs = prsStorageService.loadRepoPRs(repoName);
-    const target = prs.find((p: any) => String(p.id) === String(payload.id));
+    const target = prs.find((p) => String(p.id) === String(payload.id));
 
     if (!target) {
       throw new Error(`PR #${payload.id} não encontrado.`);
@@ -887,7 +888,7 @@ export class PRsLifecycleService {
     const scan = scanContentForSecrets(finalPlainContent, payload.filePath);
     if (scan.hasSecrets) {
       const violationSummary = scan.violations
-        .map((v: any) => `${v.file}: ${v.message}`)
+        .map((v) => `${v.file}: ${v.message}`)
         .join("; ");
       throw new Error(
         `[Secret Guard] Edição bloqueada: foram detectados segredos não criptografados: ${violationSummary}`,
@@ -917,7 +918,7 @@ export class PRsLifecycleService {
     // 7. Update file metadata in PR
     if (Array.isArray(target.files)) {
       const fileIdx = target.files.findIndex(
-        (f: any) => f.path === payload.filePath,
+        (f) => f.path === payload.filePath,
       );
       const fileObj = {
         path: payload.filePath,
@@ -934,7 +935,7 @@ export class PRsLifecycleService {
     }
 
     // 8. Invalidate previous approvals and update HEAD commit
-    const prevApprovalsCount = (target.approvals || []).filter((a: any) =>
+    const prevApprovalsCount = (target.approvals || []).filter((a) =>
       typeof a === "object" ? a.status === "APPROVED" : true,
     ).length;
     this.afterPRHeadChanged(repoName, target, {
@@ -1112,7 +1113,7 @@ export class PRsLifecycleService {
     };
   }
 
-  private async executeMerge(targetPR: any, repoNameParam?: string): Promise<string> {
+  private async executeMerge(targetPR: PRRecord, repoNameParam?: string): Promise<string> {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
     const repoName =
@@ -1125,10 +1126,10 @@ export class PRsLifecycleService {
       ? targetPR.approvals
       : [];
     const auditLines = approvalsList
-      .filter((app: any) =>
+      .filter((app) =>
         typeof app === "object" ? app.status === "APPROVED" : true,
       )
-      .map((app: any) => {
+      .map((app) => {
         if (typeof app === "string") {
           return `Approved-by: ${app}`;
         }

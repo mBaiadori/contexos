@@ -187,7 +187,15 @@ export class LightweightLocalProvider extends BaseTranslationProvider {
           return json[0];
         }
         if (Array.isArray(json) && Array.isArray(json[0])) {
-          const joined = json[0].map((item: any) => (typeof item === "string" ? item : item[0] || "")).join("");
+          const joined = json[0]
+            .map((item: unknown) =>
+              typeof item === "string"
+                ? item
+                : Array.isArray(item)
+                  ? String(item[0] || "")
+                  : "",
+            )
+            .join("");
           if (joined.trim()) return joined;
         }
       }
@@ -200,7 +208,9 @@ export class LightweightLocalProvider extends BaseTranslationProvider {
       const memUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
       const res = await fetch(memUrl);
       if (res.ok) {
-        const json = (await res.json()) as any;
+        const json = (await res.json()) as {
+          responseData?: { translatedText?: unknown };
+        };
         if (json?.responseData?.translatedText && typeof json.responseData.translatedText === "string") {
           return json.responseData.translatedText;
         }
@@ -217,7 +227,7 @@ export class LightweightLocalProvider extends BaseTranslationProvider {
         const json = await res.json();
         if (Array.isArray(json) && Array.isArray(json[0])) {
           const translatedBlock = json[0]
-            .map((item: any) => item[0])
+            .map((item: unknown) => (Array.isArray(item) ? String(item[0] || "") : ""))
             .join("");
           if (translatedBlock.trim()) return translatedBlock;
         }

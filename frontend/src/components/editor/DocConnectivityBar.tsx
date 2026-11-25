@@ -128,8 +128,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   // Atualização em tempo real das dependências e consumidores ao salvar documento ou metadados
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const handleDocumentSaved = (e: any) => {
-      const savedPath = e.detail?.filePath;
+    const handleDocumentSaved = (e: Event) => {
+      const savedPath = (e as CustomEvent<{ filePath?: string }>).detail?.filePath;
       if (
         !savedPath ||
         !filePath ||
@@ -193,8 +193,14 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
   // Opções do projeto
   const statusOptions = useMemo<StatusItem[]>(() => {
-    const raw = projectMetaOptions?.statuses || projectConfig?.statuses || [];
-    return raw.map((s: any) => {
+    const raw = (projectMetaOptions?.statuses || projectConfig?.statuses || []) as Array<
+      string | { name?: string; key?: string; label?: string; color?: string }
+    >;
+    return raw.map((s) => {
+      if (typeof s === "string") {
+        const name = s.toLowerCase().replace(/\s+/g, "-");
+        return { name, key: name, label: name.toUpperCase().replace(/-/g, " "), color: "#3b82f6" };
+      }
       const name = String(s.name || s.key || s.label || "")
         .toLowerCase()
         .replace(/\s+/g, "-");
@@ -206,8 +212,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   }, [projectMetaOptions?.statuses, projectConfig?.statuses]);
 
   const categoryOptions = useMemo<TaxonomyItem[]>(() => {
-    const raw = projectMetaOptions?.categories || projectConfig?.categories || [];
-    return raw.map((c: any) =>
+    const raw = (projectMetaOptions?.categories || projectConfig?.categories || []) as Array<
+      string | { name?: string; color?: string }
+    >;
+    return raw.map((c) =>
       typeof c === "string"
         ? { name: c, color: "#3b82f6" }
         : { name: c.name || "", color: c.color || "#3b82f6" },
@@ -215,8 +223,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   }, [projectMetaOptions?.categories, projectConfig?.categories]);
 
   const availableTags = useMemo<TaxonomyItem[]>(() => {
-    const raw = projectMetaOptions?.tags || projectConfig?.tags || [];
-    return raw.map((t: any) =>
+    const raw = (projectMetaOptions?.tags || projectConfig?.tags || []) as Array<
+      string | { name?: string; color?: string }
+    >;
+    return raw.map((t) =>
       typeof t === "string"
         ? { name: t, color: "#6366f1" }
         : { name: t.name || "", color: t.color || "#6366f1" },

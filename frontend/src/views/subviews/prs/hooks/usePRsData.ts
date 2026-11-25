@@ -368,10 +368,10 @@ export function usePRsData() {
           type: "error",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionFeedback({
         id: pr.id,
-        message: err.message || "Erro ao atualizar da versão oficial.",
+        message: err instanceof Error ? err.message : "Erro ao atualizar da versão oficial.",
         type: "error",
       });
     } finally {
@@ -391,11 +391,11 @@ export function usePRsData() {
         setActiveConflictPR({ pr, filePath, bundle: res.data });
       } else {
         alert(
-          (res.data as any)?.error || "Erro ao carregar dados do conflito.",
+          (res.data as { error?: string } | undefined)?.error || "Erro ao carregar dados do conflito.",
         );
       }
-    } catch (e: any) {
-      alert(e.message || "Erro ao carregar dados do conflito.");
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Erro ao carregar dados do conflito.");
     }
   };
 
@@ -422,8 +422,8 @@ export function usePRsData() {
       } else {
         alert(res.data?.error || "Erro ao salvar resolução de conflito.");
       }
-    } catch (e: any) {
-      alert(e.message || "Erro ao salvar resolução de conflito.");
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Erro ao salvar resolução de conflito.");
     }
   };
 
@@ -459,7 +459,7 @@ export function usePRsData() {
     });
   };
 
-  const handleExpandAllFiles = (prId: number | string, files: any[]) => {
+  const handleExpandAllFiles = (prId: number | string, files: NonNullable<PR["files"]>) => {
     setCollapsedFiles((prev) => {
       const next = { ...prev };
       files.forEach((f, idx) => {
@@ -470,7 +470,7 @@ export function usePRsData() {
     });
   };
 
-  const handleCollapseAllFiles = (prId: number | string, files: any[]) => {
+  const handleCollapseAllFiles = (prId: number | string, files: NonNullable<PR["files"]>) => {
     setCollapsedFiles((prev) => {
       const next = { ...prev };
       files.forEach((f, idx) => {
@@ -512,10 +512,10 @@ export function usePRsData() {
           type: "error",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionFeedback({
         id,
-        message: err.message || "Erro ao publicar versão.",
+        message: err instanceof Error ? err.message : "Erro ao publicar versão.",
         type: "error",
       });
     } finally {
@@ -553,10 +553,10 @@ export function usePRsData() {
           type: "error",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionFeedback({
         id,
-        message: err.message || "Erro ao rejeitar proposta.",
+        message: err instanceof Error ? err.message : "Erro ao rejeitar proposta.",
         type: "error",
       });
     } finally {
@@ -598,10 +598,10 @@ export function usePRsData() {
           type: "error",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionFeedback({
         id: target.id,
-        message: err.message || "Erro ao restaurar versão.",
+        message: err instanceof Error ? err.message : "Erro ao restaurar versão.",
         type: "error",
       });
     } finally {

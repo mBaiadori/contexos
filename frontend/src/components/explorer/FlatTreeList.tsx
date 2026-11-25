@@ -15,7 +15,7 @@ interface FlatTreeListProps {
   expandedFolders: Record<string, boolean>;
   inlineCreating: InlineCreatingState | null;
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
-  treeNodeProps: any;
+  treeNodeProps: Omit<React.ComponentProps<typeof FileTreeNode>, "node" | "depth">;
 }
 
 export const FlatTreeList: React.FC<FlatTreeListProps> = ({

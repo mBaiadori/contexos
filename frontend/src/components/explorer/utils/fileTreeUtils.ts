@@ -1,30 +1,43 @@
 import type { ScannedFile } from "../types";
 
+interface FileSystemEntryLike {
+  isFile?: boolean;
+  isDirectory?: boolean;
+  name: string;
+  file?: (cb: (f: File) => void, err?: (e: unknown) => void) => void;
+  createReader?: () => {
+    readEntries: (
+      cb: (entries: FileSystemEntryLike[]) => void,
+      err?: (e: unknown) => void,
+    ) => void;
+  };
+}
+
 // Utilitário: Escanear recursivamente arquivos e pastas arrastados do SO / Finder / Explorer
 export const scanDataTransferItems = async (
   items: DataTransferItemList,
 ): Promise<ScannedFile[]> => {
   const result: ScannedFile[] = [];
 
-  const traverseEntry = async (entry: any, currentPath: string = "") => {
+  const traverseEntry = async (entry: FileSystemEntryLike | null, currentPath: string = "") => {
     if (!entry) return;
-    if (entry.isFile) {
+    if (entry.isFile && entry.file) {
       try {
         const file = await new Promise<File>((resolve, reject) => {
-          entry.file(resolve, reject);
+          entry.file!(resolve, reject);
         });
         const rel = currentPath ? `${currentPath}/${entry.name}` : entry.name;
         result.push({ file, relativePath: rel });
       } catch (err) {
         console.warn("[FileTree] Falha ao ler arquivo de entrada:", entry.name, err);
       }
-    } else if (entry.isDirectory) {
+    } else if (entry.isDirectory && entry.createReader) {
       const dirReader = entry.createReader();
-      const readAllEntries = async (): Promise<any[]> => {
-        let allEntries: any[] = [];
-        let batch: any[] = [];
+      const readAllEntries = async (): Promise<FileSystemEntryLike[]> => {
+        let allEntries: FileSystemEntryLike[] = [];
+        let batch: FileSystemEntryLike[] = [];
         do {
-          batch = await new Promise<any[]>((resolve, reject) => {
+          batch = await new Promise<FileSystemEntryLike[]>((resolve, reject) => {
             dirReader.readEntries(resolve, reject);
           });
           allEntries = allEntries.concat(batch);
@@ -46,13 +59,11 @@ export const scanDataTransferItems = async (
     }
   };
 
-  const promises: Promise<any>[] = [];
+  const promises: Promise<void>[] = [];
   for (let i = 0; i < items.length; i++) {
-    const item = items[i];
+    const item = items[i] as DataTransferItem & { webkitGetAsEntry?: () => FileSystemEntryLike | null };
     if (item.kind === "file") {
-      const entry = (item as any).webkitGetAsEntry
-        ? (item as any).webkitGetAsEntry()
-        : null;
+      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
       if (entry) {
         promises.push(traverseEntry(entry));
       } else {
@@ -72,8 +83,8 @@ export const scanDataTransferItems = async (
 export const filesToScannedList = (fileList: FileList): ScannedFile[] => {
   const result: ScannedFile[] = [];
   for (let i = 0; i < fileList.length; i++) {
-    const file = fileList[i];
-    const rel = (file as any).webkitRelativePath || file.name;
+    const file = fileList[i] as File & { webkitRelativePath?: string };
+    const rel = file.webkitRelativePath || file.name;
     result.push({ file, relativePath: rel });
   }
   return result;

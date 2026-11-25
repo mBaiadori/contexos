@@ -22,7 +22,17 @@ export class GovernanceTeamsService {
         "GET",
       );
       if (res.statusCode === 200 && Array.isArray(res.data)) {
-        return res.data.map((t: any) => ({
+        return res.data.map(
+          (t: {
+            id: number;
+            slug: string;
+            name: string;
+            description?: string;
+            permission?: string;
+            permissions?: RepoTeamInfo['permissions'];
+            members_count?: number;
+            privacy?: string;
+          }) => ({
           id: t.id,
           slug: t.slug,
           name: t.name,
@@ -54,7 +64,14 @@ export class GovernanceTeamsService {
         "GET",
       );
       if (res.statusCode === 200 && Array.isArray(res.data)) {
-        return res.data.map((m: any) => ({
+        return res.data.map(
+          (m: {
+            id: number;
+            login: string;
+            avatar_url?: string;
+            html_url?: string;
+            site_admin?: boolean;
+          }) => ({
           id: m.id,
           login: m.login,
           avatar_url: m.avatar_url || `https://github.com/${m.login}.png`,
@@ -84,7 +101,17 @@ export class GovernanceTeamsService {
         "GET",
       );
       if (res.statusCode === 200 && Array.isArray(res.data)) {
-        return res.data.map((t: any) => ({
+        return res.data.map(
+          (t: {
+            id: number;
+            slug: string;
+            name: string;
+            description?: string;
+            permission?: string;
+            permissions?: RepoTeamInfo['permissions'];
+            members_count?: number;
+            privacy?: string;
+          }) => ({
           id: t.id,
           slug: t.slug,
           name: t.name,
@@ -242,7 +269,14 @@ export class GovernanceTeamsService {
         "GET",
       );
       if (res.statusCode === 200 && Array.isArray(res.data)) {
-        return res.data.map((m: any) => ({
+        return res.data.map(
+          (m: {
+            id: number;
+            login: string;
+            avatar_url?: string;
+            html_url?: string;
+            site_admin?: boolean;
+          }) => ({
           id: m.id,
           login: m.login,
           avatar_url: m.avatar_url || `https://github.com/${m.login}.png`,

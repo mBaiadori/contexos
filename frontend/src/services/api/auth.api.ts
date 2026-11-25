@@ -40,7 +40,7 @@ export const authApi = {
     message?: string;
     authenticated?: boolean;
     user?: User;
-    orgs?: any[];
+    orgs?: Array<{ login?: string; avatar_url?: string; description?: string; id?: number | string }>;
     accounts?: SavedAccount[];
   }>> {
     const res = await fetch('/api/auth/device/poll', {

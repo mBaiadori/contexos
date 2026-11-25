@@ -129,7 +129,7 @@ export interface SavedAccount {
   user: User;
   git_provider: 'github' | 'local' | string;
   git_provider_url?: string;
-  orgs?: any[];
+  orgs?: Array<{ login?: string; avatar_url?: string; description?: string; id?: number | string }>;
   is_active: boolean;
   last_active?: string;
 }
@@ -193,7 +193,7 @@ export interface DocumentMetadataItem {
   templateId: string;
   prompt?: string;
   department?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface TaxonomyItem {
@@ -492,7 +492,7 @@ export interface TemplateItem {
   assistant_prompt?: string;
   created_at?: string;
   updated_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface TutorialItem {
@@ -529,15 +529,15 @@ export interface RawTurnTelemetry {
     context_files?: Array<{ path: string; size?: number; snippet?: string }>;
     dynamic_context?: string;
     history_messages?: Array<{ role?: string; sender?: string; content?: string; text?: string }>;
-    tools_schema?: any[];
-    full_payload?: any;
+    tools_schema?: unknown[];
+    full_payload?: unknown;
   };
   response: {
     reply: string;
     tool_calls?: ToolCallRecord[];
-    stream_events?: any[];
+    stream_events?: unknown[];
     finish_reason?: string;
-    raw_response?: any;
+    raw_response?: unknown;
   };
   metrics: RawTurnMetrics;
 }
@@ -778,7 +778,7 @@ export interface ToolCallRecord {
   args: Record<string, any>;
   result: {
     success: boolean;
-    data?: any;
+    data?: unknown;
     error?: string;
     message?: string;
   };
@@ -823,7 +823,7 @@ export interface MCPServerDefinition {
 export interface ToolItem {
   name: string;
   description: string;
-  parameters: any;
+  parameters: Record<string, unknown>;
 }
 
 export interface CustomToolItem {
@@ -859,7 +859,7 @@ export interface CommunityToolItem {
   category: string;
   server_id?: string;
   server_name?: string;
-  parameters?: any;
+  parameters?: Record<string, unknown>;
   source: 'community';
   author?: string;
   license?: string;

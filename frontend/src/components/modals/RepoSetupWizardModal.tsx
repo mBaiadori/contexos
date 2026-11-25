@@ -211,8 +211,8 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
       } else {
         setErrorMsg(res.data?.error || "Erro ao inicializar o repositório");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Falha de comunicação com o servidor");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Falha de comunicação com o servidor");
     } finally {
       setIsSubmitting(false);
     }

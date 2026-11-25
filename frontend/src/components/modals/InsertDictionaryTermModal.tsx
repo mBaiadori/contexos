@@ -28,8 +28,8 @@ export const InsertDictionaryTermModal: React.FC<InsertDictionaryTermModalProps>
 
   const getDomainColor = (domainName?: string) => {
     if (!domainName) return "#64748b";
-    const cat = categories.find(
-      (c: any) =>
+    const cat = (categories as Array<{ name?: string; label?: string; color?: string }>).find(
+      (c) =>
         (c.name || "").toLowerCase() === domainName.toLowerCase() ||
         (c.label || "").toLowerCase() === domainName.toLowerCase()
     );

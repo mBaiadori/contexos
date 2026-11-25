@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PROJECTS_DIR, resolveRepoDir } from "../../config/constants.js";
-import { loadConfig } from "../../config/storage.js";
+import { loadConfig, type AppConfig } from "../../config/storage.js";
+import type { PRRecord } from "./prs-types.js";
 import { writeJsonAtomic } from "../../utils/atomic-write.js";
 
 export class PRsStorageService {
@@ -127,24 +128,24 @@ export class PRsStorageService {
   findPRAcrossRepos(
     prId: number | string,
     preferredRepo?: string,
-  ): { pr: any; repoName: string; prs: any[] } | null {
+  ): { pr: PRRecord; repoName: string; prs: PRRecord[] } | null {
     if (preferredRepo && preferredRepo !== "all") {
       const prs = this.loadRepoPRs(preferredRepo);
-      const pr = prs.find((p: Record<string, unknown>) => String(p.id) === String(prId));
+      const pr = prs.find((p) => String(p.id) === String(prId));
       if (pr) return { pr, repoName: preferredRepo, prs };
     }
     const cfg = loadConfig();
     const activeName = cfg.active_repo?.name;
     if (activeName && activeName !== preferredRepo) {
       const prs = this.loadRepoPRs(activeName);
-      const pr = prs.find((p: Record<string, unknown>) => String(p.id) === String(prId));
+      const pr = prs.find((p) => String(p.id) === String(prId));
       if (pr) return { pr, repoName: activeName, prs };
     }
     const allRepos = this.getAllLocalRepos();
     for (const r of allRepos) {
       if (r.name === preferredRepo || r.name === activeName) continue;
       const candidatePRs = this.loadRepoPRs(r.name);
-      const found = candidatePRs.find((p: Record<string, unknown>) => String(p.id) === String(prId));
+      const found = candidatePRs.find((p) => String(p.id) === String(prId));
       if (found) return { pr: found, repoName: r.name, prs: candidatePRs };
     }
     return null;
@@ -152,7 +153,7 @@ export class PRsStorageService {
 
   resolveTargetRepoObj(
     repoName: string,
-    cfg: any,
+    cfg: Partial<AppConfig>,
   ): { full_name?: string; is_local?: boolean; owner?: string; name: string } | null {
     if (!repoName || repoName === "all" || repoName === "local") return null;
     const cleanName = repoName.toLowerCase();
@@ -206,7 +207,7 @@ export class PRsStorageService {
     return path.join(repoDir, ".prs.json");
   }
 
-  loadRepoPRs(repoName: string): any[] {
+  loadRepoPRs(repoName: string): PRRecord[] {
     const filePath = this.getRepoPRsPath(repoName);
     if (fs.existsSync(filePath)) {
       try {
@@ -217,7 +218,7 @@ export class PRsStorageService {
           const cleanRepoName = repoName.toLowerCase();
 
           // Purga de contaminação cruzada: descarta PRs pertencentes a outro repo
-          const sanitizedList = list.filter((pr: any) => {
+          const sanitizedList = (list as PRRecord[]).filter((pr) => {
             if (cleanRepoName !== "local") {
               if (pr.html_url) {
                 const urlMatch = pr.html_url.match(/github\.com\/[^/]+\/([^/]+)\/pull\//i);
@@ -267,7 +268,7 @@ export class PRsStorageService {
     return [];
   }
 
-  saveRepoPRs(repoName: string, prs: any[]): void {
+  saveRepoPRs(repoName: string, prs: Array<Partial<PRRecord>>): void {
     const filePath = this.getRepoPRsPath(repoName);
     try {
       writeJsonAtomic(filePath, prs, 2);

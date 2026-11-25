@@ -57,7 +57,7 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const colors = ['#6366f1', '#10b981', '#a855f7', '#ec4899', '#f59e0b', '#06b6d4', '#3b82f6'];
     let colorIdx = 0;
 
-    const walk = (nodes: any[]) => {
+    const walk = (nodes: TreeNode[]) => {
       for (const node of nodes || []) {
         if (node.type === 'directory' || (node.children && node.children.length > 0)) {
           const clean = (node.path || '').replace(/\\/g, '/').replace(/^\/+/, '');
@@ -87,8 +87,11 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       !activeRepo ||
       activeRepo.is_local
     );
-    const collabs = projectConfig?.governance_collaborators || {};
-    const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === cleanLogin)?.[1] as any;
+    const collabs = (projectConfig?.governance_collaborators || {}) as Record<
+      string,
+      { departments?: string[]; allowed_paths?: string[] }
+    >;
+    const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === cleanLogin)?.[1];
     const userDepts: string[] = isOwner ? ['*'] : (userMeta?.departments || ['*']);
 
     return {
@@ -130,8 +133,11 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const userAllowedPaths = useMemo(() => {
     const userLogin = user?.login?.toLowerCase();
     if (!userLogin) return null;
-    const collabs = projectConfig?.governance_collaborators || {};
-    const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === userLogin)?.[1] as any;
+    const collabs = (projectConfig?.governance_collaborators || {}) as Record<
+      string,
+      { departments?: string[]; allowed_paths?: string[] }
+    >;
+    const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === userLogin)?.[1];
     if (userMeta?.allowed_paths && Array.isArray(userMeta.allowed_paths)) {
       if (!userMeta.allowed_paths.includes('*') && !userMeta.allowed_paths.includes('/**')) {
         return userMeta.allowed_paths.map((pattern: string) =>

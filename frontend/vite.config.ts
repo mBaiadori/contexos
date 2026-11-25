@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import { readFileSync } from 'fs'
 import path from 'path'
 
-const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'))
+const pkg = JSON.parse(readFileSync(path.resolve(import.meta.dirname, 'package.json'), 'utf-8'))
 const frontendPort = Number(process.env.VITE_PORT) || 5173
 const backendPort = Number(process.env.VITE_BACKEND_PORT) || Number(process.env.PORT) || 4100
 

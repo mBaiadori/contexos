@@ -52,7 +52,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath }) => {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
       const pageText = content.items
-        .map((item: any) => item.str)
+        .map((item) => ("str" in item ? item.str : ""))
         .join(' ')
         .replace(/\s+/g, ' ');
 
@@ -76,9 +76,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath }) => {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[PdfViewer] Erro ao extrair texto:', err);
-      alert('Não foi possível extrair o texto do PDF: ' + (err.message || 'Erro desconhecido'));
+      alert('Não foi possível extrair o texto do PDF: ' + (err instanceof Error ? err.message : 'Erro desconhecido'));
     } finally {
       setIsExtracting(false);
     }

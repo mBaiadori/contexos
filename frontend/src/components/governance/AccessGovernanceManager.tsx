@@ -132,13 +132,13 @@ export const AccessGovernanceManager: React.FC<
           setLiveTeams(repoTeamsRes.data.teams);
         }
         if (collabRes.ok && collabRes.data?.collaborators) {
-          setLiveCollaborators(collabRes.data.collaborators as any);
+          setLiveCollaborators(collabRes.data.collaborators as Parameters<typeof setLiveCollaborators>[0]);
         }
         if (wfRes.ok && wfRes.data) {
           setWorkflowStatus(wfRes.data);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn("[AccessGovernanceManager] Falha ao carregar dados:", err);
       setErrorMsg("Não foi possível sincronizar governança com o GitHub.");
     } finally {
@@ -194,8 +194,8 @@ export const AccessGovernanceManager: React.FC<
       } else {
         setErrorMsg(res.data?.message || "Falha ao criar time na organização.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsMutating(false);
     }
@@ -219,8 +219,8 @@ export const AccessGovernanceManager: React.FC<
       } else {
         setErrorMsg(res.data?.message || "Falha ao excluir time.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsMutating(false);
     }
@@ -248,8 +248,8 @@ export const AccessGovernanceManager: React.FC<
       } else {
         setErrorMsg(res.data?.message || "Falha ao adicionar membro ao time.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsMutating(false);
     }
@@ -275,8 +275,8 @@ export const AccessGovernanceManager: React.FC<
       } else {
         setErrorMsg(res.data?.message || "Falha ao remover membro do time.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsMutating(false);
     }
@@ -304,8 +304,8 @@ export const AccessGovernanceManager: React.FC<
           res.data?.message || "Falha ao enviar convite para a organização.",
         );
       }
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsMutating(false);
     }
@@ -326,8 +326,8 @@ export const AccessGovernanceManager: React.FC<
           res.data?.message || "Falha ao remover membro da organização.",
         );
       }
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsMutating(false);
     }
@@ -335,7 +335,7 @@ export const AccessGovernanceManager: React.FC<
 
   // Atribuir time ao repositório
   const handleAddTeamToRepo = async (team: OrganizationTeamInfo) => {
-    const defaultPerm = (team.permission as any) || "push";
+    const defaultPerm = (team.permission as "pull" | "push" | "admin") || "push";
     if (isLiveRepoMode && repoName) {
       setIsMutating(true);
       try {
@@ -354,8 +354,8 @@ export const AccessGovernanceManager: React.FC<
             res.data?.message || "Falha ao associar time ao repositório.",
           );
         }
-      } catch (err: any) {
-        setErrorMsg(err.message);
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
       } finally {
         setIsMutating(false);
       }
@@ -390,8 +390,8 @@ export const AccessGovernanceManager: React.FC<
           );
           fetchGovernanceData();
         }
-      } catch (err: any) {
-        setErrorMsg(err.message);
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
       } finally {
         setIsMutating(false);
       }
@@ -419,8 +419,8 @@ export const AccessGovernanceManager: React.FC<
           showFeedback(`Time @${teamSlug} removido do repositório.`);
           fetchGovernanceData();
         }
-      } catch (err: any) {
-        setErrorMsg(err.message);
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
       } finally {
         setIsMutating(false);
       }
@@ -441,7 +441,7 @@ export const AccessGovernanceManager: React.FC<
       try {
         const res = await API.inviteCollaborator({
           username: cleanUser,
-          permission: permission as any,
+          permission: permission as "pull" | "push" | "admin",
           repo: repoName,
         });
         if (res.ok) {
@@ -452,8 +452,8 @@ export const AccessGovernanceManager: React.FC<
         } else {
           setErrorMsg(res.data?.message || "Falha ao convidar colaborador.");
         }
-      } catch (err: any) {
-        setErrorMsg(err.message);
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
       } finally {
         setIsMutating(false);
       }
@@ -489,8 +489,8 @@ export const AccessGovernanceManager: React.FC<
           );
           fetchGovernanceData();
         }
-      } catch (err: any) {
-        setErrorMsg(err.message);
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
       } finally {
         setIsMutating(false);
       }
@@ -514,8 +514,8 @@ export const AccessGovernanceManager: React.FC<
           showFeedback(`Colaborador @${username} removido.`);
           fetchGovernanceData();
         }
-      } catch (err: any) {
-        setErrorMsg(err.message);
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
       } finally {
         setIsMutating(false);
       }
@@ -541,8 +541,8 @@ export const AccessGovernanceManager: React.FC<
       } else {
         setErrorMsg("Falha ao instalar workflow de governança no repositório.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsInstallingWorkflow(false);
     }
@@ -561,7 +561,7 @@ export const AccessGovernanceManager: React.FC<
         slug: t.slug,
         name: t.name,
         permission: t.permission || "push",
-        members_count: (t as any).members_count || 0,
+        members_count: (t as { members_count?: number }).members_count || 0,
       }));
 
   const currentRepoCollaborators = isFormMode

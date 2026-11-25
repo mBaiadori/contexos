@@ -643,10 +643,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
         } else {
           showToast(res.error || "Falha ao duplicar arquivo.", "warning");
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[FileTree] Erro ao duplicar arquivo:", err);
         showToast(
-          err.message || "Erro inesperado ao duplicar arquivo.",
+          err instanceof Error ? err.message : "Erro inesperado ao duplicar arquivo.",
           "warning",
         );
       }
@@ -888,7 +888,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         const isDir =
           node.type === "dir" ||
           node.type === "directory" ||
-          (node as any).is_directory;
+          node.is_directory;
 
         if (!isDir) {
           return nameMatch ? node : null;
@@ -1474,8 +1474,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
             } else {
               setDraftBranchError(res?.message || "Não foi possível criar o rascunho.");
             }
-          } catch (err: any) {
-            setDraftBranchError(err?.message || "Erro ao criar rascunho de versão.");
+          } catch (err: unknown) {
+            setDraftBranchError(err instanceof Error ? err.message : "Erro ao criar rascunho de versão.");
           } finally {
             setIsCreatingDraftBranch(false);
           }

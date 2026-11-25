@@ -222,7 +222,7 @@ export class AuthService {
       },
       token: token.trim(),
       git_provider: 'github' as const,
-      orgs: orgList.map((o: any) => ({
+      orgs: orgList.map((o: { login: string; avatar_url?: string; description?: string }) => ({
         login: o.login,
         avatar_url: o.avatar_url,
         description: o.description,
@@ -379,7 +379,7 @@ export class AuthService {
     const clientId = (
       customClientId ||
       process.env.GITHUB_CLIENT_ID ||
-      (cfg as any).github_client_id ||
+      (cfg as { github_client_id?: string }).github_client_id ||
       '178c6fc778ccc68e1d6a'
     ).trim();
 
@@ -403,7 +403,15 @@ export class AuthService {
         }),
       });
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as {
+        device_code?: string;
+        user_code?: string;
+        verification_uri?: string;
+        expires_in?: number;
+        interval?: number;
+        error?: string;
+        error_description?: string;
+      };
 
       if (!response.ok || data.error) {
         const errorMsg =
@@ -422,9 +430,9 @@ export class AuthService {
         interval: data.interval || 5,
         client_id: clientId,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[AuthService] Erro ao solicitar device code:', err);
-      throw new Error(err.message || 'Erro de conexão com o servidor de autenticação.');
+      throw new Error(err instanceof Error ? err.message : 'Erro de conexão com o servidor de autenticação.');
     }
   }
 
@@ -440,7 +448,7 @@ export class AuthService {
     const clientId = (
       customClientId ||
       process.env.GITHUB_CLIENT_ID ||
-      (cfg as any).github_client_id ||
+      (cfg as { github_client_id?: string }).github_client_id ||
       '178c6fc778ccc68e1d6a'
     ).trim();
 
@@ -459,7 +467,13 @@ export class AuthService {
         }),
       });
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as {
+        access_token?: string;
+        token_type?: string;
+        interval?: number;
+        error?: string;
+        error_description?: string;
+      };
 
       if (data.error) {
         if (data.error === 'authorization_pending') {
@@ -510,9 +524,9 @@ export class AuthService {
         status: 'pending' as const,
         message: 'Aguardando confirmação...',
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[AuthService] Erro durante o polling do device token:', err);
-      throw new Error(err.message || 'Erro ao consultar status da autorização.');
+      throw new Error(err instanceof Error ? err.message : 'Erro ao consultar status da autorização.');
     }
   }
 

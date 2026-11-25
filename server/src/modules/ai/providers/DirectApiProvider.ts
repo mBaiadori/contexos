@@ -1,4 +1,5 @@
 import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent, ChatMediaAttachment } from './provider.types.js';
+import type { ToolCallExecutionRecord } from '../tools/tool.types.js';
 import { aiService } from '../ai.service.js';
 import { loadConfig } from '../../../config/storage.js';
 
@@ -50,7 +51,7 @@ export class DirectApiProvider implements IAgentProvider {
       content?: string;
       attachments?: ChatMediaAttachment[];
     }
-  ): Promise<{ reply: string; toolCalls?: any[] }> {
+  ): Promise<{ reply: string; toolCalls?: ToolCallExecutionRecord[] }> {
     const session = this.sessions.get(sessionId);
     const repoName = session?.repoName || 'local';
     const cfg = loadConfig();
@@ -144,12 +145,12 @@ export class DirectApiProvider implements IAgentProvider {
         reply: result.reply,
         toolCalls: result.tool_calls,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       onEvent({
         type: 'error',
         provider: this.id,
         sessionId,
-        data: err?.message || String(err),
+        data: err instanceof Error ? err.message : String(err),
         timestamp: Date.now(),
       });
       throw err;

@@ -78,9 +78,9 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
         await loadData();
         setTimeout(() => setActionMessage(null), 3000);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionType('error');
-      setActionMessage(`Erro: ${err.message}`);
+      setActionMessage(`Erro: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -98,9 +98,9 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
         }
         setTimeout(() => setActionMessage(null), 3000);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionType('error');
-      setActionMessage(`Erro: ${err.message}`);
+      setActionMessage(`Erro: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -185,7 +185,7 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
             <Tabs
               tabs={tabList}
               activeTab={activeTab}
-              onChange={(tab) => setActiveTab(tab as any)}
+              onChange={(tab) => setActiveTab(tab as 'installed' | 'hub')}
               variant="pills"
             />
 

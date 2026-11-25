@@ -196,7 +196,7 @@ export const AISettingsModal: React.FC = () => {
           if (res.data.detailedModels && res.data.detailedModels.length > 0) {
             items = res.data.detailedModels;
           } else if (res.data.models && res.data.models.length > 0) {
-            items = res.data.models.map((m: any) =>
+            items = res.data.models.map((m: string | DetailedModelItem) =>
               typeof m === "string" ? { id: m, name: m } : m,
             );
           }

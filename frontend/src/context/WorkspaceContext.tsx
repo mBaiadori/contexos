@@ -72,10 +72,10 @@ export interface WorkspaceContextType {
   updateDocumentTitle: (newTitle: string) => Promise<void>;
   projectMetaOptions: ProjectMetadataOptions | null;
   loadProjectMetadataOptions: () => Promise<void>;
-  projectConfig: any;
-  loadProjectConfig: (targetRepoName?: string) => Promise<any>;
+  projectConfig: Record<string, any> | null;
+  loadProjectConfig: (targetRepoName?: string) => Promise<Record<string, any> | null>;
   saveProjectConfig: (
-    configData: any,
+    configData: Record<string, any>,
   ) => Promise<{ success: boolean; error?: string }>;
   dictionaryTerms: DictionaryTerm[];
   loadDictionaryTerms: () => Promise<DictionaryTerm[]>;

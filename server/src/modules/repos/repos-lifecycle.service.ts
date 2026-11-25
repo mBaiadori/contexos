@@ -137,8 +137,24 @@ export async function ensureMainBranchInitialized(
   }
 }
 
+export interface SelectRepoInput {
+  name: string;
+  owner?: string;
+  full_name?: string;
+  html_url?: string;
+  is_local?: boolean;
+  description?: string;
+  default_branch?: string;
+  private?: boolean;
+  is_private?: boolean;
+  permissions?: { pull?: boolean; push?: boolean; admin?: boolean };
+  is_owner?: boolean;
+  is_pending_invitation?: boolean;
+  invitation_id?: number | string;
+}
+
 export class ReposLifecycleService {
-  async selectRepo(repo: any) {
+  async selectRepo(repo: SelectRepoInput) {
     if (!repo || !repo.name) {
       throw new Error("Repositório inválido.");
     }
@@ -239,7 +255,7 @@ export class ReposLifecycleService {
             cloneResult.message || `Não foi possível baixar o projeto '${fullName}' para a sua máquina.`,
           );
         }
-      } catch (cloneErr: any) {
+      } catch (cloneErr: unknown) {
         console.warn(`[selectRepo] Não foi possível clonar ${fullName}:`, cloneErr);
         eventsService.broadcast("repo_progress", {
           repo: repo.name,
@@ -249,7 +265,8 @@ export class ReposLifecycleService {
         });
         if (!(await isGitRepo(repoDir))) {
           throw new Error(
-            cloneErr?.message || `Não foi possível baixar o projeto '${fullName}' para a sua máquina.`,
+            (cloneErr instanceof Error ? cloneErr.message : undefined) ||
+              `Não foi possível baixar o projeto '${fullName}' para a sua máquina.`,
           );
         }
       }

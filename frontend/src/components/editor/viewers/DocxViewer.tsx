@@ -52,9 +52,9 @@ export const DocxViewer: React.FC<DocxViewerProps> = ({ filePath }) => {
           renderFooters: true,
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[DocxViewer] Erro:', err);
-      setError(err.message || 'Erro ao renderizar documento Word.');
+      setError(err instanceof Error ? err.message : 'Erro ao renderizar documento Word.');
     } finally {
       setIsLoading(false);
     }

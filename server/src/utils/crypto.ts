@@ -232,7 +232,7 @@ export async function mergePlaintext3Way(
         conflictCount: conflictMarkers || 1,
       };
     }
-  } catch (err: any) {
+  } catch {
     // Fallback se não conseguir rodar git merge-file: retorna a versão local e sinaliza
     return {
       hasConflicts: true,

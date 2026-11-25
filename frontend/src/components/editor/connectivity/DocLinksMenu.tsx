@@ -1,8 +1,16 @@
 import React from "react";
 
+export interface DocLinkItem {
+  path?: string;
+  filePath?: string;
+  title?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
 export interface DocLinksMenuProps {
-  consumers: any[];
-  dependencies: any[];
+  consumers: Array<DocLinkItem | string>;
+  dependencies: Array<DocLinkItem | string>;
   showConsumers: boolean;
   setShowConsumers: (show: boolean) => void;
   showDeps: boolean;
@@ -210,7 +218,7 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                   gap: "2px",
                 }}
               >
-                {consumers.map((c: any, i: number) => (
+                {consumers.map((c, i: number) => (
                   <div
                     key={i}
                     onClick={() => {
@@ -453,7 +461,7 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
                   gap: "2px",
                 }}
               >
-                {dependencies.map((d: any, i: number) => (
+                {dependencies.map((d, i: number) => (
                   <div
                     key={i}
                     onClick={() => {

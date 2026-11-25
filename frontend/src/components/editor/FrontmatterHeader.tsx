@@ -17,10 +17,13 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
   const { departments } = useSecurity();
   const { projectMetaOptions } = useWorkspace();
 
-  const statusOptions: string[] = (projectMetaOptions?.statuses || []).map(
-    (s: any) =>
+  const statusOptions: string[] = ((projectMetaOptions?.statuses || []) as Array<
+    string | { key?: string; name?: string; label?: string }
+  >)
+    .map((s) =>
       typeof s === "string" ? s : s.key || s.name || s.label || "",
-  ).filter(Boolean);
+    )
+    .filter(Boolean);
 
   if (statusOptions.length === 0) {
     statusOptions.push(metadata.status || "-");
@@ -28,7 +31,7 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
     statusOptions.unshift(metadata.status);
   }
 
-  const handleFieldChange = (field: string, value: any) => {
+  const handleFieldChange = (field: string, value: unknown) => {
     onChange({
       ...metadata,
       [field]: value,

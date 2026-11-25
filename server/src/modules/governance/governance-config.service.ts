@@ -28,7 +28,7 @@ export class GovernanceConfigService {
     return path.join(dir, ".project.config.json");
   }
 
-  readProjectConfig(repoName?: string): any {
+  readProjectConfig(repoName?: string): Record<string, any> {
     const p = this.getProjectConfigPath(repoName);
     if (fs.existsSync(p)) {
       try {

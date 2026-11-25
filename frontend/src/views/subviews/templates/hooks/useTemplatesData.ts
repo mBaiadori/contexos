@@ -140,8 +140,8 @@ export function useTemplatesData() {
   const badgePresets = useMemo<BadgePreset[]>(() => {
     const raw = projectMetaOptions?.badges || projectConfig?.badges;
     if (Array.isArray(raw) && raw.length > 0) {
-      return raw
-        .map((b: any) =>
+      return (raw as Array<string | { name?: string; color?: string; description?: string }>)
+        .map((b) =>
           typeof b === "string"
             ? { name: b.toUpperCase() }
             : {
@@ -161,8 +161,8 @@ export function useTemplatesData() {
     let baseList: SelectOption[] = [];
 
     if (Array.isArray(rawProjectCats) && rawProjectCats.length > 0) {
-      baseList = rawProjectCats.map((cat: any) => {
-        const name = typeof cat === "string" ? cat : cat.name;
+      baseList = (rawProjectCats as Array<string | { name?: string }>).map((cat) => {
+        const name = typeof cat === "string" ? cat : String(cat.name || "");
         const lower = String(name || "").toLowerCase();
         return {
           value: lower,
@@ -339,7 +339,7 @@ export function useTemplatesData() {
         await updateTemplate(tplId, templateData);
         setSaveSuccessMsg("Template atualizado com sucesso!");
       } else {
-        await createTemplate(templateData as any);
+        await createTemplate(templateData as Partial<TemplateItem>);
         setIsEditMode(true);
         setTplId(finalId);
         setSaveSuccessMsg("Template criado com sucesso!");
@@ -358,8 +358,8 @@ export function useTemplatesData() {
       });
 
       setTimeout(() => setSaveSuccessMsg(""), 3000);
-    } catch (err: any) {
-      setSaveError(err.message || "Erro ao salvar template.");
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : "Erro ao salvar template.");
     } finally {
       setIsSaving(false);
     }
@@ -369,8 +369,8 @@ export function useTemplatesData() {
     if (window.confirm(`Tem certeza que deseja remover o template "${tpl.title}"?`)) {
       try {
         await deleteTemplate(tpl.id, isCommunity);
-      } catch (err: any) {
-        alert(`Erro: ${err.message}`);
+      } catch (err: unknown) {
+        alert(`Erro: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   };
@@ -389,10 +389,10 @@ export function useTemplatesData() {
           return next;
         });
       }, 3500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setImportFeedback((prev) => ({
         ...prev,
-        [tpl.id]: { ok: false, msg: err.message || "Falha ao importar." },
+        [tpl.id]: { ok: false, msg: err instanceof Error ? err.message : "Falha ao importar." },
       }));
     }
   };

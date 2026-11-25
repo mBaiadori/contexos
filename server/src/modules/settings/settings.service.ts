@@ -1,6 +1,10 @@
 import { loadConfig, saveConfig } from "../../config/storage.js";
 import { validateUrlForSSRF } from "../../utils/ssrf-guard.js";
 
+type AppConfig = ReturnType<typeof loadConfig>;
+type AppSettings = NonNullable<AppConfig["settings"]>;
+type AppAISettings = NonNullable<AppConfig["ai_settings"]>;
+
 export class SettingsService {
   getSettings() {
     const cfg = loadConfig();
@@ -14,12 +18,12 @@ export class SettingsService {
     };
   }
 
-  saveSettings(settingsData: any) {
+  saveSettings(settingsData: Partial<AppSettings>) {
     const cfg = loadConfig();
     cfg.settings = {
       ...cfg.settings,
       ...settingsData,
-    };
+    } as AppSettings;
     saveConfig(cfg);
     return {
       success: true,
@@ -44,22 +48,35 @@ export class SettingsService {
       custom_endpoint: ai.custom_endpoint,
       default_provider:
         ai.default_provider ||
-        (cfg.settings as any)?.default_provider ||
+        cfg.settings?.default_provider ||
         "antigravity",
-      antigravity_cli_path: (cfg.settings as any)?.antigravity_cli_path || "",
-      claude_cli_path: (cfg.settings as any)?.claude_cli_path || "",
-      agent_effort: (cfg.settings as any)?.agent_effort || "medium",
-      agent_model: (cfg.settings as any)?.agent_model || "",
-      claude_model: (cfg.settings as any)?.claude_model || "",
+      antigravity_cli_path: cfg.settings?.antigravity_cli_path || "",
+      claude_cli_path: cfg.settings?.claude_cli_path || "",
+      agent_effort: cfg.settings?.agent_effort || "medium",
+      agent_model: cfg.settings?.agent_model || "",
+      claude_model: cfg.settings?.claude_model || "",
     };
   }
 
-  saveAISettings(aiData: any) {
+  saveAISettings(
+    aiData: Partial<AppAISettings> &
+      Partial<
+        Pick<
+          AppSettings,
+          | "antigravity_cli_path"
+          | "claude_cli_path"
+          | "agent_effort"
+          | "agent_model"
+          | "claude_model"
+          | "default_provider"
+        >
+      >,
+  ) {
     const cfg = loadConfig();
     cfg.ai_settings = {
       ...cfg.ai_settings,
       ...aiData,
-    };
+    } as AppAISettings;
     if (
       aiData.antigravity_cli_path !== undefined ||
       aiData.claude_cli_path !== undefined ||
@@ -72,16 +89,16 @@ export class SettingsService {
         ...cfg.settings,
         antigravity_cli_path:
           aiData.antigravity_cli_path ??
-          (cfg.settings as any)?.antigravity_cli_path,
+          cfg.settings?.antigravity_cli_path,
         claude_cli_path:
-          aiData.claude_cli_path ?? (cfg.settings as any)?.claude_cli_path,
+          aiData.claude_cli_path ?? cfg.settings?.claude_cli_path,
         agent_effort:
-          aiData.agent_effort ?? (cfg.settings as any)?.agent_effort,
-        agent_model: aiData.agent_model ?? (cfg.settings as any)?.agent_model,
-        claude_model: aiData.claude_model ?? (cfg.settings as any)?.claude_model,
+          aiData.agent_effort ?? cfg.settings?.agent_effort,
+        agent_model: aiData.agent_model ?? cfg.settings?.agent_model,
+        claude_model: aiData.claude_model ?? cfg.settings?.claude_model,
         default_provider:
-          aiData.default_provider ?? (cfg.settings as any)?.default_provider,
-      };
+          aiData.default_provider ?? cfg.settings?.default_provider,
+      } as AppSettings;
     }
     saveConfig(cfg);
     return {
@@ -293,16 +310,17 @@ export class SettingsService {
               }
             }
           } else {
-            const errData = await res.json().catch(() => ({}));
-            const errMsg =
-              (errData as any)?.error?.message || `Status HTTP ${res.status}`;
+            const errData = (await res.json().catch(() => ({}))) as {
+              error?: { message?: string };
+            };
+            const errMsg = errData?.error?.message || `Status HTTP ${res.status}`;
             console.warn(
               `[SettingsService] Erro ao consultar modelos do Gemini: ${errMsg}`,
             );
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.warn(
-            `[SettingsService] Falha na requisição Gemini models: ${err.message || String(err)}`,
+            `[SettingsService] Falha na requisição Gemini models: ${err instanceof Error ? err.message : String(err)}`,
           );
         }
       }
@@ -351,9 +369,9 @@ export class SettingsService {
               }
             }
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.warn(
-            `[SettingsService] Falha na consulta OpenAI models: ${err.message}`,
+            `[SettingsService] Falha na consulta OpenAI models: ${err instanceof Error ? err.message : String(err)}`,
           );
         }
       }

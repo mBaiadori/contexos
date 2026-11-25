@@ -70,8 +70,8 @@ export const CloneRepoModal: React.FC<CloneRepoModalProps> = ({
       } else {
         setErrorMsg(res.data?.error || res.data?.message || "Erro ao clonar repositório.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Falha na comunicação com o servidor.");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Falha na comunicação com o servidor.");
     } finally {
       setIsSubmitting(false);
     }

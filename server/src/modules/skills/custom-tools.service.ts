@@ -402,10 +402,10 @@ export class CustomToolsService {
         success: false,
         error: `Tipo de handler desconhecido: ${tool.handler_type}`,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         success: false,
-        error: `Falha na execução da ferramenta customizada '${tool.name}': ${err.message || String(err)}`,
+        error: `Falha na execução da ferramenta customizada '${tool.name}': ${err instanceof Error ? err.message : String(err)}`,
       };
     }
   }
@@ -438,7 +438,7 @@ export class CustomToolsService {
       if ('success' in resObj || 'data' in resObj) {
         return {
           success: resObj.success !== undefined ? Boolean(resObj.success) : true,
-          data: resObj.data !== undefined ? resObj.data : resObj,
+          data: resObj.data !== undefined ? (resObj.data as Record<string, unknown>) : resObj,
           error: typeof resObj.error === 'string' ? resObj.error : undefined,
         };
       }
@@ -446,7 +446,7 @@ export class CustomToolsService {
 
     return {
       success: true,
-      data: result,
+      data: result as Record<string, unknown>,
     };
   }
 
@@ -483,7 +483,7 @@ export class CustomToolsService {
 
     const response = await safeFetch(rawUrl, fetchOptions);
     const contentType = response.headers.get('content-type') || '';
-    let responseData: any = null;
+    let responseData: unknown = null;
 
     if (contentType.includes('application/json')) {
       responseData = await response.json();
@@ -500,7 +500,7 @@ export class CustomToolsService {
 
     return {
       success: true,
-      data: responseData,
+      data: responseData as Record<string, unknown>,
     };
   }
 

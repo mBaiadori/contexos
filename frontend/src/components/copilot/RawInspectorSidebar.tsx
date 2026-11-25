@@ -24,8 +24,8 @@ interface RawInspectorSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   docPath?: string;
-  rawPayload?: any;
-  rawResponse?: any;
+  rawPayload?: Record<string, unknown>;
+  rawResponse?: Record<string, unknown>;
 }
 
 export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
@@ -593,7 +593,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setDetailTab(tab.id as any)}
+                  onClick={() => setDetailTab(tab.id as "prompt" | "context" | "tools" | "response")}
                   style={{
                     flex: 1,
                     padding: "8px 4px",
@@ -878,7 +878,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                     {activeTurn.response?.tool_calls &&
                     activeTurn.response.tool_calls.length > 0 ? (
                       activeTurn.response.tool_calls.map(
-                        (tc: any, idx: number) => (
+                        (tc, idx: number) => (
                           <div
                             key={idx}
                             style={{
@@ -998,9 +998,9 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                           gap: "3px",
                         }}
                       >
-                        {activeTurn.response.stream_events
+                        {(activeTurn.response.stream_events as Array<{ type?: string; toolName?: string }>)
                           .slice(0, 15)
-                          .map((ev: any, idx: number) => (
+                          .map((ev, idx: number) => (
                             <div
                               key={idx}
                               style={{

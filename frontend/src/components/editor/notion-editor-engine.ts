@@ -89,13 +89,13 @@ export class NotionEditorEngine {
   onAddDictionaryTerm?: (text: string) => void;
   onLinkSynonym?: (text: string) => void;
   dictionaryTerms: DictionaryTerm[] = [];
-  private dictHoverTimer: any = null;
+  private dictHoverTimer: ReturnType<typeof setTimeout> | null = null;
   private dictCurrentHoverEl: HTMLElement | null = null;
 
   undoStack: string[] = [];
   redoStack: string[] = [];
   isComposing = false;
-  historyTimer: any = null;
+  historyTimer: ReturnType<typeof setTimeout> | null = null;
   MAX_HISTORY = 150;
 
   slashMenu: SlashMenuEngine | null = null;
@@ -1101,7 +1101,7 @@ export class NotionEditorEngine {
     try {
       const { svg } = await mermaid.render(renderId, code);
       renderArea.innerHTML = sanitizeSvg(svg);
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Remove any stray error elements mermaid might append to body
       const strayErr = document.getElementById(`d${renderId}`);
       if (strayErr) strayErr.remove();
@@ -1109,7 +1109,7 @@ export class NotionEditorEngine {
       renderArea.innerHTML = `
         <div style="color:#ef4444; font-size:12px; padding:12px; display:flex; align-items:center; gap:6px; background:#fef2f2; border-radius:6px; border:1px solid #fecaca;">
           <span class="material-symbols-outlined icon-xs">warning</span>
-          <span>Erro na sintaxe Mermaid: ${escapeHtml(e?.message || String(e))}</span>
+          <span>Erro na sintaxe Mermaid: ${escapeHtml(e instanceof Error ? e.message : String(e))}</span>
         </div>
       `;
     }
@@ -1712,7 +1712,9 @@ export class NotionEditorEngine {
 
   handlePaste(e: ClipboardEvent) {
     e.preventDefault();
-    const clipboardData = e.clipboardData || (window as any).clipboardData;
+    const clipboardData =
+      e.clipboardData ||
+      (window as Window & { clipboardData?: DataTransfer }).clipboardData;
     let text = clipboardData?.getData('text/plain') || '';
     const htmlData = clipboardData?.getData('text/html') || '';
 

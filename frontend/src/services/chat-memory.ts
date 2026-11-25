@@ -9,9 +9,9 @@ export interface ChatSessionRecord {
   repo: string;
   docPath: string;
   sessionId: string;
-  history: any[];
+  history: Array<Record<string, unknown>>;
   updatedAt: string;
-  author?: any;
+  author?: Record<string, unknown> | string | null;
   model?: string;
 }
 
@@ -31,14 +31,14 @@ class ChatMemoryStore {
     return new Promise((resolve) => {
       try {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onupgradeneeded = (e: any) => {
-          const db = e.target.result;
+        req.onupgradeneeded = (e: IDBVersionChangeEvent) => {
+          const db = (e.target as IDBOpenDBRequest).result;
           if (!db.objectStoreNames.contains(STORE_NAME)) {
             db.createObjectStore(STORE_NAME, { keyPath: "key" });
           }
         };
-        req.onsuccess = (e: any) => {
-          this.db = e.target.result;
+        req.onsuccess = (e: Event) => {
+          this.db = (e.target as IDBOpenDBRequest).result;
           resolve(this.db);
         };
         req.onerror = () => {
@@ -89,7 +89,16 @@ class ChatMemoryStore {
     }
   }
 
-  async saveSession(repo: string, docPath: string, sessionData: { sessionId?: string; history: any[]; author?: any; model?: string }): Promise<ChatSessionRecord> {
+  async saveSession(
+    repo: string,
+    docPath: string,
+    sessionData: {
+      sessionId?: string;
+      history: Array<Record<string, unknown>>;
+      author?: Record<string, unknown> | string | null;
+      model?: string;
+    },
+  ): Promise<ChatSessionRecord> {
     await this.initPromise;
     const key = this.getKey(repo, docPath);
     const record: ChatSessionRecord = {

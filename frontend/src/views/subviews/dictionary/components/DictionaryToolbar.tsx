@@ -6,7 +6,7 @@ import { DDD_CATEGORIES, type SortOption, type ViewMode } from "../types";
 interface DictionaryToolbarProps {
   searchTerm: string;
   onSearchChange: (val: string) => void;
-  categories: any[];
+  categories: Array<{ name: string; label?: string; color?: string }>;
   selectedDomainFilter: string;
   onSelectDomainFilter: (val: string) => void;
   selectedCategoryFilter: string;
@@ -114,7 +114,7 @@ export const DictionaryToolbar: React.FC<DictionaryToolbarProps> = ({
               }}
             >
               <option value="ALL">Todos os Domínios</option>
-              {categories.map((cat: any) => (
+              {categories.map((cat) => (
                 <option key={cat.name} value={cat.name}>
                   {cat.label || cat.name}
                 </option>

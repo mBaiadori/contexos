@@ -493,8 +493,8 @@ export const VersionsCanvasSubView: React.FC<
             : "Não foi possível buscar atualizações."),
       });
       await loadGraph();
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err?.message || "Erro ao buscar atualizações." });
+    } catch (err: unknown) {
+      setFeedback({ type: "error", message: err instanceof Error ? err.message : "Erro ao buscar atualizações." });
     } finally {
       setIsSyncing(false);
     }
@@ -756,10 +756,10 @@ export const VersionsCanvasSubView: React.FC<
                     message: res.data?.error || res.data?.message || "Erro ao excluir rascunho.",
                   });
                 }
-              } catch (err: any) {
+              } catch (err: unknown) {
                 setFeedback({
                   type: "error",
-                  message: err?.message || "Falha ao excluir rascunho.",
+                  message: err instanceof Error ? err.message : "Falha ao excluir rascunho.",
                 });
               } finally {
                 setIsProcessing(false);

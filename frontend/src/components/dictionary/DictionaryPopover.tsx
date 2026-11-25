@@ -43,8 +43,8 @@ export const DictionaryPopover: React.FC<DictionaryPopoverProps> = ({
     if (!data?.domain) return "#64748b";
     const categories =
       projectMetaOptions?.categories || projectConfig?.categories || [];
-    const found = categories.find(
-      (c: any) =>
+    const found = (categories as Array<{ name?: string; label?: string; color?: string }>).find(
+      (c) =>
         (c.name || "").toLowerCase() === data.domain?.toLowerCase() ||
         (c.label || "").toLowerCase() === data.domain?.toLowerCase(),
     );

@@ -103,11 +103,11 @@ export const LanguageSelectorDropdown: React.FC<
         setIsOpen(false);
       } else {
         setErrorToast(
-          (res.data as any)?.error || "Erro ao solicitar tradução.",
+          (res.data as { error?: string } | undefined)?.error || "Erro ao solicitar tradução.",
         );
       }
-    } catch (err: any) {
-      setErrorToast(err?.message || "Falha na comunicação com o servidor.");
+    } catch (err: unknown) {
+      setErrorToast(err instanceof Error ? err.message : "Falha na comunicação com o servidor.");
     } finally {
       setIsTranslating(false);
       setTranslatingLang(null);
@@ -130,11 +130,11 @@ export const LanguageSelectorDropdown: React.FC<
         }
       } else {
         setErrorToast(
-          (res.data as any)?.error || "Erro ao remover arquivo de tradução.",
+          (res.data as { error?: string } | undefined)?.error || "Erro ao remover arquivo de tradução.",
         );
       }
-    } catch (err: any) {
-      setErrorToast(err?.message || "Falha ao remover tradução.");
+    } catch (err: unknown) {
+      setErrorToast(err instanceof Error ? err.message : "Falha ao remover tradução.");
     } finally {
       setDeletingLang(null);
     }

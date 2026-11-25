@@ -60,9 +60,7 @@ export class DraftsTrashService {
     const effectiveOwner =
       ownerParam ||
       (cfg.active_repo?.name === activeRepoName
-        ? (typeof cfg.active_repo?.owner === "string"
-            ? cfg.active_repo.owner
-            : cfg.active_repo?.owner?.login)
+        ? cfg.active_repo?.owner
         : undefined);
 
     return resolveRepoDir(activeRepoName, effectiveOwner);

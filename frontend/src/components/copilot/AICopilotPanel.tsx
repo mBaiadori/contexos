@@ -125,7 +125,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   const isAutoRagEnabled = useCopilotStore((s) => s.isAutoRagEnabled);
 
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (isThinking) {
       setElapsedSeconds(0);
       interval = setInterval(() => {

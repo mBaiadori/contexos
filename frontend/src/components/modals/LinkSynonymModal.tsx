@@ -73,8 +73,8 @@ export const LinkSynonymModal: React.FC<LinkSynonymModalProps> = ({
       } else {
         setError(res.error || "Erro ao vincular sinônimo.");
       }
-    } catch (err: any) {
-      setError(err.message || "Erro inesperado.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erro inesperado.");
     } finally {
       setIsSaving(false);
     }
@@ -82,8 +82,8 @@ export const LinkSynonymModal: React.FC<LinkSynonymModalProps> = ({
 
   const getCategoryColor = (domain?: string) => {
     if (!domain) return "#64748b";
-    const found = categories.find(
-      (c: any) =>
+    const found = (categories as Array<{ name?: string; label?: string; color?: string }>).find(
+      (c) =>
         (c.name || "").toLowerCase() === domain.toLowerCase() ||
         (c.label || "").toLowerCase() === domain.toLowerCase(),
     );

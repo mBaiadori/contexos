@@ -31,9 +31,7 @@ export class GovernanceCollaboratorsService {
         ? resolvedFullName.split("/")[0]
         : null;
     const ownerLogin =
-      (typeof activeRepo?.owner === "string"
-        ? activeRepo.owner
-        : activeRepo?.owner?.login) ||
+      activeRepo?.owner ||
       repoOwnerFromFullName ||
       cfg.user?.login ||
       "local-owner";
@@ -59,7 +57,21 @@ export class GovernanceCollaboratorsService {
           cfg.token,
         );
         if (ghRes.statusCode === 200 && Array.isArray(ghRes.data)) {
-          collaborators = ghRes.data.map((c: any) => {
+          collaborators = ghRes.data.map(
+            (c: {
+              login: string;
+              id: number;
+              avatar_url?: string;
+              html_url?: string;
+              role_name?: string;
+              permissions?: {
+                admin?: boolean;
+                maintain?: boolean;
+                push?: boolean;
+                triage?: boolean;
+                pull?: boolean;
+              };
+            }) => {
             const login = c.login;
             const meta = findLocalMeta(login);
             let perm: GitHubPermission = "push";
@@ -157,8 +169,8 @@ export class GovernanceCollaboratorsService {
             }
           }
         } catch {}
-      } catch (err: any) {
-        githubAuthError = err.message;
+      } catch (err: unknown) {
+        githubAuthError = err instanceof Error ? err.message : String(err);
         console.warn(
           "[GovernanceService] Aviso ao buscar colaboradores do GitHub:",
           err,
@@ -307,9 +319,9 @@ export class GovernanceCollaboratorsService {
             res.data?.message || "Falha ao convidar usuário no GitHub.",
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         throw new Error(
-          `Erro ao enviar convite via API do GitHub: ${err.message}`,
+          `Erro ao enviar convite via API do GitHub: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
@@ -380,7 +392,7 @@ export class GovernanceCollaboratorsService {
           cfg.token,
           "DELETE",
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn(
           `[GovernanceService] Aviso ao remover colaborador no GitHub:`,
           err,
@@ -450,7 +462,7 @@ export class GovernanceCollaboratorsService {
             "PUT",
             { permission: payload.permission },
           );
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.warn(
             `[GovernanceService] Aviso ao atualizar permissão no GitHub para @${cleanUsername}:`,
             err,

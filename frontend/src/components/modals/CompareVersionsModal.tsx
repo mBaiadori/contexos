@@ -60,7 +60,7 @@ export const CompareVersionsModal: React.FC<CompareVersionsModalProps> = ({
             files: res.data.files || [],
           });
         } else {
-          setErrorMsg((res.data as any)?.error || "Não foi possível comparar estas versões.");
+          setErrorMsg((res.data as { error?: string } | undefined)?.error || "Não foi possível comparar estas versões.");
         }
       })
       .catch((err) => {

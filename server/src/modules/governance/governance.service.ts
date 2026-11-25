@@ -37,7 +37,7 @@ export { governancePermissionsService, GovernancePermissionsService } from "./go
  * subdivididas em módulos coesos e especializados.
  */
 export class GovernanceService {
-  public readProjectConfig(repoName?: string): any {
+  public readProjectConfig(repoName?: string): Record<string, any> {
     return governanceConfigService.readProjectConfig(repoName);
   }
 

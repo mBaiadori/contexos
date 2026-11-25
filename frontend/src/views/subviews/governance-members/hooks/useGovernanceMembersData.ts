@@ -80,7 +80,7 @@ export function useGovernanceMembersData() {
     activeOrg?.login ||
     (typeof activeRepo?.owner === "string"
       ? activeRepo.owner
-      : (activeRepo?.owner as any)?.login) ||
+      : (activeRepo?.owner as { login?: string } | undefined)?.login) ||
     user?.login ||
     "";
   const repoName = activeRepo?.name || "";
@@ -107,14 +107,14 @@ export function useGovernanceMembersData() {
     try {
       const res = await API.getGovernanceCollaborators(repoName);
       if (res.ok && res.data?.collaborators) {
-        setCollaborators(res.data.collaborators as any);
+        setCollaborators(res.data.collaborators as Parameters<typeof setCollaborators>[0]);
       }
       if (res.data?.githubAuthError) {
         setGithubAuthError(res.data.githubAuthError);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erro ao carregar colaboradores:", err);
-      setGithubAuthError(err.message || "Erro ao conectar com o GitHub.");
+      setGithubAuthError(err instanceof Error ? err.message : "Erro ao conectar com o GitHub.");
     } finally {
       setIsLoadingCollabs(false);
     }
@@ -227,10 +227,10 @@ export function useGovernanceMembersData() {
       } else {
         throw new Error(res.data?.error || "Falha ao aplicar proteção.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setProtectionFeedback({
         type: "error",
-        message: err.message || "Erro ao aplicar proteção de branch no GitHub.",
+        message: err instanceof Error ? err.message : "Erro ao aplicar proteção de branch no GitHub.",
       });
     } finally {
       setIsApplyingProtection(false);
@@ -252,10 +252,10 @@ export function useGovernanceMembersData() {
       } else {
         throw new Error("Falha ao instalar workflow.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setWorkflowFeedback({
         type: "error",
-        message: err.message || "Erro ao instalar workflow do GitHub Actions.",
+        message: err instanceof Error ? err.message : "Erro ao instalar workflow do GitHub Actions.",
       });
     } finally {
       setIsInstallingWorkflow(false);
@@ -287,10 +287,10 @@ export function useGovernanceMembersData() {
       } else {
         throw new Error(res.data?.error || "Erro ao enviar convite.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setInviteFeedback({
         type: "error",
-        message: err.message || "Erro ao enviar convite.",
+        message: err instanceof Error ? err.message : "Erro ao enviar convite.",
       });
     } finally {
       setIsInviting(false);
@@ -321,10 +321,10 @@ export function useGovernanceMembersData() {
       } else {
         throw new Error("Erro ao atualizar permissão.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setEditFeedback({
         type: "error",
-        message: err.message || "Erro ao atualizar permissão.",
+        message: err instanceof Error ? err.message : "Erro ao atualizar permissão.",
       });
     } finally {
       setIsSavingEdit(false);
@@ -339,8 +339,8 @@ export function useGovernanceMembersData() {
     try {
       await API.removeCollaborator(username, repoName);
       await fetchCollaborators();
-    } catch (err: any) {
-      alert(err.message || "Erro ao remover colaborador.");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Erro ao remover colaborador.");
     }
   };
 
@@ -362,8 +362,8 @@ export function useGovernanceMembersData() {
       } else {
         throw new Error(res.data?.message || "Falha ao criar equipe.");
       }
-    } catch (err: any) {
-      alert(err.message || "Erro ao criar equipe.");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Erro ao criar equipe.");
     }
   };
 
@@ -375,8 +375,8 @@ export function useGovernanceMembersData() {
     try {
       await API.deleteOrgTeam(orgLogin, teamSlug);
       await fetchTeams();
-    } catch (err: any) {
-      alert(err.message || "Erro ao excluir equipe.");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Erro ao excluir equipe.");
     }
   };
 

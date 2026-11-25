@@ -10,8 +10,8 @@ export async function dictionaryRoutes(fastify: FastifyInstance) {
     try {
       const result = dictionaryService.saveDictionary(request.body);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 }

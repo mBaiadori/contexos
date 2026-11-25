@@ -9,8 +9,8 @@ export async function systemRoutes(fastify: FastifyInstance) {
     try {
       const diagnostics = await systemService.getDiagnostics();
       return reply.send(diagnostics);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message || 'Falha ao coletar diagnósticos' });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : 'Falha ao coletar diagnósticos' });
     }
   });
 
@@ -20,8 +20,8 @@ export async function systemRoutes(fastify: FastifyInstance) {
   fastify.get('/api/system/license', async (_request, reply) => {
     try {
       return reply.send(systemService.getLicenseStatus());
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message || 'Falha ao obter status de licença' });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : 'Falha ao obter status de licença' });
     }
   });
 
@@ -33,8 +33,8 @@ export async function systemRoutes(fastify: FastifyInstance) {
     try {
       const result = await systemService.activateLicense(body.key || '');
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Falha na ativação da licença' });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : 'Falha na ativação da licença' });
     }
   });
 
@@ -44,8 +44,8 @@ export async function systemRoutes(fastify: FastifyInstance) {
   fastify.get('/api/system/onboarding/status', async (_request, reply) => {
     try {
       return reply.send(systemService.getOnboardingStatus());
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message || 'Falha ao checar status de onboarding' });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : 'Falha ao checar status de onboarding' });
     }
   });
 
@@ -54,11 +54,11 @@ export async function systemRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/api/system/onboarding/complete', async (request, reply) => {
     try {
-      const body = request.body as any;
+      const body = request.body as Parameters<typeof systemService.completeOnboarding>[0];
       const result = await systemService.completeOnboarding(body || {});
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Falha ao concluir onboarding' });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : 'Falha ao concluir onboarding' });
     }
   });
 
@@ -70,8 +70,8 @@ export async function systemRoutes(fastify: FastifyInstance) {
       const body = request.body as { name?: string };
       const result = await systemService.createDemoWorkspace(body.name || 'context-os-demo');
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message || 'Falha ao criar workspace demo' });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : 'Falha ao criar workspace demo' });
     }
   });
 }

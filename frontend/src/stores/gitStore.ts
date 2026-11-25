@@ -116,7 +116,7 @@ export const useGitStore = create<GitState>((set, get) => ({
     try {
       const data = await API.getWorkspaceChanges(repo);
       const filtered = (data.changes || []).filter(
-        (c: any) => c?.path && c.path !== ".docs.metadata.json",
+        (c) => c?.path && c.path !== ".docs.metadata.json",
       );
       pendingChangesByRepo[repo] = filtered;
       if (!targetRepoName || useRepoStore.getState().activeRepo?.name === repo) {

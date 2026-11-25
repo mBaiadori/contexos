@@ -8,11 +8,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SCHEMAS_DIR = path.resolve(__dirname, '../schemas');
 
-const ajv = new (Ajv as any)({
+type AjvConstructor = new (opts: { allErrors: boolean; strict: boolean }) => {
+  compile: (schema: unknown) => ValidateFunction;
+};
+
+const ajv = new (Ajv as unknown as AjvConstructor)({
   allErrors: true,
   strict: false,
 });
-(addFormats as any)(ajv);
+(addFormats as unknown as (instance: unknown) => void)(ajv);
 
 const validatorsCache = new Map<string, ValidateFunction>();
 
@@ -44,7 +48,7 @@ export interface ValidationResult {
   errors?: string[];
 }
 
-export function validateJsonSchema(schemaName: string, data: any): ValidationResult {
+export function validateJsonSchema(schemaName: string, data: unknown): ValidationResult {
   try {
     const validate = getValidator(schemaName);
     const valid = validate(data);
@@ -55,7 +59,7 @@ export function validateJsonSchema(schemaName: string, data: any): ValidationRes
       return { valid: false, errors };
     }
     return { valid: true };
-  } catch (err: any) {
-    return { valid: false, errors: [err.message || 'Erro de validação desconhecido'] };
+  } catch (err: unknown) {
+    return { valid: false, errors: [err instanceof Error ? err.message : 'Erro de validação desconhecido'] };
   }
 }

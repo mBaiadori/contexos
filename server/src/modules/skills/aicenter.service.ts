@@ -162,7 +162,7 @@ export class AICenterService {
       system_prompt: content.trim(),
       skills,
       tools,
-      category: category as any,
+      category: category as AgentDefinition['category'],
       recommended_model: metadata.model ? `gemini-2.5-pro` : 'gemini-2.5-flash',
       temperature: 0.3,
       source: 'community',
@@ -293,7 +293,15 @@ ${installedAgent.system_prompt}
     const tools: CommunityToolDefinition[] = [];
 
     // Mapeamento enriquecido de ferramentas por servidor MCP do ECC
-    const mcpToolCatalog: Record<string, Array<{ name: string; title: string; description: string; parameters?: any }>> = {
+    const mcpToolCatalog: Record<
+      string,
+      Array<{
+        name: string;
+        title: string;
+        description: string;
+        parameters?: CommunityToolDefinition['parameters'];
+      }>
+    > = {
       nexus: [
         { name: 'nexus_stats', title: 'Nexus Stats', description: 'Consulta uso, economia e métricas de chamadas de LLM em tempo real.', parameters: { type: 'object', properties: { period: { type: 'string', enum: ['today', 'week', 'month'] } } } },
         { name: 'nexus_route', title: 'Nexus Model Router', description: 'Roteia dinamicamente prompts para o modelo mais eficiente em custo.', parameters: { type: 'object', properties: { task_type: { type: 'string' }, complexity: { type: 'string', enum: ['low', 'medium', 'high'] } } } },
@@ -508,8 +516,8 @@ ${installedAgent.system_prompt}
       const filtered = (parsed.mcpServers || []).filter((s: MCPServerDefinition) => s.id !== serverId);
       fs.writeFileSync(mcpConfigPath, JSON.stringify({ mcpServers: filtered }, null, 2), 'utf-8');
       return { success: true, message: 'Servidor MCP removido com sucesso.' };
-    } catch (e: any) {
-      return { success: false, message: e.message };
+    } catch (e: unknown) {
+      return { success: false, message: e instanceof Error ? e.message : String(e) };
     }
   }
 }

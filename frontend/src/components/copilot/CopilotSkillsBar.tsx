@@ -4,7 +4,7 @@ interface CopilotSkillsBarProps {
   templateSkills: string[];
   activeSkillIds: string[];
   extraActiveSkills: string[];
-  availableSkills: any[];
+  availableSkills: Array<{ id: string; name?: string; title?: string; [key: string]: unknown }>;
   onToggleSkill: (id: string) => void;
   onRemoveActiveSkill: (id: string) => void;
   onClearAllSkills: () => void;

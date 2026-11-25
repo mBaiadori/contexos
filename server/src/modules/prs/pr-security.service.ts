@@ -65,7 +65,12 @@ export class PRSecurityService {
     if (!userProfile) {
       const repoDir = this.getRepoDir(repoName);
       const cfgPath = path.join(repoDir, ".project.config.json");
-      let profile: any = {
+      let profile: {
+        login?: string;
+        departments?: string[];
+        status?: string;
+        role?: string;
+      } = {
         login,
         departments: ["*"],
         status: "active",
@@ -78,8 +83,8 @@ export class PRSecurityService {
           const matched = Object.entries(collabs).find(
             ([k]) => k.toLowerCase() === login.toLowerCase(),
           );
-          if (matched) {
-            profile = matched[1];
+          if (matched && matched[1] && typeof matched[1] === "object") {
+            profile = matched[1] as typeof profile;
           }
         } catch {}
       }

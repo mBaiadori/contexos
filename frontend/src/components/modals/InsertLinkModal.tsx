@@ -134,7 +134,7 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
 
     const result: TreeNode[] = [];
     for (const node of nodes) {
-      const isDir = node.type === 'dir' || node.type === 'directory' || (node as any).is_directory;
+      const isDir = node.type === 'dir' || node.type === 'directory' || node.is_directory;
       if (isDir) {
         const matchingChildren = filterTreeNodes(node.children || [], term);
         if (matchingChildren.length > 0 || node.name.toLowerCase().includes(lower)) {
@@ -155,7 +155,7 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
   // Render tree item recursively
   const renderTree = (nodes: TreeNode[], depth = 0): React.ReactNode => {
     return nodes.map((node) => {
-      const isDir = node.type === 'dir' || node.type === 'directory' || (node as any).is_directory;
+      const isDir = node.type === 'dir' || node.type === 'directory' || node.is_directory;
       const isCollapsed = searchDoc.trim() ? false : !!collapsedFolders[node.path];
       const isMd = !isDir && (node.name.endsWith('.md') || node.name.endsWith('.markdown'));
       const isSelected = selectedDocPath === node.path;
@@ -350,7 +350,7 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
         <Tabs
           tabs={tabItems}
           activeTab={activeTab}
-          onChange={(tab) => setActiveTab(tab as any)}
+          onChange={(tab) => setActiveTab(tab as 'doc' | 'external' | 'new')}
           variant="pills"
         />
 

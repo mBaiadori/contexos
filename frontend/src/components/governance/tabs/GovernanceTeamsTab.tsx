@@ -107,7 +107,7 @@ export const GovernanceTeamsTab: React.FC<GovernanceTeamsTabProps> = ({
             />
             <select
               value={newTeamPrivacy}
-              onChange={(e) => setNewTeamPrivacy(e.target.value as any)}
+              onChange={(e) => setNewTeamPrivacy(e.target.value as "closed" | "secret")}
               className="access-gov-select"
               style={{ width: "130px" }}
             >

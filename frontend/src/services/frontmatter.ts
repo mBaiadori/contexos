@@ -15,7 +15,7 @@ export interface DocumentMetadata {
     next_stage?: string;
     feedback_loops?: Record<string, string>;
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ParsedDocument {

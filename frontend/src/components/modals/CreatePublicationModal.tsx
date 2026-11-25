@@ -21,7 +21,7 @@ export interface CreatePublicationModalProps {
     description?: string;
     status?: string;
   };
-  onCreated?: (pr: any) => void | Promise<void>;
+  onCreated?: (pr: { id?: number | string; message?: string; [key: string]: unknown }) => void | Promise<void>;
 }
 
 export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
@@ -119,7 +119,20 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
     Promise.all([
       shouldCompare
         ? API.compareBranches(defaultBranch, sourceBranch, repoName)
-        : Promise.resolve({ ok: true, data: { files: [] as any[] } }),
+        : Promise.resolve({
+            ok: true,
+            data: {
+              files: [] as Array<{
+                path: string;
+                status: string;
+                additions: number;
+                deletions: number;
+                diff: string;
+                oldContent?: string;
+                newContent?: string;
+              }>,
+            },
+          }),
       API.getWorkspaceChanges(repoName).catch(() => ({ changes: [] as WorkspaceChange[] })),
     ])
       .then(([compareRes, wsRes]) => {
@@ -228,8 +241,8 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
             "Não foi possível enviar o pedido de publicação.",
         );
       }
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Falha de comunicação ao enviar publicação.");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Falha de comunicação ao enviar publicação.");
     } finally {
       setIsSubmitting(false);
     }

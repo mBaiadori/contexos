@@ -6,8 +6,13 @@ import App from './App.tsx'
 
 // Detecta ambiente Desktop (Electron) e plataforma para ajustes nativos (drag, traffic lights)
 if (typeof window !== 'undefined') {
-  const isDesktop = Boolean((window as any).desktopBridge?.isDesktop);
-  const platform = (window as any).desktopBridge?.platform;
+  const desktopBridge = (
+    window as Window & {
+      desktopBridge?: { isDesktop?: boolean; platform?: string };
+    }
+  ).desktopBridge;
+  const isDesktop = Boolean(desktopBridge?.isDesktop);
+  const platform = desktopBridge?.platform;
   if (isDesktop) {
     document.documentElement.classList.add('is-desktop');
     document.body.classList.add('is-desktop');

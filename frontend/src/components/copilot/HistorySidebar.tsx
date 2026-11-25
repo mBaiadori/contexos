@@ -5,12 +5,22 @@ import { useWorkspace } from "../../context/WorkspaceContext";
 import { useCopilotStore } from "../../stores/copilotStore";
 import { Badge, Button, IconButton, SearchInput } from "../ui";
 
+interface HistorySessionItem {
+  id?: string;
+  session_id?: string;
+  timestamp?: number;
+  updated_at?: string;
+  created_at?: string;
+  events?: Array<{ role?: string; text?: string; content?: string; timestamp?: string }>;
+  [key: string]: unknown;
+}
+
 interface HistorySidebarProps {
   isOpen: boolean;
   onClose: () => void;
   repo: string;
   docPath: string;
-  onRestoreSession?: (session: any) => void;
+  onRestoreSession?: (session: HistorySessionItem) => void;
 }
 
 function formatRelativeTime(dateStr?: string | number): string {
@@ -82,8 +92,8 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       ]);
 
       if (histRes.ok && histRes.data) {
-        const rawSessions: any[] = Array.isArray(histRes.data.sessions)
-          ? histRes.data.sessions
+        const rawSessions: HistorySessionItem[] = Array.isArray(histRes.data.sessions)
+          ? (histRes.data.sessions as HistorySessionItem[])
           : [];
 
         // Ordenação: mais recente sempre primeiro
@@ -501,7 +511,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
               }}
             >
               {selectedSession.events && selectedSession.events.length > 0 ? (
-                selectedSession.events.map((ev: any, i: number) => {
+                selectedSession.events.map((ev: { role?: string; text?: string; content?: string; timestamp?: string }, i: number) => {
                   const isUser = ev.role === "user";
                   return (
                     <div

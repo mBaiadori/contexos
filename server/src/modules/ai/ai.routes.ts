@@ -10,11 +10,13 @@ import { ProviderId, ProviderStreamEvent, ChatMediaAttachment } from './provider
 import { normalizeAttachments } from './providers/media-attachments.js';
 import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
 
-function redactAttachmentPayloads(body: any): any {
+function redactAttachmentPayloads<
+  T extends { attachments?: Array<{ id?: string; name?: string; mimeType?: string; size?: number }> },
+>(body: T): T {
   if (!body || !Array.isArray(body.attachments)) return body;
   return {
     ...body,
-    attachments: body.attachments.map((a: any) => ({
+    attachments: body.attachments.map((a) => ({
       id: a?.id,
       name: a?.name,
       mimeType: a?.mimeType,
@@ -26,7 +28,7 @@ function redactAttachmentPayloads(body: any): any {
 /**
  * Serializador JSON seguro contra referências circulares para eventos SSE e telemetria
  */
-function safeJsonStringify(obj: any): string {
+function safeJsonStringify(obj: unknown): string {
   const seen = new WeakSet();
   return JSON.stringify(obj, (_key, value) => {
     if (typeof value === 'object' && value !== null) {
@@ -67,8 +69,8 @@ export async function aiRoutes(fastify: FastifyInstance) {
     try {
       await provider.sendApproval(body.session_id, body.approved, body.custom_input);
       return reply.send({ success: true, session_id: body.session_id });
-    } catch (err: any) {
-      return reply.status(500).send({ error: err?.message || 'Falha ao enviar aprovação' });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : 'Falha ao enviar aprovação' });
     }
   });
 
@@ -95,13 +97,19 @@ export async function aiRoutes(fastify: FastifyInstance) {
       prompt?: string;
       content?: string;
       path?: string;
-      history?: any[];
+      history?: Array<{
+        role: 'user' | 'assistant' | 'system' | 'model';
+        sender?: string;
+        content?: string;
+        text?: string;
+      }>;
       assistant_prompt?: string;
       raw_mode?: boolean;
       session_id?: string;
       repo?: string;
       allowed_tools?: string[];
       skill_id?: string;
+      skill_ids?: string[];
       provider_id?: ProviderId;
       attachments?: ChatMediaAttachment[];
     };
@@ -113,8 +121,10 @@ export async function aiRoutes(fastify: FastifyInstance) {
     let attachments: ChatMediaAttachment[] = [];
     try {
       attachments = normalizeAttachments(body.attachments);
-    } catch (attErr: any) {
-      return reply.status(400).send({ error: attErr?.message || 'Anexo inválido.' });
+    } catch (attErr: unknown) {
+      return reply.status(400).send({
+        error: attErr instanceof Error ? attErr.message : 'Anexo inválido.',
+      });
     }
     const rawPrompt = (body.prompt || '').trim();
     const prompt = rawPrompt || (attachments.length > 0 ? 'Analise as mídias/arquivos anexados.' : '');
@@ -125,8 +135,8 @@ export async function aiRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Prompt não pode ser vazio.' });
     }
 
-    const effectiveSkillIds: string[] = Array.isArray((body as any).skill_ids)
-      ? (body as any).skill_ids
+    const effectiveSkillIds: string[] = Array.isArray(body.skill_ids)
+      ? body.skill_ids
       : body.skill_id
         ? [body.skill_id]
         : [];
@@ -175,7 +185,10 @@ export async function aiRoutes(fastify: FastifyInstance) {
             streamEvents.push(event);
           },
           {
-            history: (body.history || []).map((h) => ({ role: h.role, content: h.text || h.content || '' })),
+            history: (body.history || []).map((h) => ({
+              role: h.role === 'model' ? ('assistant' as const) : h.role,
+              content: h.text || h.content || '',
+            })),
             briefing,
             contextPointers,
             content: body.content,
@@ -239,9 +252,10 @@ export async function aiRoutes(fastify: FastifyInstance) {
           telemetry_turn: telemetryTurn,
           usage: telemetryTurn.metrics,
         });
-      } catch (err: any) {
-        aiService.appendChatEvent(repoName, filePath, sessionId, 'model', `⚠️ ${err?.message || 'Erro ao comunicar com o agente conectado.'}`, { model: provider.name, author: 'Agent' });
-        return reply.status(500).send({ error: err?.message || 'Erro ao comunicar com o agente conectado.' });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao comunicar com o agente conectado.';
+        aiService.appendChatEvent(repoName, filePath, sessionId, 'model', `⚠️ ${msg}`, { model: provider.name, author: 'Agent' });
+        return reply.status(500).send({ error: msg });
       }
     }
 
@@ -370,13 +384,19 @@ export async function aiRoutes(fastify: FastifyInstance) {
       prompt?: string;
       content?: string;
       path?: string;
-      history?: any[];
+      history?: Array<{
+        role: 'user' | 'assistant' | 'system' | 'model';
+        sender?: string;
+        content?: string;
+        text?: string;
+      }>;
       assistant_prompt?: string;
       raw_mode?: boolean;
       session_id?: string;
       repo?: string;
       allowed_tools?: string[];
       skill_id?: string;
+      skill_ids?: string[];
       provider_id?: ProviderId;
       attachments?: ChatMediaAttachment[];
     };
@@ -388,8 +408,10 @@ export async function aiRoutes(fastify: FastifyInstance) {
     let attachments: ChatMediaAttachment[] = [];
     try {
       attachments = normalizeAttachments(body.attachments);
-    } catch (attErr: any) {
-      return reply.status(400).send({ error: attErr?.message || 'Anexo inválido.' });
+    } catch (attErr: unknown) {
+      return reply.status(400).send({
+        error: attErr instanceof Error ? attErr.message : 'Anexo inválido.',
+      });
     }
     const rawPrompt = (body.prompt || '').trim();
     const prompt = rawPrompt || (attachments.length > 0 ? 'Analise as mídias/arquivos anexados.' : '');
@@ -409,8 +431,21 @@ export async function aiRoutes(fastify: FastifyInstance) {
 
     const recordedEvents: ProviderStreamEvent[] = [];
     let accumulatedReply = '';
-    const executedToolCalls: any[] = [];
-    let reportedUsage: any = null;
+    const executedToolCalls: Array<{
+      tool: string;
+      args?: Record<string, unknown>;
+      result: unknown;
+      timestamp: string;
+    }> = [];
+    type ReportedUsage = {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+      cost_usd?: number;
+      pricing_formula?: string;
+      is_estimated?: boolean;
+    };
+    let reportedUsage = null as ReportedUsage | null;
 
     const sendEvent = (event: ProviderStreamEvent) => {
       recordedEvents.push(event);
@@ -425,8 +460,9 @@ export async function aiRoutes(fastify: FastifyInstance) {
           timestamp: new Date().toISOString(),
         });
       }
-      if (event.type === 'stream_telemetry' && event.data?.usage) {
-        reportedUsage = event.data.usage;
+      const eventData = event.data as { usage?: typeof reportedUsage } | undefined;
+      if (event.type === 'stream_telemetry' && eventData?.usage) {
+        reportedUsage = eventData.usage;
       }
       try {
         reply.raw.write(`data: ${safeJsonStringify(event)}\n\n`);
@@ -437,8 +473,8 @@ export async function aiRoutes(fastify: FastifyInstance) {
 
     const provider = providerManager.getProvider(providerId);
 
-    const effectiveStreamSkillIds: string[] = Array.isArray((body as any).skill_ids)
-      ? (body as any).skill_ids
+    const effectiveStreamSkillIds: string[] = Array.isArray(body.skill_ids)
+      ? body.skill_ids
       : body.skill_id
         ? [body.skill_id]
         : [];
@@ -490,7 +526,10 @@ export async function aiRoutes(fastify: FastifyInstance) {
       const result = await provider.sendMessage(sessionId, prompt, sendEvent, {
         briefing: fullSystemPrompt,
         contextPointers,
-        history: (body.history || []).map((h) => ({ role: h.role, content: h.text || h.content || '' })),
+        history: (body.history || []).map((h) => ({
+          role: h.role === 'model' ? ('assistant' as const) : h.role,
+          content: h.text || h.content || '',
+        })),
         content: body.content || '',
         attachments,
       });
@@ -564,8 +603,8 @@ export async function aiRoutes(fastify: FastifyInstance) {
         },
         timestamp: Date.now(),
       });
-    } catch (err: any) {
-      const errorMsg = err?.message || String(err);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('[AI Stream] Erro durante streaming da sessão:', errorMsg);
       // Se já acumulou resposta da IA, preserva a resposta do modelo e não a substitui por mensagem de erro
       if (accumulatedReply.trim()) {

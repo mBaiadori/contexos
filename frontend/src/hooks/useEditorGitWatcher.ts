@@ -89,9 +89,9 @@ export function useEditorGitWatcher({
         setSyncError(errMsg);
         return false;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[useEditorGitWatcher] Falha ao sincronizar documento:', err);
-      setSyncError(err.message || 'Erro inesperado');
+      setSyncError(err instanceof Error ? err.message : 'Erro inesperado');
       return false;
     } finally {
       setIsSyncing(false);

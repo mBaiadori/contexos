@@ -83,7 +83,7 @@ export function validateRepoName(name: string): string {
  * Converte qualquer entrada (string "owner/repo", objeto com owner/name, etc.) em RepoRef canônico.
  */
 export function parseRepoRef(
-  input: string | { owner?: any; repo?: string; name?: string; full_name?: string } | null | undefined,
+  input: string | { owner?: string | { login?: string } | null; repo?: string; name?: string; full_name?: string } | null | undefined,
   fallbackOwner?: string,
 ): RepoRef | null {
   if (!input) return null;

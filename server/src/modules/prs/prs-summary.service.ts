@@ -333,9 +333,9 @@ DIRETRIZES OBRIGATÓRIAS:
             is_ai_generated: true,
           };
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn(
-          `[PRsService] Falha na geração com IA (${err.message}), utilizando fallback estruturado de diff.`,
+          `[PRsService] Falha na geração com IA (${err instanceof Error ? err.message : String(err)}), utilizando fallback estruturado de diff.`,
         );
       }
     }
@@ -477,7 +477,7 @@ DIRETRIZES OBRIGATÓRIAS:
           id: pr.id,
           title: pr.title,
           branch: pr.branch,
-          author: pr.author?.login || pr.author?.name || "Autor",
+          author: pr.author || "Autor",
           matchingFiles: matching,
         });
       }

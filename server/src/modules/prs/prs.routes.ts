@@ -236,7 +236,9 @@ export async function prsRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/workspace/create-pr", async (request, reply) => {
     try {
-      const result = await prsService.createPR(request.body as any);
+      const result = await prsService.createPR(
+        request.body as Parameters<typeof prsService.createPR>[0],
+      );
       return reply.send(result);
     } catch (err: unknown) {
       return reply.status(400).send({ error: errMsg(err) });
@@ -245,7 +247,9 @@ export async function prsRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/prs/create", async (request, reply) => {
     try {
-      const result = await prsService.createPR(request.body as any);
+      const result = await prsService.createPR(
+        request.body as Parameters<typeof prsService.createPR>[0],
+      );
       return reply.send(result);
     } catch (err: unknown) {
       return reply.status(400).send({ error: errMsg(err) });
@@ -270,7 +274,9 @@ export async function prsRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/prs/edit-file", async (request, reply) => {
     try {
-      const result = await prsService.editPRFile(request.body as any);
+      const result = await prsService.editPRFile(
+        request.body as Parameters<typeof prsService.editPRFile>[0],
+      );
       return reply.send(result);
     } catch (err: unknown) {
       return reply.status(400).send({ error: errMsg(err) });

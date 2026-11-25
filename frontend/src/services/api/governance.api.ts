@@ -53,7 +53,7 @@ export const governanceApi = {
     allowed_paths?: string[];
     denied_paths?: string[];
     repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; message: string; collaborator?: any; error?: string }>> {
+  }): Promise<ApiResponse<{ success: boolean; message: string; collaborator?: Record<string, unknown>; error?: string }>> {
     const res = await fetch('/api/governance/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -103,7 +103,7 @@ export const governanceApi = {
     enforce_admins?: boolean;
     dismiss_stale_reviews?: boolean;
     repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; message: string; protection: any; error?: string }>> {
+  }): Promise<ApiResponse<{ success: boolean; message: string; protection: Record<string, unknown>; error?: string }>> {
     const res = await fetch('/api/governance/branch-protection', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -130,9 +130,9 @@ export const governanceApi = {
   },
 
   async updateQuorumRules(payload: {
-    rules: any;
+    rules: Record<string, unknown>;
     repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; rules: any }>> {
+  }): Promise<ApiResponse<{ success: boolean; rules: Record<string, unknown> }>> {
     const res = await fetch('/api/governance/quorum', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -141,7 +141,7 @@ export const governanceApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getGovernanceAuditLogs(repo?: string): Promise<ApiResponse<{ logs: any[] }>> {
+  async getGovernanceAuditLogs(repo?: string): Promise<ApiResponse<{ logs: Array<Record<string, unknown>> }>> {
     const res = await fetch(`/api/governance/audit-logs${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
     return { ok: res.ok, data: await res.json() };
   },
@@ -160,12 +160,12 @@ export const governanceApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getDepartments(repo?: string): Promise<ApiResponse<{ departments: any[] }>> {
+  async getDepartments(repo?: string): Promise<ApiResponse<{ departments: Array<Record<string, unknown>> }>> {
     const res = await fetch(`/api/governance/departments${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
     return { ok: res.ok, data: await res.json() };
   },
 
-  async saveDepartments(departments: any[], repo?: string): Promise<ApiResponse<{ success: boolean; departments: any[] }>> {
+  async saveDepartments(departments: Array<Record<string, unknown>>, repo?: string): Promise<ApiResponse<{ success: boolean; departments: Array<Record<string, unknown>> }>> {
     const res = await fetch('/api/governance/departments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -174,22 +174,22 @@ export const governanceApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async scanSecrets(repo?: string): Promise<ApiResponse<{ hasSecrets: boolean; violations: any[] }>> {
+  async scanSecrets(repo?: string): Promise<ApiResponse<{ hasSecrets: boolean; violations: Array<Record<string, unknown>> }>> {
     const res = await fetch(`/api/governance/scan-secrets${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getOrgTeams(org: string): Promise<ApiResponse<{ teams: any[] }>> {
+  async getOrgTeams(org: string): Promise<ApiResponse<{ teams: Array<Record<string, unknown>> }>> {
     const res = await fetch(`/api/governance/orgs/${encodeURIComponent(org)}/teams`);
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getOrgMembers(org: string): Promise<ApiResponse<{ members: any[] }>> {
+  async getOrgMembers(org: string): Promise<ApiResponse<{ members: Array<Record<string, unknown>> }>> {
     const res = await fetch(`/api/governance/orgs/${encodeURIComponent(org)}/members`);
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getRepoTeams(owner: string, repo: string): Promise<ApiResponse<{ teams: any[] }>> {
+  async getRepoTeams(owner: string, repo: string): Promise<ApiResponse<{ teams: Array<Record<string, unknown>> }>> {
     const res = await fetch(`/api/governance/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/teams`);
     return { ok: res.ok, data: await res.json() };
   },
@@ -227,7 +227,7 @@ export const governanceApi = {
     name: string;
     description?: string;
     privacy?: 'closed' | 'secret';
-  }): Promise<ApiResponse<{ success: boolean; team?: any; message?: string }>> {
+  }): Promise<ApiResponse<{ success: boolean; team?: Record<string, unknown>; message?: string }>> {
     const res = await fetch(`/api/governance/orgs/${encodeURIComponent(payload.org)}/teams`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -243,7 +243,7 @@ export const governanceApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getOrgTeamMembers(org: string, teamSlug: string): Promise<ApiResponse<{ members: any[] }>> {
+  async getOrgTeamMembers(org: string, teamSlug: string): Promise<ApiResponse<{ members: Array<Record<string, unknown>> }>> {
     const res = await fetch(`/api/governance/orgs/${encodeURIComponent(org)}/teams/${encodeURIComponent(teamSlug)}/members`);
     return { ok: res.ok, data: await res.json() };
   },

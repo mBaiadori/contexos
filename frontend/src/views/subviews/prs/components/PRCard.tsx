@@ -13,9 +13,9 @@ import type {
 
 interface PRCardProps {
   pr: PR;
-  user: any;
+  user: Record<string, unknown> | null;
   providerLabel: string;
-  projectConfig: any;
+  projectConfig: Record<string, unknown> | null;
   isExpanded: boolean;
   toggleExpand: (id: number | string, pr: PR) => void;
   mergeabilityMap: Record<string | number, MergeabilityInfo>;
@@ -29,8 +29,8 @@ interface PRCardProps {
   handleMerge: (id: number | string, repo?: string) => void;
   collapsedFiles: Record<string, boolean>;
   toggleFileCollapse: (key: string) => void;
-  handleExpandAllFiles: (prId: number | string, files: any[]) => void;
-  handleCollapseAllFiles: (prId: number | string, files: any[]) => void;
+  handleExpandAllFiles: (prId: number | string, files: NonNullable<PR["files"]>) => void;
+  handleCollapseAllFiles: (prId: number | string, files: NonNullable<PR["files"]>) => void;
   fileDiffsData: Record<string, PRFileDiffData>;
   fileDiffsCache: Record<string, string>;
   loadingDiffs: Record<string, boolean>;
@@ -68,7 +68,7 @@ export const PRCard: React.FC<PRCardProps> = ({
   const isOpen = !isMerged && !isClosed;
   const rawFiles = Array.isArray(pr.files) ? pr.files : [];
   const prFiles = rawFiles.filter(
-    (f: any) => f?.path && f.path !== ".docs.metadata.json",
+    (f) => f?.path && f.path !== ".docs.metadata.json",
   );
   const isDirectCommit = !!pr.is_direct_commit;
 

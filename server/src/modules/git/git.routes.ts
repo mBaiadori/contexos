@@ -2,6 +2,10 @@ import { FastifyInstance } from "fastify";
 import { gitService } from "./git.service.js";
 import { draftsTrashService } from "./drafts-trash.service.js";
 
+function getErrMsg(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
 export async function gitRoutes(app: FastifyInstance) {
   // 1. Get current Git Status
   app.get("/api/git/status", async (req, reply) => {
@@ -9,10 +13,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo } = req.query as { repo?: string };
       const data = await gitService.getStatus(repo);
       return data;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao obter status do Git" });
+        .send({ error: getErrMsg(err, "Erro ao obter status do Git") });
     }
   });
 
@@ -22,10 +26,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { limit, repo } = req.query as { limit?: string; repo?: string };
       const data = await gitService.getLog(limit ? parseInt(limit, 10) : 20, repo);
       return data;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao obter histórico de commits" });
+        .send({ error: getErrMsg(err, "Erro ao obter histórico de commits") });
     }
   });
 
@@ -35,10 +39,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo } = req.query as { repo?: string };
       const data = await gitService.getBranches(repo);
       return data;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao listar branches" });
+        .send({ error: getErrMsg(err, "Erro ao listar branches") });
     }
   });
 
@@ -50,10 +54,10 @@ export async function gitRoutes(app: FastifyInstance) {
         fetchRemote: fetchRemote === "true" || fetchRemote === "1",
       });
       return data;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao carregar grafo de versões" });
+        .send({ error: getErrMsg(err, "Erro ao carregar grafo de versões") });
     }
   });
 
@@ -208,10 +212,10 @@ export async function gitRoutes(app: FastifyInstance) {
       }
       const res = await gitService.switchOrCreateBranch(branch, repo, undefined, baseBranch, displayTitle);
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao trocar de branch" });
+        .send({ error: getErrMsg(err, "Erro ao trocar de branch") });
     }
   });
 
@@ -253,10 +257,10 @@ export async function gitRoutes(app: FastifyInstance) {
       }
       const res = await gitService.deleteBranch(branch, repo);
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err?.message || "Erro ao excluir rascunho" });
+        .send({ error: getErrMsg(err, "Erro ao excluir rascunho") });
     }
   });
 
@@ -282,10 +286,10 @@ export async function gitRoutes(app: FastifyInstance) {
         });
       }
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao realizar commit" });
+        .send({ error: getErrMsg(err, "Erro ao realizar commit") });
     }
   });
 
@@ -295,10 +299,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { branch, repo } = (req.body as { branch?: string; repo?: string }) || {};
       const res = await gitService.sync(branch, repo);
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao sincronizar com remote" });
+        .send({ error: getErrMsg(err, "Erro ao sincronizar com remote") });
     }
   });
 
@@ -313,10 +317,10 @@ export async function gitRoutes(app: FastifyInstance) {
       }
       const res = await gitService.getBlame(path, repo);
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao obter blame do arquivo" });
+        .send({ error: getErrMsg(err, "Erro ao obter blame do arquivo") });
     }
   });
 
@@ -335,10 +339,10 @@ export async function gitRoutes(app: FastifyInstance) {
         repo
       );
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao obter histórico do arquivo" });
+        .send({ error: getErrMsg(err, "Erro ao obter histórico do arquivo") });
     }
   });
 
@@ -353,10 +357,10 @@ export async function gitRoutes(app: FastifyInstance) {
       }
       const res = await gitService.getFileVersion(path, hash, repo);
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao obter versão do arquivo" });
+        .send({ error: getErrMsg(err, "Erro ao obter versão do arquivo") });
     }
   });
 
@@ -366,10 +370,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { path, repo } = req.query as { path?: string; repo?: string };
       const data = await gitService.getDiff(path, repo);
       return data;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao obter diff do Git" });
+        .send({ error: getErrMsg(err, "Erro ao obter diff do Git") });
     }
   });
 
@@ -388,10 +392,10 @@ export async function gitRoutes(app: FastifyInstance) {
       }
       const data = await gitService.compareBranches(base, head, repo);
       return data;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao comparar versões" });
+        .send({ error: getErrMsg(err, "Erro ao comparar versões") });
     }
   });
 
@@ -400,10 +404,10 @@ export async function gitRoutes(app: FastifyInstance) {
     try {
       const res = await gitService.getGitVersion();
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao diagnosticar Git" });
+        .send({ error: getErrMsg(err, "Erro ao diagnosticar Git") });
     }
   });
 
@@ -413,10 +417,10 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo, branch } = req.query as { repo?: string; branch?: string };
       const res = await gitService.checkRemote(repo, branch);
       return res;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return reply
         .status(500)
-        .send({ error: err.message || "Erro ao verificar atualizações remotas" });
+        .send({ error: getErrMsg(err, "Erro ao verificar atualizações remotas") });
     }
   });
 
@@ -429,8 +433,8 @@ export async function gitRoutes(app: FastifyInstance) {
       }
       const res = await gitService.clone({ repo, owner, remote_url });
       return res;
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message || "Erro ao clonar repositório" });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err, "Erro ao clonar repositório") });
     }
   });
 
@@ -440,8 +444,8 @@ export async function gitRoutes(app: FastifyInstance) {
       const { repo, branch, owner } = (req.body as { repo?: string; branch?: string; owner?: string }) || {};
       const res = await gitService.pull(repo, branch, owner);
       return res;
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message || "Erro ao puxar alterações do repositório" });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: getErrMsg(err, "Erro ao puxar alterações do repositório") });
     }
   });
 }

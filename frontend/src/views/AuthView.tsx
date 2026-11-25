@@ -146,9 +146,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
       // Inicia polling com o intervalo fornecido pelo provedor
       startPolling(data.device_code, data.interval);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatusMessage({
-        text: err.message || t("auth:statusServerError"),
+        text: err instanceof Error ? err.message : t("auth:statusServerError"),
         type: "error",
       });
     } finally {
@@ -270,9 +270,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
           });
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatusMessage({
-        text: err.message || "Erro de conexão ao criar organização",
+        text: err instanceof Error ? err.message : "Erro de conexão ao criar organização",
         type: "error",
       });
     } finally {

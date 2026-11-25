@@ -119,7 +119,19 @@ class SystemService {
    */
   getLicenseStatus(): LicenseStatus {
     const cfg = loadConfig();
-    const license = (cfg.settings as any)?.license || {};
+    const settings = cfg.settings as
+      | {
+          license?: {
+            active?: boolean;
+            key?: string;
+            plan?: string;
+            licensed_to?: string;
+            expires_at?: string;
+            activated_at?: string;
+          };
+        }
+      | undefined;
+    const license = settings?.license || {};
     const key = license.key || '';
 
     // Se houver uma chave ou se estiver em modo desenvolvimento/avaliação
@@ -148,10 +160,10 @@ class SystemService {
     // Validação de formato ou validação de chave
     const cfg = loadConfig();
     if (!cfg.settings) {
-      cfg.settings = {} as any;
+      cfg.settings = { auto_pr_on_save: false, template_creator_prompt: '', global_system_prompt: '' };
     }
 
-    (cfg.settings as any).license = {
+    (cfg.settings as Record<string, unknown>).license = {
       active: true,
       key: cleanKey,
       plan: 'Pro License (Ativado)',
@@ -173,7 +185,10 @@ class SystemService {
    */
   getOnboardingStatus(): { needed: boolean; stepCompleted: { license: boolean; ai: boolean; workspace: boolean } } {
     const cfg = loadConfig();
-    const hasLicense = Boolean((cfg.settings as any)?.license?.active);
+    const settings = cfg.settings as
+      | { license?: { active?: boolean }; onboarding_completed?: boolean }
+      | undefined;
+    const hasLicense = Boolean(settings?.license?.active);
     const hasAi = Boolean(cfg.ai_settings?.api_key && cfg.ai_settings.api_key.trim().length > 0);
     
     let hasWorkspace = Boolean(cfg.active_repo?.name);
@@ -184,7 +199,7 @@ class SystemService {
       } catch {}
     }
 
-    const onboardingCompletedFlag = Boolean((cfg.settings as any)?.onboarding_completed);
+    const onboardingCompletedFlag = Boolean(settings?.onboarding_completed);
 
     return {
       needed: !onboardingCompletedFlag && (!hasAi || !hasWorkspace),
@@ -208,11 +223,11 @@ class SystemService {
     workspace_name?: string;
   }): Promise<{ success: boolean; active_repo: string }> {
     const cfg = loadConfig();
-    if (!cfg.settings) cfg.settings = {} as any;
-    if (!cfg.ai_settings) cfg.ai_settings = {} as any;
+    if (!cfg.settings) cfg.settings = { auto_pr_on_save: false, template_creator_prompt: '', global_system_prompt: '' };
+    if (!cfg.ai_settings) cfg.ai_settings = { provider: 'gemini', model: '', api_key: '', custom_endpoint: '' };
 
     if (data.license_key) {
-      (cfg.settings as any).license = {
+      (cfg.settings as Record<string, unknown>).license = {
         active: true,
         key: data.license_key.trim(),
         plan: 'Pro License',
@@ -232,7 +247,7 @@ class SystemService {
       cfg.ai_settings.api_key = data.ai_api_key.trim();
     }
 
-    (cfg.settings as any).onboarding_completed = true;
+    (cfg.settings as Record<string, unknown>).onboarding_completed = true;
 
     let targetRepoName = cfg.active_repo?.name || 'contexos-demo';
 

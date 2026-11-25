@@ -12,10 +12,11 @@ import { computeDiff } from "../../utils/diff.js";
 import { prSecurityService } from "./pr-security.service.js";
 import { prsStorageService } from "./prs-storage.service.js";
 import { prsLifecycleService } from "./prs-lifecycle.service.js";
+import type { PRFileItem, PRRecord } from "./prs-types.js";
 
 export class PRsQueryService {
   private lastGitHubSyncTime: Record<string, number> = {};
-  private commitFilesCache = new Map<string, any[]>();
+  private commitFilesCache = new Map<string, PRFileItem[]>();
 
   async getPRs(
     targetRepoQuery?: string,
@@ -48,9 +49,9 @@ export class PRsQueryService {
 
     if (isAll) {
       // 1. Visão Central Unificada ("Todos os Repositórios")
-      const combinedAll: any[] = [];
+      const combinedAll: PRRecord[] = [];
       for (const r of allRepos) {
-        const rPRs = prsStorageService.loadRepoPRs(r.name).map((p: any) => ({
+        const rPRs = prsStorageService.loadRepoPRs(r.name).map((p) => ({
           ...p,
           repo_name: p.repo_name || r.name,
         }));
@@ -60,10 +61,10 @@ export class PRsQueryService {
         try {
           const gitCommits = await getGitLog(r.dir, 15);
           const existingHashes = new Set(
-            rPRs.map((p: any) => String(p.commit_hash || p.github_number || p.id)),
+            rPRs.map((p) => String(p.commit_hash || p.github_number || p.id)),
           );
           const existingTitles = new Set(
-            rPRs.map((p: any) => (p.title || "").trim().toLowerCase()),
+            rPRs.map((p) => (p.title || "").trim().toLowerCase()),
           );
           for (const c of gitCommits) {
             if (
@@ -164,7 +165,7 @@ export class PRsQueryService {
       const pageItems = filteredList.slice(startIndex, startIndex + limit);
 
       const sanitizedPageItems = await Promise.all(
-        pageItems.map(async (p: any) => {
+        pageItems.map(async (p) => {
           const itemRepo = p.repo_name || "local";
           const govRules = prsStorageService.getGovernanceRules(itemRepo);
           const rawFiles = Array.isArray(p.files) ? p.files : [];
@@ -244,7 +245,7 @@ export class PRsQueryService {
             }
 
             const existingIdx = allPRs.findIndex(
-              (p: any) =>
+              (p) =>
                 (p.github_number && p.github_number === ghPR.number) ||
                 (p.github_id && p.github_id === ghPR.id) ||
                 (p.repo_name === repoName &&
@@ -313,7 +314,7 @@ export class PRsQueryService {
     );
     if (openPRsWithBranch.length > 0) {
       await Promise.all(
-        openPRsWithBranch.map(async (pr: any) => {
+        openPRsWithBranch.map(async (pr) => {
           try {
             const revRes = await executeGit(
               ["rev-parse", assertBranchName(pr.branch)],
@@ -344,7 +345,7 @@ export class PRsQueryService {
       repoPRs.map((p: { title?: string }) => (p.title || "").trim().toLowerCase()),
     );
 
-    const commitRevisions: any[] = [];
+    const commitRevisions: PRRecord[] = [];
     for (const c of gitCommits) {
       if (
         existingHashes.has(c.hash) ||
@@ -452,7 +453,7 @@ export class PRsQueryService {
     // 8. Carrega arquivos de commit e sanitiza permissões APENAS para os itens da página atual
     const govRules = prsStorageService.getGovernanceRules(repoName);
     const sanitizedPageItems = await Promise.all(
-      pageItems.map(async (p: any) => {
+      pageItems.map(async (p) => {
         let rawFiles = Array.isArray(p.files) ? p.files : [];
 
         // Para commits oficiais diretos na main da página atual, obtém os arquivos sob demanda com cache
@@ -474,7 +475,7 @@ export class PRsQueryService {
                 rawFiles = numStatRes.stdout
                   .split("\n")
                   .filter(Boolean)
-                  .map((line) => {
+                  .map((line): PRFileItem | null => {
                     const parts = line.split("\t");
                     if (parts.length >= 3) {
                       const additions = parseInt(parts[0], 10) || 0;
@@ -495,7 +496,7 @@ export class PRsQueryService {
                     }
                     return null;
                   })
-                  .filter(Boolean);
+                  .filter((f): f is PRFileItem => f !== null);
                 this.commitFilesCache.set(p.commit_hash, rawFiles);
               }
             } catch {}
@@ -507,7 +508,7 @@ export class PRsQueryService {
         const filesToProcess = rawFiles.slice(0, 50);
 
         const sanitizedFiles = await Promise.all(
-          filesToProcess.map(async (f: any) => {
+          filesToProcess.map(async (f) => {
             const rawPath = f.path || "";
             const branchOrCommit =
               p.head_sha || p.commit_hash || p.branch || "HEAD";
@@ -587,7 +588,7 @@ export class PRsQueryService {
     const cfg = loadConfig();
     const login = userLogin || cfg.user?.login || "local_user";
 
-    let pr: any = null;
+    let pr: PRRecord | null = null;
     let effectiveRepo = repoName || cfg.active_repo?.name || "local";
     if (prId) {
       const foundData = prsStorageService.findPRAcrossRepos(prId, repoName);

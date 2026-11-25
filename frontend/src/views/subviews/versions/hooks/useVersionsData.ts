@@ -76,7 +76,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
           try {
             const data = await API.getWorkspaceChanges(r.name);
             const rChanges = (data?.changes || []).filter(
-              (c: any) => c?.path && c.path !== ".docs.metadata.json",
+              (c) => c?.path && c.path !== ".docs.metadata.json",
             );
             counts[r.name] = rChanges.length;
 
@@ -192,10 +192,10 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
           message: "Sincronização com o repositório concluída com sucesso.",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setFeedback({
         type: "error",
-        message: err.message || "Erro durante a sincronização com o repositório.",
+        message: err instanceof Error ? err.message : "Erro durante a sincronização com o repositório.",
       });
     } finally {
       setIsSyncing(false);
@@ -248,10 +248,10 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
           message: res.data?.error || "Erro ao criar proposta de versão.",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setFeedback({
         type: "error",
-        message: err.message || "Falha na comunicação com o servidor.",
+        message: err instanceof Error ? err.message : "Falha na comunicação com o servidor.",
       });
     } finally {
       setIsCreatingPR(false);

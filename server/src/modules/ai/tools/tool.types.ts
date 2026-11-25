@@ -3,7 +3,7 @@ export interface ToolParameterProperty {
   description: string;
   enum?: string[];
   items?: { type: string };
-  default?: any;
+  default?: unknown;
 }
 
 export interface ToolParametersSchema {
@@ -20,7 +20,7 @@ export interface ToolExecutionContext {
 
 export interface ToolResult {
   success: boolean;
-  data?: any;
+  data?: Record<string, any>;
   error?: string;
   message?: string;
 }

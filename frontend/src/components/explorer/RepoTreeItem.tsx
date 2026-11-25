@@ -42,7 +42,7 @@ interface RepoTreeItemProps {
   onDragLeaveRepo: (e: React.DragEvent, targetRepoName: string) => void;
   onDropOnRepo: (e: React.DragEvent, targetRepoName: string) => void;
   // FileTreeNode props
-  treeNodeProps: any;
+  treeNodeProps: Omit<React.ComponentProps<typeof FileTreeNode>, "node" | "depth">;
 }
 
 export const RepoTreeItem: React.FC<RepoTreeItemProps> = memo((props) => {

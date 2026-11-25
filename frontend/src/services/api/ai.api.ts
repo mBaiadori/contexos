@@ -1,8 +1,40 @@
-import type { AISettingsState, ToolCallRecord, AgentDefinition, MCPServerDefinition, ToolItem, CustomToolItem, CommunityToolItem, ChatMediaAttachment } from '../../types';
+import type {
+  AISettingsState,
+  ToolCallRecord,
+  AgentDefinition,
+  MCPServerDefinition,
+  ToolItem,
+  CustomToolItem,
+  CommunityToolItem,
+  ChatMediaAttachment,
+  RawTurnMetrics,
+  RawTurnTelemetry,
+} from '../../types';
 import type { ApiResponse } from './client';
 
+export interface ChatHistoryPayloadItem {
+  role?: string;
+  sender?: string;
+  content?: string;
+  text?: string;
+}
+
+export interface ChatStreamEventPayload {
+  type: string;
+  text?: string;
+  toolName?: string;
+  toolArgs?: Record<string, unknown>;
+  data?: unknown;
+  [key: string]: unknown;
+}
+
 export const aiApi = {
-  async askAI(payload: { prompt: string; content?: string; path?: string; history?: any[] }): Promise<ApiResponse<any>> {
+  async askAI(payload: {
+    prompt: string;
+    content?: string;
+    path?: string;
+    history?: ChatHistoryPayloadItem[];
+  }): Promise<ApiResponse<{ reply?: string; error?: string; [key: string]: unknown }>> {
     return aiApi.sendChatMessage(payload);
   },
 
@@ -10,7 +42,7 @@ export const aiApi = {
     prompt: string; 
     content?: string; 
     path?: string; 
-    history?: any[]; 
+    history?: ChatHistoryPayloadItem[]; 
     assistant_prompt?: string; 
     raw_mode?: boolean;
     session_id?: string; 
@@ -19,7 +51,18 @@ export const aiApi = {
     allowed_tools?: string[];
     provider_id?: string;
     attachments?: Array<Omit<ChatMediaAttachment, 'previewUrl'>>;
-  }): Promise<ApiResponse<{ reply: string; diff?: any; actions?: any[]; tool_calls?: ToolCallRecord[]; steps_count?: number; provider?: string; model?: string; usage?: any; telemetry_turn?: any }>> {
+  }): Promise<ApiResponse<{
+    reply: string;
+    diff?: unknown;
+    actions?: unknown[];
+    tool_calls?: ToolCallRecord[];
+    steps_count?: number;
+    provider?: string;
+    model?: string;
+    usage?: RawTurnMetrics;
+    telemetry_turn?: RawTurnTelemetry;
+    error?: string;
+  }>> {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -33,7 +76,7 @@ export const aiApi = {
       prompt: string;
       content?: string;
       path?: string;
-      history?: any[];
+      history?: ChatHistoryPayloadItem[];
       assistant_prompt?: string;
       raw_mode?: boolean;
       session_id?: string;
@@ -43,7 +86,7 @@ export const aiApi = {
       provider_id?: string;
       attachments?: Array<Omit<ChatMediaAttachment, 'previewUrl'>>;
     },
-    onEvent: (event: any) => void
+    onEvent: (event: ChatStreamEventPayload) => void
   ): Promise<void> {
     const res = await fetch('/api/chat/stream', {
       method: 'POST',

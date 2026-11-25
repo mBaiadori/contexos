@@ -25,8 +25,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
       return reply.send({
         templates: templatesService.getProjectTemplates(repoName),
       });
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -42,8 +42,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
       return reply.send({
         templates: templatesService.getTemplates(repoName),
       });
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -63,8 +63,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: `Template '${id}' não encontrado.` });
       }
       return reply.send({ template });
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -93,8 +93,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
       const repoName = body.repo || cfg.active_repo?.name || 'local';
       const result = templatesService.createProjectTemplate(repoName, body);
       return reply.status(201).send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -110,8 +110,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
       const repoName = body.repo || cfg.active_repo?.name || 'local';
       const result = templatesService.updateProjectTemplate(repoName, id, body);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -127,8 +127,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
       const repoName = query.repo || cfg.active_repo?.name || 'local';
       const result = templatesService.deleteProjectTemplate(id, repoName);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -154,8 +154,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
       const repoName = body.repo || cfg.active_repo?.name || 'local';
       const result = templatesService.importFromCommunity(id, repoName);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -170,8 +170,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
       const repoName = body.repo || cfg.active_repo?.name || 'local';
       const result = templatesService.syncProjectTemplatesMetadata(repoName);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -189,8 +189,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
       }
       const result = templatesService.deleteProjectTemplate(id, repoName);
       return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -206,8 +206,8 @@ export async function templatesRoutes(fastify: FastifyInstance) {
         return reply.send(templatesService.deleteCommunityTemplate(id));
       }
       return reply.send(templatesService.deleteProjectTemplate(id, repoName));
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

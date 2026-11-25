@@ -7,7 +7,8 @@ export async function settingsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/settings/save', async (request, reply) => {
-    return reply.send(settingsService.saveSettings(request.body));
+    const body = request.body as Parameters<typeof settingsService.saveSettings>[0];
+    return reply.send(settingsService.saveSettings(body));
   });
 
   fastify.get('/api/ai/settings', async (_request, reply) => {
@@ -15,7 +16,8 @@ export async function settingsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/ai/settings', async (request, reply) => {
-    return reply.send(settingsService.saveAISettings(request.body));
+    const body = request.body as Parameters<typeof settingsService.saveAISettings>[0];
+    return reply.send(settingsService.saveAISettings(body));
   });
 
   fastify.get('/api/ai/models', async (request, reply) => {

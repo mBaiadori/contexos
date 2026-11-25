@@ -32,7 +32,7 @@ interface TemplatePropertiesPanelProps {
   tplCategory: string;
   setTplCategory: (val: string) => void;
   categoryDropdownOptions: SelectOption[];
-  updateActiveEditingTemplate: (patch: any) => void;
+  updateActiveEditingTemplate: (patch: Record<string, unknown>) => void;
   tplBadge: string;
   setTplBadge: (val: string) => void;
   badgePresets: BadgePreset[];

@@ -76,7 +76,7 @@ export const reposApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async createOrg(payload: { username: string; full_name?: string; description?: string; visibility?: string }): Promise<ApiResponse<{ success: boolean; org?: any; requires_web_flow?: boolean; web_url?: string; message?: string; error?: string }>> {
+  async createOrg(payload: { username: string; full_name?: string; description?: string; visibility?: string }): Promise<ApiResponse<{ success: boolean; org?: Record<string, unknown>; requires_web_flow?: boolean; web_url?: string; message?: string; error?: string }>> {
     const res = await fetch('/api/repos/orgs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -105,7 +105,7 @@ export const reposApi = {
     description?: string;
     is_private?: boolean;
     owner?: string;
-  }): Promise<ApiResponse<{ success: boolean; remoteUpdated?: boolean; message?: string; repo?: any; error?: string }>> {
+  }): Promise<ApiResponse<{ success: boolean; remoteUpdated?: boolean; message?: string; repo?: Record<string, unknown>; error?: string }>> {
     const res = await fetch('/api/repos', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -120,7 +120,7 @@ export const reposApi = {
     owner?: string;
     description?: string;
     is_private?: boolean;
-  }): Promise<ApiResponse<{ success: boolean; message?: string; repo?: any; error?: string }>> {
+  }): Promise<ApiResponse<{ success: boolean; message?: string; repo?: Record<string, unknown>; error?: string }>> {
     const res = await fetch('/api/repos/clone', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,12 +129,12 @@ export const reposApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getProjectFile(path: string, repo?: string): Promise<{ path: string; content: string; meta?: any; source?: string; error?: string }> {
+  async getProjectFile(path: string, repo?: string): Promise<{ path: string; content: string; meta?: Record<string, unknown>; source?: string; error?: string }> {
     const res = await fetch(`/api/project/file?path=${encodeURIComponent(path)}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`);
     return res.json();
   },
 
-  async createProjectFile(payload: { path: string; is_folder?: boolean; content?: string; meta?: any; templateId?: string; repo?: string }): Promise<ApiResponse<any>> {
+  async createProjectFile(payload: { path: string; is_folder?: boolean; content?: string; meta?: Record<string, unknown>; templateId?: string; repo?: string }): Promise<ApiResponse<{ success?: boolean; path?: string; tree?: TreeNode[]; templatePrompt?: string; systemPrompt?: string; templateId?: string; error?: string }>> {
     const res = await fetch('/api/project/file/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -150,7 +150,7 @@ export const reposApi = {
       relativePath?: string;
       content?: string;
       base64?: string;
-      meta?: any;
+      meta?: Record<string, unknown>;
     }>;
     repo?: string;
   }): Promise<ApiResponse<{ success: boolean; importedFiles: Array<{ path: string; name: string; isBinary: boolean; size: number }>; errors?: string[]; error?: string; tree?: TreeNode[] }>> {
@@ -260,7 +260,7 @@ export const reposApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async saveProjectConfig(configData: any, repo?: string): Promise<ApiResponse<any>> {
+  async saveProjectConfig(configData: Record<string, unknown>, repo?: string): Promise<ApiResponse<{ success?: boolean; error?: string; [key: string]: unknown }>> {
     const res = await fetch('/api/project/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -301,7 +301,7 @@ export const reposApi = {
     return res.json();
   },
 
-  async scaffoldEntity(data: any): Promise<ApiResponse<any>> {
+  async scaffoldEntity(data: Record<string, unknown>): Promise<ApiResponse<{ success?: boolean; path?: string; tree?: TreeNode[]; error?: string }>> {
     const res = await fetch('/api/project/scaffold', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -47,9 +47,9 @@ export const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath }) => {
       setSheetNames(parsed.sheetNames);
       setActiveSheet(parsed.activeSheet);
       setSheetData(parsed.rows);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[ExcelViewer] Erro:', err);
-      setError(err.message || 'Erro ao processar planilha Excel.');
+      setError(err instanceof Error ? err.message : 'Erro ao processar planilha Excel.');
     } finally {
       setIsLoading(false);
     }
@@ -66,8 +66,8 @@ export const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath }) => {
       const parsed = await parseSpreadsheet(fileBuffer, name);
       setActiveSheet(parsed.activeSheet);
       setSheetData(parsed.rows);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao alternar de aba.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao alternar de aba.');
     } finally {
       setIsLoading(false);
     }

@@ -330,7 +330,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
               const turnIdx = Math.floor(i / 2) + 1;
               const userEv = sess.events[i - 1];
               const priorEvents = sess.events.slice(0, i - 1);
-              const histText = priorEvents.map((h: any) => `${h.role || h.sender}: ${h.text || h.content || ''}`).join('\n');
+              const histText = priorEvents
+                .map((h: { role?: string; sender?: string; text?: string; content?: string }) =>
+                  `${h.role || h.sender}: ${h.text || h.content || ''}`,
+                )
+                .join('\n');
               const activeModel = aiSettings?.active_model || 'gemini-2.5-flash';
               const pTokens = estimateTokens((userEv?.text || userEv?.content || '') + (sess.path && sess.path !== 'Global' ? `\n${sess.path}` : '') + (histText ? `\n${histText}` : ''));
               const cTokens = estimateTokens(ev.text || ev.content || '');
@@ -380,7 +384,17 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           useCopilotStore.getState().setSessionTelemetry(sessionId, telemetryTurns);
         }
 
-        const restoredMessages: ChatMessage[] = sess.events.map((ev: any, idx: number) => {
+        const restoredMessages: ChatMessage[] = sess.events.map(
+          (
+            ev: {
+              role?: string;
+              text?: string;
+              content?: string;
+              timestamp?: string;
+              tool_calls?: ToolCallRecord[];
+            },
+            idx: number,
+          ) => {
           const isAssistant = ev.role === 'model' || ev.role === 'assistant';
           let turnMetrics: RawTurnMetrics | undefined = undefined;
           let rawTurnId: string | undefined = undefined;
@@ -447,7 +461,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
       // Helper to collect all files inside a folder node from tree
       const collectFilesFromTree = (targetPath: string): string[] => {
-        const findNode = (nodes: any[]): any => {
+        const findNode = (nodes: TreeNode[]): TreeNode | null => {
           for (const n of nodes) {
             if (n.path === targetPath) return n;
             if (n.children && n.children.length > 0) {
@@ -458,7 +472,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           return null;
         };
 
-        const collect = (node: any): string[] => {
+        const collect = (node: TreeNode): string[] => {
           const isDir = node.type === 'dir' || node.type === 'directory' || node.is_directory;
           if (!isDir) return [node.path];
           let collected: string[] = [];
@@ -629,9 +643,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       let accumulatedReply = '';
       const assistantMsgId = generateUniqueMessageId('msg-ai');
       let createdAssistantMsg = false;
-      const streamEventsList: any[] = [];
-      let receivedTelemetry: any = null;
-      let receivedToolCalls: any[] = [];
+      const streamEventsList: Array<Record<string, unknown>> = [];
+      let receivedTelemetry: RawTurnTelemetry | null = null;
+      let receivedToolCalls: ToolCallRecord[] = [];
 
       try {
         await API.streamChatMessage(chatPayload, (event) => {
@@ -780,7 +794,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           const completionTokens = res.data.usage?.completion_tokens || estimateTokens(res.data.reply || '');
           const costInfo = calculateTokenCost(activeModelName, promptTokens, completionTokens);
 
-          const turnTelemetry: RawTurnTelemetry = (res.data as any).telemetry_turn || {
+          const turnTelemetry: RawTurnTelemetry = res.data.telemetry_turn || {
             turn_id: turnId,
             turn_index: turnIndex,
             session_id: currentSessionId,

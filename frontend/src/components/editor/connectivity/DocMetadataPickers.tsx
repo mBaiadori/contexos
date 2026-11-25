@@ -91,13 +91,13 @@ export function getTagStyle(tagName: string, customColor?: string) {
 
 export interface DocMetadataPickersProps {
   currentStatus: string;
-  activeStatusObj: any;
+  activeStatusObj: StatusItem | undefined;
   statusOptions: StatusItem[];
   showStatusPicker: boolean;
   setShowStatusPicker: (v: boolean) => void;
   onStatusChange: (status: string) => void;
 
-  currentCategories: any;
+  currentCategories: string;
   catColor: string;
   categoryOptions: TaxonomyItem[];
   showCategoryPicker: boolean;
@@ -107,12 +107,12 @@ export interface DocMetadataPickersProps {
   onCategoryChange: (cat: string) => void;
 
   currentTemplateId: string;
-  activeTemplate: any;
+  activeTemplate: { id?: string; title?: string; name?: string; [key: string]: unknown } | undefined;
   showTemplatePicker: boolean;
   setShowTemplatePicker: (v: boolean) => void;
   templateSearchInput: string;
   setTemplateSearchInput: (v: string) => void;
-  filteredTemplates: any[];
+  filteredTemplates: Array<{ id: string; title?: string; name?: string; badge?: string; [key: string]: unknown }>;
   onTemplateChange: (tplId: string) => void;
 
   currentTags: string[];
@@ -124,7 +124,7 @@ export interface DocMetadataPickersProps {
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
 
-  activeDept: any;
+  activeDept: { id: string; name: string; color?: string; [key: string]: unknown } | undefined;
   onCloseOtherPickers?: () => void;
 }
 

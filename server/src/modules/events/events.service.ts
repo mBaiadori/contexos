@@ -37,7 +37,7 @@ class EventsService {
     this.clients.delete(client);
   }
 
-  public broadcast(eventType: string, data: any = {}): void {
+  public broadcast(eventType: string, data: unknown = {}): void {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     const msg = `event: ${eventType}\ndata: ${payload}\n\n`;
 
@@ -174,7 +174,7 @@ class EventsService {
       );
 
       this.nativeWatcher.on('error', (err: unknown) => {
-        console.warn('[Events] Aviso no file watcher:', (err as any)?.code || err);
+        console.warn('[Events] Aviso no file watcher:', (err as NodeJS.ErrnoException)?.code || err);
       });
     } catch (err) {
       console.warn('[Events] Não foi possível iniciar o file watcher nativo:', err);

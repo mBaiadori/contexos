@@ -2,6 +2,7 @@ import { spawn, execFile, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderModelOption, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent, ChatMediaAttachment } from './provider.types.js';
+import type { ToolCallExecutionRecord } from '../tools/tool.types.js';
 import { materializeAttachmentsForCli } from './media-attachments.js';
 import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
@@ -161,7 +162,7 @@ export class AntigravityAdapter implements IAgentProvider {
       contextPointers?: string[];
       attachments?: ChatMediaAttachment[];
     }
-  ): Promise<{ reply: string; toolCalls?: any[] }> {
+  ): Promise<{ reply: string; toolCalls?: ToolCallExecutionRecord[] }> {
     const cli = this.resolveCliCommand();
 
     if (!cli.available) {
@@ -225,13 +226,13 @@ export class AntigravityAdapter implements IAgentProvider {
       timestamp: Date.now(),
     });
 
-    return new Promise<{ reply: string; toolCalls?: any[] }>((resolve, reject) => {
+    return new Promise<{ reply: string; toolCalls?: ToolCallExecutionRecord[] }>((resolve, reject) => {
       let finalReply = '';
 
       try {
         const cfg = loadConfig();
-        const effort = (cfg.settings as any)?.agent_effort || 'medium';
-        const model = (cfg.settings as any)?.agent_model;
+        const effort = cfg.settings?.agent_effort || 'medium';
+        const model = cfg.settings?.agent_model;
 
         const spawnArgs: string[] = ['--dangerously-skip-permissions'];
         if (effort) {
@@ -338,8 +339,8 @@ export class AntigravityAdapter implements IAgentProvider {
             reply: cleanReply || (code === 0 ? 'Tarefa executada com sucesso pelo Antigravity.' : `Processo finalizado com código ${code}`),
           });
         });
-      } catch (err: any) {
-        const errMessage = `Falha ao iniciar processo: ${err?.message || String(err)}`;
+      } catch (err: unknown) {
+        const errMessage = `Falha ao iniciar processo: ${err instanceof Error ? err.message : String(err)}`;
         onEvent({
           type: 'error',
           provider: this.id,

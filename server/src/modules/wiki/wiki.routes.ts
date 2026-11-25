@@ -43,8 +43,8 @@ export async function wikiRoutes(fastify: FastifyInstance) {
         body.repo
       );
       return reply.send({ ok: true, ...result });
-    } catch (err: any) {
-      return reply.status(400).send({ ok: false, error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ ok: false, error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -57,8 +57,8 @@ export async function wikiRoutes(fastify: FastifyInstance) {
         body.repo
       );
       return reply.send({ ok: true, ...result });
-    } catch (err: any) {
-      return reply.status(400).send({ ok: false, error: err.message });
+    } catch (err: unknown) {
+      return reply.status(400).send({ ok: false, error: err instanceof Error ? err.message : String(err) });
     }
   });
 }

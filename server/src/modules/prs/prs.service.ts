@@ -1,5 +1,6 @@
 import type { PRApprovalAudit } from "./prs-types.js";
 import { prsStorageService } from "./prs-storage.service.js";
+import type { PRRecord } from "./prs-types.js";
 import { prsQueryService } from "./prs-query.service.js";
 import { prsSummaryService } from "./prs-summary.service.js";
 import { prsLifecycleService } from "./prs-lifecycle.service.js";
@@ -30,7 +31,7 @@ export class PRsService {
   findPRAcrossRepos(
     prId: number | string,
     preferredRepo?: string,
-  ): { pr: any; repoName: string; prs: any[] } | null {
+  ): { pr: PRRecord; repoName: string; prs: PRRecord[] } | null {
     return prsStorageService.findPRAcrossRepos(prId, preferredRepo);
   }
 
@@ -38,11 +39,11 @@ export class PRsService {
     return prsStorageService.getRepoPRsPath(repoName);
   }
 
-  loadRepoPRs(repoName: string): any[] {
+  loadRepoPRs(repoName: string): PRRecord[] {
     return prsStorageService.loadRepoPRs(repoName);
   }
 
-  saveRepoPRs(repoName: string, prs: any[]): void {
+  saveRepoPRs(repoName: string, prs: Array<Partial<PRRecord>>): void {
     prsStorageService.saveRepoPRs(repoName, prs);
   }
 
@@ -95,7 +96,7 @@ export class PRsService {
 
   afterPRHeadChanged(
     repoName: string,
-    pr: any,
+    pr: PRRecord,
     ctx: { actor: string; file?: string; newHead?: string },
   ): void {
     prsLifecycleService.afterPRHeadChanged(repoName, pr, ctx);

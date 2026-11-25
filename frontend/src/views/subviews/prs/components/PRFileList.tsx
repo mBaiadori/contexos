@@ -7,11 +7,11 @@ import type { PRFileDiffData } from "../types";
 interface PRFileListProps {
   pr: PR;
   isOpen: boolean;
-  prFiles: any[];
+  prFiles: NonNullable<PR["files"]>;
   collapsedFiles: Record<string, boolean>;
   toggleFileCollapse: (key: string) => void;
-  handleExpandAllFiles: (prId: number | string, files: any[]) => void;
-  handleCollapseAllFiles: (prId: number | string, files: any[]) => void;
+  handleExpandAllFiles: (prId: number | string, files: NonNullable<PR["files"]>) => void;
+  handleCollapseAllFiles: (prId: number | string, files: NonNullable<PR["files"]>) => void;
   fileDiffsData: Record<string, PRFileDiffData>;
   fileDiffsCache: Record<string, string>;
   loadingDiffs: Record<string, boolean>;
@@ -124,7 +124,7 @@ export const PRFileList: React.FC<PRFileListProps> = ({
               gap: "10px",
             }}
           >
-            {prFiles.map((f: any, fIdx: number) => {
+            {prFiles.map((f, fIdx: number) => {
               const fileKey = `${pr.id}-${f.path || fIdx}`;
               const isFileCollapsed = collapsedFiles[fileKey] !== undefined ? collapsedFiles[fileKey] : true;
               const diffInfo = fileDiffsData[fileKey];

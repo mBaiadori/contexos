@@ -154,7 +154,7 @@ export class GitService {
     const repoName = repoNameParam || cfg.active_repo?.name || "local";
     const repoDir = this.getRepoDir(repoName, ownerParam);
     const repoObj =
-      cfg.repos?.find((r: any) => r.name === repoName) ||
+      cfg.repos?.find((r) => r.name === repoName) ||
       (cfg.active_repo?.name === repoName
         ? cfg.active_repo
         : { name: repoName, full_name: repoName, is_local: true });
@@ -304,7 +304,7 @@ export class GitService {
   ): Promise<string> {
     const isTargetActive = !repoName || cfg.active_repo?.name === repoName;
     const repoObj =
-      cfg.repos?.find((r: any) => r?.name === repoName) ||
+      cfg.repos?.find((r) => r?.name === repoName) ||
       (isTargetActive ? cfg.active_repo : undefined);
     const configuredDefault =
       repoObj?.default_branch ||
@@ -396,7 +396,7 @@ export class GitService {
     }
 
     const repoObj =
-      cfg.repos?.find((r: any) => r.name === repoName) ||
+      cfg.repos?.find((r) => r.name === repoName) ||
       (cfg.active_repo?.name === repoName ? cfg.active_repo : undefined);
     const targetBranch = branch || repoObj?.default_branch || "main";
 

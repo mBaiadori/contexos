@@ -44,8 +44,8 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
       if (res.ok && res.data?.templates) {
         set({ templates: res.data.templates });
       }
-    } catch (err: any) {
-      set({ error: err.message || 'Erro ao carregar templates.' });
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : 'Erro ao carregar templates.' });
     } finally {
       set({ loading: false });
     }
@@ -125,9 +125,9 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
         useGitStore.getState().refreshPendingChanges().catch(() => {});
         return { success: true, template: res.data.template };
       }
-      return { success: false, message: (res.data as any)?.error || 'Erro ao criar template.' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Erro de conexão.' };
+      return { success: false, message: (res.data as { error?: string } | undefined)?.error || 'Erro ao criar template.' };
+    } catch (err: unknown) {
+      return { success: false, message: err instanceof Error ? err.message : 'Erro de conexão.' };
     }
   },
 
@@ -140,9 +140,9 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
         useGitStore.getState().refreshPendingChanges().catch(() => {});
         return { success: true, template: res.data.template };
       }
-      return { success: false, message: (res.data as any)?.error || 'Erro ao atualizar template.' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Erro de conexão.' };
+      return { success: false, message: (res.data as { error?: string } | undefined)?.error || 'Erro ao atualizar template.' };
+    } catch (err: unknown) {
+      return { success: false, message: err instanceof Error ? err.message : 'Erro de conexão.' };
     }
   },
 
@@ -156,9 +156,9 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
         useGitStore.getState().refreshPendingChanges().catch(() => {});
         return { success: true, message: res.data?.message || 'Template importado.' };
       }
-      return { success: false, message: (res.data as any)?.error || 'Erro ao importar.' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Erro de conexão.' };
+      return { success: false, message: (res.data as { error?: string } | undefined)?.error || 'Erro ao importar.' };
+    } catch (err: unknown) {
+      return { success: false, message: err instanceof Error ? err.message : 'Erro de conexão.' };
     } finally {
       set({ importingId: null });
     }
@@ -175,9 +175,9 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
         useGitStore.getState().refreshPendingChanges().catch(() => {});
         return { success: true, message: res.data?.message || 'Template removido com sucesso.' };
       }
-      return { success: false, message: (res.data as any)?.error || res.data?.message || 'Falha ao remover template.' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Erro de conexão.' };
+      return { success: false, message: (res.data as { error?: string } | undefined)?.error || res.data?.message || 'Falha ao remover template.' };
+    } catch (err: unknown) {
+      return { success: false, message: err instanceof Error ? err.message : 'Erro de conexão.' };
     }
   },
 
@@ -188,9 +188,9 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
         await Promise.all([get().fetchTemplates(), get().fetchCommunityTemplates()]);
         return { success: true, message: res.data?.message || 'Template removido da comunidade com sucesso.' };
       }
-      return { success: false, message: (res.data as any)?.error || res.data?.message || 'Falha ao remover template da comunidade.' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Erro de conexão.' };
+      return { success: false, message: (res.data as { error?: string } | undefined)?.error || res.data?.message || 'Falha ao remover template da comunidade.' };
+    } catch (err: unknown) {
+      return { success: false, message: err instanceof Error ? err.message : 'Erro de conexão.' };
     }
   },
 }));

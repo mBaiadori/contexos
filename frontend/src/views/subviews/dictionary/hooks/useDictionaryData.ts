@@ -213,9 +213,9 @@ export function useDictionaryData() {
       } else {
         setFormError(res.error || "Erro ao salvar termo no dicionário.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[DictionarySubView] Erro ao salvar termo:", err);
-      setFormError(err.message || "Erro inesperado ao salvar.");
+      setFormError(err instanceof Error ? err.message : "Erro inesperado ao salvar.");
     } finally {
       setIsSaving(false);
     }
@@ -257,7 +257,7 @@ export function useDictionaryData() {
     setImportError("");
     try {
       const parsed = JSON.parse(importJsonText);
-      let incomingTerms: any[] = [];
+      let incomingTerms: Array<Record<string, unknown>> = [];
       if (Array.isArray(parsed)) {
         incomingTerms = parsed;
       } else if (parsed && Array.isArray(parsed.terms)) {
@@ -310,8 +310,8 @@ export function useDictionaryData() {
       } else {
         setImportError(res.error || "Falha ao gravar termos importados.");
       }
-    } catch (err: any) {
-      setImportError(err.message || "Erro ao processar JSON.");
+    } catch (err: unknown) {
+      setImportError(err instanceof Error ? err.message : "Erro ao processar JSON.");
     } finally {
       setIsSaving(false);
     }
@@ -322,7 +322,7 @@ export function useDictionaryData() {
     (domainName?: string) => {
       if (!domainName) return "#64748b";
       const cat = categories.find(
-        (c: any) =>
+        (c) =>
           (c.name || "").toLowerCase() === domainName.toLowerCase() ||
           (c.label || "").toLowerCase() === domainName.toLowerCase()
       );

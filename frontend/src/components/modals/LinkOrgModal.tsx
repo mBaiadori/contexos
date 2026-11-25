@@ -90,8 +90,8 @@ export const LinkOrgModal: React.FC<LinkOrgModalProps> = ({
       } else {
         setErrorMsg(res.data?.error || res.data?.message || "Não foi possível vincular a organização.");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Erro de conexão ao vincular organização.");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Erro de conexão ao vincular organização.");
     } finally {
       setIsLinking(false);
     }

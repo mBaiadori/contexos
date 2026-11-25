@@ -64,11 +64,11 @@ export function useSkillsData() {
       } else {
         setActionFeedback({
           ok: false,
-          msg: (res.data as any)?.message || "Falha ao instalar skill.",
+          msg: (res.data as { message?: string } | undefined)?.message || "Falha ao instalar skill.",
         });
       }
-    } catch (err: any) {
-      setActionFeedback({ ok: false, msg: err.message || "Erro de conexão." });
+    } catch (err: unknown) {
+      setActionFeedback({ ok: false, msg: err instanceof Error ? err.message : "Erro de conexão." });
     }
   };
 
@@ -94,11 +94,11 @@ export function useSkillsData() {
       } else {
         setActionFeedback({
           ok: false,
-          msg: (res.data as any)?.message || "Falha ao desinstalar skill.",
+          msg: (res.data as { message?: string } | undefined)?.message || "Falha ao desinstalar skill.",
         });
       }
-    } catch (err: any) {
-      setActionFeedback({ ok: false, msg: err.message || "Erro de conexão." });
+    } catch (err: unknown) {
+      setActionFeedback({ ok: false, msg: err instanceof Error ? err.message : "Erro de conexão." });
     }
   };
 

@@ -69,7 +69,8 @@ export const TaxonomyChipEditor: React.FC<TaxonomyChipEditorProps> = ({
       {items.map((item, idx) => {
         const isEditing = editingIndex === idx;
         const color = isEditing ? editColor : (item.color || "#3b82f6");
-        const name = (item as any).label || (item as any).name || (item as any).id || "";
+        const metaItem = item as { label?: string; name?: string; id?: string };
+        const name = metaItem.label || metaItem.name || metaItem.id || "";
 
         if (isEditing) {
           return (

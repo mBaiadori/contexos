@@ -615,7 +615,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                       key={p.id}
                       type="button"
                       onClick={() => {
-                        setAiProvider(p.id as any);
+                        setAiProvider(p.id as "gemini" | "openai" | "anthropic" | "ollama");
                         setAiModel(providerLinks[p.id]?.defaultModel || "");
                         setAiTestResult(null);
                       }}
@@ -1257,7 +1257,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
           {currentStep > 1 && currentStep < 4 ? (
             <Button
               variant="secondary"
-              onClick={() => setCurrentStep((prev) => (prev - 1) as any)}
+              onClick={() => setCurrentStep((prev) => (prev - 1) as 1 | 2 | 3 | 4)}
               style={{ display: "flex", alignItems: "center", gap: "6px" }}
             >
               <ArrowLeft size={16} /> Voltar

@@ -20,7 +20,7 @@ interface ToolsTabProps {
   handleDeleteCustomTool: (toolId: string) => Promise<void>;
   setTestingTool: (tool: ToolItem | null) => void;
   setToolArgsInput: (val: string) => void;
-  setToolTestResult: (val: any) => void;
+  setToolTestResult: (val: Record<string, unknown> | null) => void;
   communityToolCategory: string;
   setCommunityToolCategory: (val: string) => void;
   communityToolSearch: string;
@@ -380,7 +380,7 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
                       JSON.stringify(
                         tool.parameters?.properties
                           ? Object.keys(tool.parameters.properties).reduce(
-                              (acc: any, k) => {
+                              (acc: Record<string, string>, k) => {
                                 acc[k] = "";
                                 return acc;
                               },

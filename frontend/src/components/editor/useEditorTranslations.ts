@@ -187,10 +187,10 @@ export function useEditorTranslations({
             engineRef.current.setMarkdown(transBody);
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setEditorToast({
           text:
-            err?.message ||
+            (err instanceof Error ? err.message : undefined) ||
             `Não foi possível carregar a tradução (${lang.toUpperCase()}).`,
           type: "warning",
         });
@@ -256,15 +256,15 @@ export function useEditorTranslations({
       } else {
         setEditorToast({
           text:
-            (res.data as any)?.error ||
+            (res.data as { error?: string } | undefined)?.error ||
             "Erro ao atualizar tradução do documento oficial.",
           type: "warning",
         });
         setTimeout(() => setEditorToast(null), 3000);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setEditorToast({
-        text: err?.message || "Falha na comunicação ao atualizar tradução.",
+        text: err instanceof Error ? err.message : "Falha na comunicação ao atualizar tradução.",
         type: "warning",
       });
       setTimeout(() => setEditorToast(null), 3000);
@@ -294,15 +294,15 @@ export function useEditorTranslations({
       } else {
         setEditorToast({
           text:
-            (res.data as any)?.error ||
+            (res.data as { error?: string } | undefined)?.error ||
             "Erro ao preparar sincronização para o documento oficial.",
           type: "warning",
         });
         setTimeout(() => setEditorToast(null), 3000);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setEditorToast({
-        text: err?.message || "Falha na comunicação ao sincronizar tradução.",
+        text: err instanceof Error ? err.message : "Falha na comunicação ao sincronizar tradução.",
         type: "warning",
       });
       setTimeout(() => setEditorToast(null), 3000);
@@ -364,7 +364,7 @@ export function useEditorTranslations({
       } else {
         setEditorToast({
           text:
-            (res.data as any)?.error || "Erro ao atualizar documento oficial.",
+            (res.data as { error?: string } | undefined)?.error || "Erro ao atualizar documento oficial.",
           type: "warning",
         });
         setTimeout(() => setEditorToast(null), 3000);

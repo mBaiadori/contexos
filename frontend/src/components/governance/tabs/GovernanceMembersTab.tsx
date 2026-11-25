@@ -85,7 +85,7 @@ export const GovernanceMembersTab: React.FC<GovernanceMembersTabProps> = ({
             />
             <select
               value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as any)}
+              onChange={(e) => setInviteRole(e.target.value as "member" | "admin" | "billing_manager")}
               className="access-gov-select"
               style={{ width: "160px" }}
             >

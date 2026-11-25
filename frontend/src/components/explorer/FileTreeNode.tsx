@@ -39,17 +39,17 @@ interface FileTreeNodeProps {
   inlineCreating: InlineCreatingState | null;
   inlineValue: string;
   setInlineValue: (val: string) => void;
-  selectedTemplate: any;
-  setSelectedTemplate: (tpl: any) => void;
+  selectedTemplate: { id?: string; name?: string; title?: string; [key: string]: unknown } | null;
+  setSelectedTemplate: (tpl: { id?: string; name?: string; title?: string; [key: string]: unknown } | null) => void;
   templatePickerOpen: boolean;
   setTemplatePickerOpen: (open: boolean) => void;
   onConfirmInlineCreate: () => void;
   onCancelInlineCreate: () => void;
   isSubmittingInlineRef: React.MutableRefObject<boolean>;
-  gitStatusMap: Map<string, any>;
-  pendingChangesMap: Map<string, any>;
-  departmentsMap: Map<string, any>;
-  canAccessDoc: (doc: any) => boolean;
+  gitStatusMap: Map<string, unknown>;
+  pendingChangesMap: Map<string, unknown>;
+  departmentsMap: Map<string, { id?: string; name?: string; color?: string; [key: string]: unknown }>;
+  canAccessDoc: (doc: TreeNode) => boolean;
   onToggleFolder: (path: string, e: React.MouseEvent) => void;
   onFileClick: (path: string, name: string, repoName?: string) => void;
   onStartInlineCreate: (parentPath: string, isFolder: boolean, e?: React.MouseEvent) => void;
@@ -383,10 +383,10 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
         : "M"
       : null;
 
-  const deptObj = (node as any).department
-    ? departmentsMap.get(String((node as any).department).toLowerCase())
+  const deptObj = node.department
+    ? departmentsMap.get(String(node.department).toLowerCase())
     : undefined;
-  const isAllowed = canAccessDoc(node as any);
+  const isAllowed = canAccessDoc(node);
   const isLocked = !isAllowed;
   const hasSecProtection = isLocked || deptObj !== undefined;
 

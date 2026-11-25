@@ -78,8 +78,8 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
           setErrorMsg(errorText);
         }
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Falha na comunicação com o servidor.");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Falha na comunicação com o servidor.");
     } finally {
       setIsDeleting(false);
     }

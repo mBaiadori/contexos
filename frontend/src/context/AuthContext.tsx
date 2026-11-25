@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (status.authenticated && status.user) {
         setUser(status.user);
         if (status.git_provider) {
-          setProvider(status.git_provider as any);
+          setProvider(status.git_provider as 'github' | 'local');
         }
         if (status.git_provider_url) {
           setProviderUrl(status.git_provider_url);
@@ -96,8 +96,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
       return { success: false, error: res.data.error || 'Falha ao autenticar com token GitHub' };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Erro de conexão com o servidor' };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Erro de conexão com o servidor' };
     }
   };
 
@@ -116,8 +116,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
       return { success: false, error: res.data.error || 'Falha ao alternar conta' };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Erro ao alternar perfil' };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Erro ao alternar perfil' };
     } finally {
       setIsLoading(false);
     }
@@ -139,8 +139,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
       return { success: false, error: 'Falha ao remover conta' };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Erro ao remover conta' };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Erro ao remover conta' };
     }
   };
 

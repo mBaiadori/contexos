@@ -43,7 +43,7 @@ export class DictionaryService {
     };
   }
 
-  saveDictionary(data: any, targetRepo?: string) {
+  saveDictionary(data: unknown, targetRepo?: string) {
     const valRes = validateJsonSchema('dictionary', data);
     if (!valRes.valid) {
       throw new Error(`Dados do dicionário inválidos: ${valRes.errors?.join(', ')}`);

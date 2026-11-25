@@ -1,3 +1,5 @@
+import type { ToolCallExecutionRecord } from '../tools/tool.types.js';
+
 export type ProviderMode = 'direct' | 'connected';
 
 export type ProviderId = 'direct-api' | 'antigravity' | 'claude-code' | 'aider' | string;
@@ -30,10 +32,10 @@ export interface ProviderStreamEvent {
   type: StreamEventType;
   provider: ProviderId;
   sessionId?: string;
-  data?: any;
+  data?: unknown;
   text?: string;
   toolName?: string;
-  toolArgs?: any;
+  toolArgs?: Record<string, unknown>;
   approvalPrompt?: string;
   timestamp?: number;
 }
@@ -103,7 +105,7 @@ export interface IAgentProvider {
       content?: string;
       attachments?: ChatMediaAttachment[];
     }
-  ): Promise<{ reply: string; toolCalls?: any[] }>;
+  ): Promise<{ reply: string; toolCalls?: ToolCallExecutionRecord[] }>;
 
   /**
    * Responde a uma solicitação de aprovação interativa (y/n ou resposta textual)

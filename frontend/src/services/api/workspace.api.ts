@@ -13,7 +13,12 @@ export const workspaceApi = {
     return res.json();
   },
 
-  async saveWorkspaceFile(payload: { path: string; content: string; meta?: any; repo?: string }): Promise<ApiResponse<any>> {
+  async saveWorkspaceFile(payload: {
+    path: string;
+    content: string;
+    meta?: Record<string, unknown>;
+    repo?: string;
+  }): Promise<ApiResponse<{ success?: boolean; error?: string; [key: string]: unknown }>> {
     const res = await fetch('/api/workspace/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -22,7 +27,12 @@ export const workspaceApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async saveProjectFile(payload: { path: string; content: string; meta?: any; repo?: string }): Promise<ApiResponse<any>> {
+  async saveProjectFile(payload: {
+    path: string;
+    content: string;
+    meta?: Record<string, unknown>;
+    repo?: string;
+  }): Promise<ApiResponse<{ success?: boolean; error?: string; [key: string]: unknown }>> {
     return workspaceApi.saveWorkspaceFile(payload);
   },
 

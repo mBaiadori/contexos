@@ -95,8 +95,8 @@ export function useSettingsData() {
       const pCfg = await loadProjectConfig();
       if (pCfg) {
         if (Array.isArray(pCfg.categories)) {
-          const parsedCats: TaxonomyItem[] = pCfg.categories.map(
-            (c: any, idx: number) => {
+          const parsedCats: TaxonomyItem[] = (pCfg.categories as Array<string | Partial<TaxonomyItem>>).map(
+            (c, idx: number) => {
               if (typeof c === "string") {
                 return {
                   name: c,
@@ -123,8 +123,8 @@ export function useSettingsData() {
             GUIDE: "#ec4899",
             TEST: "#14b8a6",
           };
-          const parsedBadges: TaxonomyItem[] = pCfg.badges.map(
-            (b: any, idx: number) => {
+          const parsedBadges: TaxonomyItem[] = (pCfg.badges as Array<string | Partial<TaxonomyItem>>).map(
+            (b, idx: number) => {
               if (typeof b === "string") {
                 const name = b.trim().toUpperCase();
                 return {
@@ -147,8 +147,8 @@ export function useSettingsData() {
         }
 
         if (Array.isArray(pCfg.tags)) {
-          const parsedTags: TaxonomyItem[] = pCfg.tags.map(
-            (t: any, idx: number) => {
+          const parsedTags: TaxonomyItem[] = (pCfg.tags as Array<string | Partial<TaxonomyItem>>).map(
+            (t, idx: number) => {
               if (typeof t === "string") {
                 return {
                   name: t,
@@ -174,8 +174,8 @@ export function useSettingsData() {
             superseded: "#d8b4fe",
             deprecated: "#fca5a5",
           };
-          const parsedStatuses: TaxonomyItem[] = pCfg.statuses.map(
-            (s: any, idx: number) => {
+          const parsedStatuses: TaxonomyItem[] = (pCfg.statuses as Array<string | Partial<TaxonomyItem>>).map(
+            (s, idx: number) => {
               if (typeof s === "string") {
                 const name = formatStatusName(s);
                 return {

@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderModelOption, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent, ChatMediaAttachment } from './provider.types.js';
+import type { ToolCallExecutionRecord } from '../tools/tool.types.js';
 import { materializeAttachmentsForCli } from './media-attachments.js';
 import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
@@ -40,7 +41,7 @@ export class ClaudeCodeAdapter implements IAgentProvider {
 
   private resolveCliPath(): string | null {
     const cfg = loadConfig();
-    const customPath = (cfg.settings as any)?.claude_cli_path || process.env.CLAUDE_CLI_PATH;
+    const customPath = cfg.settings?.claude_cli_path || process.env.CLAUDE_CLI_PATH;
     if (customPath) {
       const val = validateCliExecutable(customPath, ['claude']);
       if (val.valid && val.realPath) {
@@ -98,7 +99,7 @@ export class ClaudeCodeAdapter implements IAgentProvider {
       contextPointers?: string[];
       attachments?: ChatMediaAttachment[];
     }
-  ): Promise<{ reply: string; toolCalls?: any[] }> {
+  ): Promise<{ reply: string; toolCalls?: ToolCallExecutionRecord[] }> {
     const cliPath = this.resolveCliPath();
     if (!cliPath) {
       const errMsg = 'Claude CLI não está instalado ou não foi encontrado em ~/.local/bin/claude.';
@@ -151,12 +152,12 @@ export class ClaudeCodeAdapter implements IAgentProvider {
       timestamp: Date.now(),
     });
 
-    return new Promise<{ reply: string; toolCalls?: any[] }>((resolve, reject) => {
+    return new Promise<{ reply: string; toolCalls?: ToolCallExecutionRecord[] }>((resolve, reject) => {
       let finalReply = '';
 
       try {
         const cfg = loadConfig();
-        const claudeModel = (cfg.settings as any)?.claude_model;
+        const claudeModel = cfg.settings?.claude_model;
         const spawnArgs: string[] = [];
         if (claudeModel) {
           spawnArgs.push('--model', claudeModel);
@@ -227,12 +228,12 @@ export class ClaudeCodeAdapter implements IAgentProvider {
             reply: finalReply.trim() || `Processo finalizado com código ${code}`,
           });
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         onEvent({
           type: 'error',
           provider: this.id,
           sessionId,
-          data: err?.message || String(err),
+          data: err instanceof Error ? err.message : String(err),
           timestamp: Date.now(),
         });
         reject(err);

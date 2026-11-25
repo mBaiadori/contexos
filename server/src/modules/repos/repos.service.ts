@@ -46,7 +46,7 @@ export class ReposService {
     return reposDiagnosisService.diagnoseRepo(repoName, ownerOrOrg, checkRemote);
   }
 
-  async selectRepo(repo: any) {
+  async selectRepo(repo: Parameters<ReposLifecycleService['selectRepo']>[0]) {
     return reposLifecycleService.selectRepo(repo);
   }
 

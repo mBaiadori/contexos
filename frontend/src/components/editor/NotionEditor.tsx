@@ -457,13 +457,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       engineRef.current.applyDictionaryHighlights();
     }
     if (onCustomSave) {
-      const res = await onCustomSave();
-      if ((res as any)?.success !== false) {
+      const res = (await onCustomSave()) as { success?: boolean; message?: string } | void;
+      if (res?.success !== false) {
         if (engineRef.current) {
           engineRef.current.applyDictionaryHighlights();
         }
         setEditorToast({
-          text: (res as any)?.message || "Template salvo com sucesso!",
+          text: res?.message || "Template salvo com sucesso!",
           type: "success",
         });
         setTimeout(() => setEditorToast(null), 2500);
@@ -528,9 +528,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             type: "warning",
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setEditorToast({
-          text: err.message || "Erro de rede ao salvar no PR.",
+          text: err instanceof Error ? err.message : "Erro de rede ao salvar no PR.",
           type: "warning",
         });
       }
@@ -567,7 +567,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     // Validação estrita: se metaOverride for um evento DOM ou SyntheticEvent do React, descarta-o
     const isEvent =
       metaOverride &&
-      (typeof (metaOverride as any).preventDefault === "function" ||
+      (typeof (metaOverride as { preventDefault?: unknown }).preventDefault === "function" ||
         "_reactName" in metaOverride ||
         "nativeEvent" in metaOverride ||
         ("clientX" in metaOverride && "clientY" in metaOverride) ||
@@ -707,7 +707,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         try {
           const targetContext = await API.getDocumentContext(url);
           const existingLinks: string[] = Array.isArray(targetContext?.dependencies)
-            ? targetContext.dependencies.map((d: any) => d.path || d.filePath || d)
+            ? targetContext.dependencies.map((d: string | { path?: string; filePath?: string }) =>
+                typeof d === "string" ? d : d.path || d.filePath || String(d),
+              )
             : [];
           if (!existingLinks.includes(filePath)) {
             existingLinks.push(filePath);
@@ -861,12 +863,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   // Listeners para navegação e atualização de fragmentos de texto (Deep Linking)
   useEffect(() => {
-    const handleFragmentNav = (e: any) => {
+    const handleFragmentNav = (e: Event) => {
+      const detail = (e as CustomEvent<{ filePath?: string; hash?: string }>).detail;
       // Se o evento especificou um filePath de destino, só executa se corresponder a este editor
-      if (e.detail?.filePath && e.detail.filePath !== filePath) {
+      if (detail?.filePath && detail.filePath !== filePath) {
         return;
       }
-      const targetHash = e.detail?.hash || window.location.hash;
+      const targetHash = detail?.hash || window.location.hash;
       if (
         targetHash &&
         (targetHash.includes(":~:text=") || targetHash.startsWith("#"))
@@ -964,9 +967,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   // Listener para erros de abertura de documentos inexistentes no workspace
   useEffect(() => {
-    const handleFileLoadError = (e: any) => {
+    const handleFileLoadError = (e: Event) => {
       const msg =
-        e.detail?.message ||
+        (e as CustomEvent<{ message?: string }>).detail?.message ||
         "Documento referenciado não foi encontrado no workspace.";
       setEditorToast({ text: msg, type: "warning" });
       setTimeout(() => setEditorToast(null), 4500);
@@ -1399,8 +1402,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               } else {
                 alert(res.data?.error || "Erro ao resolver conflito no PR.");
               }
-            } catch (err: any) {
-              alert(err.message || "Erro ao resolver conflito no PR.");
+            } catch (err: unknown) {
+              alert(err instanceof Error ? err.message : "Erro ao resolver conflito no PR.");
             }
           } else {
             const parsed = parseFrontmatter(resolvedContent);

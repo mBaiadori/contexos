@@ -133,8 +133,8 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
     }
 
     return keys.map((key) => {
-      const curVal = (currentMeta as any)?.[key];
-      const otherVal = (otherMeta as any)?.[key];
+      const curVal = (currentMeta as Record<string, unknown> | undefined)?.[key];
+      const otherVal = (otherMeta as Record<string, unknown> | undefined)?.[key];
       let curStr =
         curVal !== undefined && curVal !== null
           ? typeof curVal === "object"

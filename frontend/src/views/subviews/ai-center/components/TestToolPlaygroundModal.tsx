@@ -8,7 +8,7 @@ interface TestToolPlaygroundModalProps {
   setToolArgsInput: (val: string) => void;
   handleExecuteToolTest: () => Promise<void>;
   isExecutingTool: boolean;
-  toolTestResult: any;
+  toolTestResult: Record<string, unknown> | null;
 }
 
 export const TestToolPlaygroundModal: React.FC<TestToolPlaygroundModalProps> = ({

@@ -23,7 +23,7 @@ interface TermModalProps {
   setInputDefinition: (val: string) => void;
   formError: string;
   isSaving: boolean;
-  categories: any[];
+  categories: Array<{ name: string; label?: string; color?: string }>;
   onSaveTerm: () => void;
 }
 
@@ -148,7 +148,7 @@ export const TermModal: React.FC<TermModalProps> = ({
           helperText="Selecione o domínio/categoria correspondente configurado no projeto."
         >
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
-            {categories.map((cat: any) => {
+            {categories.map((cat) => {
               const isSelected = inputDomain.toLowerCase() === (cat.name || "").toLowerCase();
               const color = cat.color || "#3b82f6";
               return (

@@ -196,9 +196,9 @@ export const useFileTreeDnD = ({
             "Falha ao importar arquivos.";
           showToast(`Erro na importação: ${errMsg}`, "warning");
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         showToast(
-          `Erro ao conectar com o servidor: ${err.message || "Erro desconhecido"}`,
+          `Erro ao conectar com o servidor: ${err instanceof Error ? err.message : "Erro desconhecido"}`,
           "warning",
         );
       } finally {
@@ -241,9 +241,9 @@ export const useFileTreeDnD = ({
             "warning",
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[FileTree] Falha ao mover item:", err);
-        showToast(err.message || "Erro inesperado ao mover o item.", "warning");
+        showToast(err instanceof Error ? err.message : "Erro inesperado ao mover o item.", "warning");
       }
     },
     [activeRepo?.name, moveFileOrFolder, showToast],

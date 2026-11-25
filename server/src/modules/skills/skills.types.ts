@@ -75,6 +75,7 @@ export interface CustomToolParameterProperty {
   type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';
   description?: string;
   enum?: string[];
+  default?: unknown;
   items?: {
     type: string;
     description?: string;
@@ -118,7 +119,11 @@ export interface CommunityToolDefinition {
   category: string;
   server_id?: string;
   server_name?: string;
-  parameters?: any;
+  parameters?: {
+    type?: string;
+    properties?: Record<string, CustomToolParameterProperty>;
+    required?: string[];
+  };
   source: 'community';
   author?: string;
   license?: string;

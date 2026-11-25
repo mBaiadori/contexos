@@ -14,7 +14,7 @@ interface CustomToolModalProps {
   isTestingCustomTool: boolean;
   customToolTestArgs: string;
   setCustomToolTestArgs: (val: string) => void;
-  customToolTestOutput: any;
+  customToolTestOutput: Record<string, unknown> | null;
 }
 
 export const CustomToolModal: React.FC<CustomToolModalProps> = ({
@@ -231,7 +231,7 @@ export const CustomToolModal: React.FC<CustomToolModalProps> = ({
                   onChange={(e) =>
                     setEditingCustomTool({
                       ...editingCustomTool,
-                      category: e.target.value as any,
+                      category: e.target.value as CustomToolItem["category"],
                     })
                   }
                   style={{
@@ -278,7 +278,7 @@ export const CustomToolModal: React.FC<CustomToolModalProps> = ({
                     onClick={() =>
                       setEditingCustomTool({
                         ...editingCustomTool,
-                        handler_type: t.id as any,
+                        handler_type: t.id as CustomToolItem["handler_type"],
                       })
                     }
                     className={`store-filter-chip ${editingCustomTool.handler_type === t.id ? "active" : ""}`}
@@ -362,7 +362,7 @@ export const CustomToolModal: React.FC<CustomToolModalProps> = ({
                         ...editingCustomTool,
                         handler_config: {
                           ...editingCustomTool.handler_config,
-                          method: e.target.value as any,
+                          method: e.target.value as NonNullable<CustomToolItem["handler_config"]>["method"],
                         },
                       })
                     }

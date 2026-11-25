@@ -7,7 +7,7 @@ export interface DocDraft {
   repo: string;
   filePath: string;
   body: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   rawContent: string;
   timestamp: number;
   updatedAt: string;
@@ -22,7 +22,7 @@ class DraftStoreService {
     return `${prefix}${cleanRepo}:${cleanPath}`;
   }
 
-  saveDocDraft(repo: string, filePath: string, draftData: { body: string; metadata?: any; rawContent?: string }, debounceMs = 500) {
+  saveDocDraft(repo: string, filePath: string, draftData: { body: string; metadata?: Record<string, unknown>; rawContent?: string }, debounceMs = 500) {
     const key = this._makeKey(DRAFT_PREFIX, repo, filePath);
 
     const existing = this.debounceTimers.get(key);
