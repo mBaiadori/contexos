@@ -163,7 +163,6 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
   onSelectModel,
   onSelectProvider,
   onSelectCliModel,
-  onSelectEffort,
   onOpenSettings,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
