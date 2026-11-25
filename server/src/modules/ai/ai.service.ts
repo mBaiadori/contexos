@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { PROJECTS_DIR, DEFAULT_GLOBAL_SYSTEM_PROMPT, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
+import type { ChatMediaAttachment } from './providers/provider.types.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 import { ToolCallExecutionRecord } from './tools/tool.types.js';
 import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
@@ -119,7 +120,8 @@ export class AIService {
     filePath: string = 'index.md',
     history: ChatMessage[] = [],
     customSystemPrompt?: string,
-    repoName: string = 'local'
+    repoName: string = 'local',
+    attachments: ChatMediaAttachment[] = []
   ): Promise<AIExecutionResult> {
     const startTime = Date.now();
     const provider = (aiSettings.provider || 'gemini').toLowerCase();
@@ -199,9 +201,19 @@ export class AIService {
           parts: [{ text: h.content || h.text || '' }],
         }));
 
+      const geminiUserParts: any[] = [{ text: fullUserPrompt }];
+      for (const att of attachments) {
+        geminiUserParts.push({
+          inlineData: {
+            mimeType: att.mimeType || 'application/octet-stream',
+            data: att.dataBase64,
+          },
+        });
+      }
+
       contents.push({
         role: 'user',
-        parts: [{ text: fullUserPrompt }],
+        parts: geminiUserParts,
       });
 
       const selectedModelName = model.includes('gemini') ? model : 'gemini-2.5-flash';
@@ -339,6 +351,29 @@ export class AIService {
       try {
         const client = new OpenAI({ apiKey });
         const openAITools = activeTools.length > 0 ? toolRegistry.toOpenAITools(activeTools) : undefined;
+        const openAIUserContent: any =
+          attachments.length > 0
+            ? [
+                { type: 'text', text: fullUserPrompt },
+                ...attachments.map((att) => {
+                  if (att.mimeType.startsWith('image/')) {
+                    return {
+                      type: 'image_url',
+                      image_url: { url: `data:${att.mimeType};base64,${att.dataBase64}` },
+                    };
+                  }
+                  if (att.mimeType.startsWith('text/') || att.mimeType === 'application/json') {
+                    const decoded = Buffer.from(att.dataBase64, 'base64').toString('utf-8');
+                    return { type: 'text', text: `\n[Arquivo anexado: ${att.name}]\n${decoded}` };
+                  }
+                  return {
+                    type: 'text',
+                    text: `\n[Mídia anexada: ${att.name} (${att.mimeType}) — não suportada nativamente neste endpoint]`,
+                  };
+                }),
+              ]
+            : fullUserPrompt;
+
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
           { role: 'system', content: systemPrompt },
           ...history
@@ -347,7 +382,7 @@ export class AIService {
               role: (h.role === 'model' ? 'assistant' : h.role) as any,
               content: h.content || h.text || '',
             })),
-          { role: 'user', content: fullUserPrompt },
+          { role: 'user', content: openAIUserContent },
         ];
 
         let currentStep = 0;
@@ -452,6 +487,43 @@ export class AIService {
       try {
         const client = new Anthropic({ apiKey });
         const anthropicTools = activeTools.length > 0 ? toolRegistry.toAnthropicTools(activeTools) : undefined;
+        const anthropicUserContent: any =
+          attachments.length > 0
+            ? [
+                ...attachments.map((att) => {
+                  if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(att.mimeType)) {
+                    return {
+                      type: 'image',
+                      source: {
+                        type: 'base64',
+                        media_type: att.mimeType,
+                        data: att.dataBase64,
+                      },
+                    };
+                  }
+                  if (att.mimeType === 'application/pdf') {
+                    return {
+                      type: 'document',
+                      source: {
+                        type: 'base64',
+                        media_type: 'application/pdf',
+                        data: att.dataBase64,
+                      },
+                    };
+                  }
+                  if (att.mimeType.startsWith('text/') || att.mimeType === 'application/json') {
+                    const decoded = Buffer.from(att.dataBase64, 'base64').toString('utf-8');
+                    return { type: 'text', text: `[Arquivo anexado: ${att.name}]\n${decoded}` };
+                  }
+                  return {
+                    type: 'text',
+                    text: `[Mídia anexada: ${att.name} (${att.mimeType}) — não suportada nativamente neste endpoint]`,
+                  };
+                }),
+                { type: 'text', text: fullUserPrompt },
+              ]
+            : fullUserPrompt;
+
         const messages: Anthropic.MessageParam[] = [
           ...history
             .filter((h) => (h.content || h.text) && h.role !== 'system')
@@ -459,7 +531,7 @@ export class AIService {
               role: (h.role === 'model' ? 'assistant' : 'user') as 'user' | 'assistant',
               content: h.content || h.text || '',
             })),
-          { role: 'user', content: fullUserPrompt },
+          { role: 'user', content: anthropicUserContent },
         ];
 
         let currentStep = 0;
@@ -562,6 +634,29 @@ export class AIService {
           apiKey: apiKey || 'ollama',
         });
 
+        const openAIUserContent: any =
+          attachments.length > 0
+            ? [
+                { type: 'text', text: fullUserPrompt },
+                ...attachments.map((att) => {
+                  if (att.mimeType.startsWith('image/')) {
+                    return {
+                      type: 'image_url',
+                      image_url: { url: `data:${att.mimeType};base64,${att.dataBase64}` },
+                    };
+                  }
+                  if (att.mimeType.startsWith('text/') || att.mimeType === 'application/json') {
+                    const decoded = Buffer.from(att.dataBase64, 'base64').toString('utf-8');
+                    return { type: 'text', text: `\n[Arquivo anexado: ${att.name}]\n${decoded}` };
+                  }
+                  return {
+                    type: 'text',
+                    text: `\n[Mídia anexada: ${att.name} (${att.mimeType}) — não suportada nativamente neste endpoint]`,
+                  };
+                }),
+              ]
+            : fullUserPrompt;
+
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
           { role: 'system', content: systemPrompt },
           ...history
@@ -570,7 +665,7 @@ export class AIService {
               role: (h.role === 'model' ? 'assistant' : h.role) as any,
               content: h.content || h.text || '',
             })),
-          { role: 'user', content: fullUserPrompt },
+          { role: 'user', content: openAIUserContent },
         ];
 
         const response = await client.chat.completions.create({

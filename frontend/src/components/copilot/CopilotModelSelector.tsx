@@ -199,18 +199,16 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
         justifyContent: "space-between",
         gap: "8px",
         padding: "6px 8px",
-        borderRadius: "6px",
-        border: isSelected
-          ? "1px solid var(--color-primary, #2563eb)"
-          : "1px solid transparent",
+        borderRadius: "7px",
+        border: "none",
         background: isSelected
-          ? "var(--color-primary-container, rgba(37, 99, 235, 0.1))"
+          ? "rgba(37, 99, 235, 0.08)"
           : "transparent",
         color: isSelected
           ? "var(--color-primary, #2563eb)"
           : "var(--color-on-surface, #1e293b)",
         cursor: "pointer",
-        fontSize: "11.5px",
+        fontSize: "12px",
         textAlign: "left",
         width: "100%",
         transition: "background 0.12s ease",
@@ -242,13 +240,13 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
               padding: "1px 6px",
               borderRadius: "999px",
               background: isSelected
-                ? "var(--color-primary, #2563eb)"
+                ? "rgba(37, 99, 235, 0.12)"
                 : "var(--color-surface-container, #f1f5f9)",
               color: isSelected
-                ? "#ffffff"
+                ? "var(--color-primary, #2563eb)"
                 : "var(--color-on-surface-variant, #64748b)",
               flexShrink: 0,
-              fontWeight: 600,
+              fontWeight: 500,
             }}
           >
             {item.badge}
@@ -275,15 +273,16 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
       ref={dropdownRef}
       className="ai-copilot-agent-wrapper"
       style={{
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
-        gap: "6px",
+        gap: "4px",
         minWidth: 0,
+        flex: "0 1 auto",
         position: "relative",
         overflow: "visible",
       }}
     >
-      {/* Unified Connector + Model Trigger */}
+      {/* Unified Connector + Model Trigger (integrated lightweight chat style) */}
       <button
         className="ai-copilot-agent-btn"
         type="button"
@@ -292,38 +291,36 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
         style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: "6px",
-          padding: "4px 10px",
-          borderRadius: "16px",
+          gap: "5px",
+          height: "26px",
+          padding: "2px 8px",
+          borderRadius: "8px",
           background: isOpen
-            ? "var(--color-primary, #2563eb)"
-            : "var(--color-surface-container, #f1f5f9)",
-          color: isOpen ? "#ffffff" : "var(--color-on-surface, #0f172a)",
-          border: "1px solid var(--color-outline-variant, #cbd5e1)",
+            ? "var(--color-surface-container-high, #e2e8f0)"
+            : "transparent",
+          color: "var(--color-on-surface-variant, #475569)",
+          border: "none",
           cursor: "pointer",
           fontSize: "11.5px",
-          fontWeight: 600,
-          transition: "all 0.15s ease",
-          maxWidth: "230px",
+          fontWeight: 500,
+          transition: "background 0.15s ease, color 0.15s ease",
+          maxWidth: "190px",
+          minWidth: 0,
         }}
       >
         <span
           style={{
-            fontSize: "9.5px",
+            fontSize: "9px",
             fontWeight: 700,
             textTransform: "uppercase",
-            padding: "1px 5px",
+            padding: "1px 4px",
             borderRadius: "4px",
-            background: isOpen
-              ? "rgba(255,255,255,0.22)"
-              : isCliMode
-                ? "rgba(16, 185, 129, 0.14)"
-                : "rgba(37, 99, 235, 0.12)",
-            color: isOpen
-              ? "#ffffff"
-              : isCliMode
-                ? "#059669"
-                : "var(--color-primary, #2563eb)",
+            background: isCliMode
+              ? "rgba(16, 185, 129, 0.12)"
+              : "rgba(37, 99, 235, 0.1)",
+            color: isCliMode
+              ? "#059669"
+              : "var(--color-primary, #2563eb)",
             flexShrink: 0,
           }}
         >
@@ -342,6 +339,7 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
           className="material-symbols-outlined"
           style={{
             fontSize: "14px",
+            opacity: 0.7,
             transition: "transform 0.2s ease",
             transform: isOpen ? "rotate(180deg)" : "none",
             flexShrink: 0,
@@ -351,38 +349,39 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
         </span>
       </button>
 
-      {/* Unified Connector + Model Popover */}
+      {/* Unified Connector + Model Popover (opens upward from chat input) */}
       {isOpen && (
         <div
           style={{
             position: "absolute",
-            top: "calc(100% + 6px)",
+            bottom: "calc(100% + 8px)",
             left: 0,
             zIndex: 1100,
-            width: "300px",
+            width: "285px",
+            maxWidth: "calc(100vw - 40px)",
             background: "var(--color-surface, #ffffff)",
-            border: "1px solid var(--color-outline-variant, #cbd5e1)",
+            border: "1px solid rgba(15, 23, 42, 0.08)",
             borderRadius: "12px",
-            boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
-            padding: "8px",
+            boxShadow: "0 8px 24px rgba(15, 23, 42, 0.1)",
+            padding: "10px",
             display: "flex",
             flexDirection: "column",
             gap: "8px",
-            maxHeight: "440px",
+            maxHeight: "420px",
             overflowY: "auto",
             animation: "fadeIn 0.15s ease-out",
           }}
         >
           {/* 1. Connector Switcher */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
             <div
               style={{
                 fontSize: "10px",
-                fontWeight: 700,
+                fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "0.5px",
                 color: "var(--text-muted, #94a3b8)",
-                padding: "2px 6px",
+                padding: "0 4px",
               }}
             >
               Conector
@@ -391,7 +390,10 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr 1fr",
-                gap: "4px",
+                gap: "3px",
+                background: "var(--color-surface-container, #f1f5f9)",
+                padding: "3px",
+                borderRadius: "9px",
               }}
             >
               {connectorOptions.map((c) => {
@@ -406,21 +408,21 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: "4px",
+                      gap: "5px",
                       padding: "5px 6px",
                       borderRadius: "7px",
-                      border: isSelected
-                        ? "1px solid var(--color-primary, #2563eb)"
-                        : "1px solid var(--color-outline-variant, #e2e8f0)",
-                      background: isSelected
-                        ? "var(--color-primary-container, rgba(37, 99, 235, 0.1))"
-                        : "var(--color-surface-container, #f8fafc)",
+                      border: "none",
+                      background: isSelected ? "#ffffff" : "transparent",
+                      boxShadow: isSelected
+                        ? "0 1px 2px rgba(15, 23, 42, 0.08)"
+                        : "none",
                       color: isSelected
-                        ? "var(--color-primary, #2563eb)"
-                        : "var(--color-on-surface, #334155)",
-                      fontSize: "10.5px",
-                      fontWeight: isSelected ? 700 : 500,
+                        ? "var(--color-on-surface, #0f172a)"
+                        : "var(--color-on-surface-variant, #64748b)",
+                      fontSize: "11px",
+                      fontWeight: isSelected ? 600 : 500,
                       cursor: "pointer",
+                      transition: "all 0.15s ease",
                     }}
                   >
                     <span
@@ -442,21 +444,21 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
           {/* 2. Models for the active connector */}
           <div
             style={{
-              borderTop: "1px solid var(--color-outline-variant, #e2e8f0)",
-              paddingTop: "6px",
+              borderTop: "1px solid rgba(15, 23, 42, 0.06)",
+              paddingTop: "8px",
               display: "flex",
               flexDirection: "column",
-              gap: "3px",
+              gap: "2px",
             }}
           >
             <div
               style={{
                 fontSize: "10px",
-                fontWeight: 700,
+                fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "0.5px",
                 color: "var(--text-muted, #94a3b8)",
-                padding: "2px 6px",
+                padding: "0 4px 4px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -484,27 +486,34 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                   <div
                     style={{
                       marginTop: "6px",
-                      paddingTop: "6px",
-                      borderTop:
-                        "1px dashed var(--color-outline-variant, #e2e8f0)",
+                      paddingTop: "8px",
+                      borderTop: "1px solid rgba(15, 23, 42, 0.06)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
                       gap: "6px",
-                      paddingLeft: "6px",
-                      paddingRight: "6px",
+                      paddingLeft: "4px",
+                      paddingRight: "4px",
                     }}
                   >
                     <span
                       style={{
-                        fontSize: "10.5px",
-                        fontWeight: 600,
+                        fontSize: "11px",
+                        fontWeight: 500,
                         color: "var(--text-muted, #64748b)",
                       }}
                     >
-                      Effort:
+                      Effort
                     </span>
-                    <div style={{ display: "flex", gap: "4px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "2px",
+                        background: "var(--color-surface-container, #f1f5f9)",
+                        padding: "2px",
+                        borderRadius: "7px",
+                      }}
+                    >
                       {(["low", "medium", "high"] as const).map((eff) => {
                         const active = agentEffort === eff;
                         return (
@@ -513,21 +522,21 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                             type="button"
                             onClick={() => onSelectEffort(eff)}
                             style={{
-                              padding: "2px 7px",
+                              padding: "2px 8px",
                               borderRadius: "5px",
-                              border: active
-                                ? "1px solid var(--color-primary, #2563eb)"
-                                : "1px solid var(--color-outline-variant, #e2e8f0)",
-                              background: active
-                                ? "var(--color-primary-container, rgba(37, 99, 235, 0.12))"
-                                : "transparent",
+                              border: "none",
+                              background: active ? "#ffffff" : "transparent",
+                              boxShadow: active
+                                ? "0 1px 2px rgba(15, 23, 42, 0.08)"
+                                : "none",
                               color: active
                                 ? "var(--color-primary, #2563eb)"
                                 : "var(--text-muted, #64748b)",
-                              fontSize: "10px",
-                              fontWeight: active ? 700 : 500,
+                              fontSize: "10.5px",
+                              fontWeight: active ? 600 : 500,
                               cursor: "pointer",
                               textTransform: "capitalize",
+                              transition: "all 0.12s ease",
                             }}
                           >
                             {eff}
@@ -595,7 +604,7 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
           {/* 3. Footer Settings */}
           <div
             style={{
-              borderTop: "1px solid var(--color-outline-variant, #e2e8f0)",
+              borderTop: "1px solid rgba(15, 23, 42, 0.06)",
               paddingTop: "6px",
             }}
           >
@@ -611,13 +620,13 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "6px",
-                padding: "6px",
-                borderRadius: "6px",
+                padding: "6px 8px",
+                borderRadius: "7px",
                 border: "none",
-                background: "var(--color-surface-container, #f8fafc)",
+                background: "transparent",
                 color: "var(--color-primary, #2563eb)",
-                fontSize: "11px",
-                fontWeight: 600,
+                fontSize: "11.5px",
+                fontWeight: 500,
                 cursor: "pointer",
               }}
             >

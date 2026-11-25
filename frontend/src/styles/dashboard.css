@@ -5612,6 +5612,110 @@ span[title] {
   box-shadow: none !important;
 }
 
+.ai-copilot-input-container.dragging-media {
+  background: #f0f7ff !important;
+  border-top: 2px dashed #3b82f6 !important;
+}
+
+.ai-media-preview-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 112px;
+  overflow-y: auto;
+}
+
+.ai-media-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  font-size: 11px;
+  color: #1e293b;
+  max-width: 210px;
+}
+
+.ai-media-chip-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.ai-media-chip-icon {
+  font-size: 16px;
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.ai-media-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-media-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.ai-media-chip-remove:hover {
+  background: #e2e8f0;
+  color: #ef4444;
+}
+
+.ai-media-error-banner {
+  font-size: 11px;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.chat-bubble-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.chat-bubble-attachment-img-link {
+  display: inline-block;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.chat-bubble-attachment-img {
+  display: block;
+  max-width: 180px;
+  max-height: 140px;
+  object-fit: cover;
+}
+
+.chat-bubble-attachment-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  background: rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
 .ai-copilot-textarea,
 .ai-copilot-textarea:hover,
 .ai-copilot-textarea:focus,

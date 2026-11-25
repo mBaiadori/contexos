@@ -1,4 +1,4 @@
-import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
+import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent, ChatMediaAttachment } from './provider.types.js';
 import { aiService } from '../ai.service.js';
 import { loadConfig } from '../../../config/storage.js';
 
@@ -48,6 +48,7 @@ export class DirectApiProvider implements IAgentProvider {
       briefing?: string;
       contextPointers?: string[];
       content?: string;
+      attachments?: ChatMediaAttachment[];
     }
   ): Promise<{ reply: string; toolCalls?: any[] }> {
     const session = this.sessions.get(sessionId);
@@ -77,7 +78,8 @@ export class DirectApiProvider implements IAgentProvider {
         'index.md',
         (options?.history || []).map((h) => ({ role: h.role, text: h.content })),
         systemPrompt,
-        repoName
+        repoName,
+        options?.attachments
       );
 
       if (result.tool_calls && result.tool_calls.length > 0) {

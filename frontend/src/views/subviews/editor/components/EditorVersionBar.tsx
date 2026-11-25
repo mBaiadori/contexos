@@ -638,11 +638,11 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
               size="sm"
               variant="primary"
               onClick={() => {
-                if (isOfficial || isReadOnlyMode) {
+                if (isReadOnlyMode) {
                   openDraftPromptForIntent("publish");
                   return;
                 }
-                setPendingPublishBranch(undefined);
+                setPendingPublishBranch(isOfficial ? defaultBranch : undefined);
                 setIsPubModalOpen(true);
               }}
               icon={<Send size={13} />}
@@ -683,7 +683,8 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
         nodes={versionGraph?.nodes || []}
         defaultBranch={defaultBranch}
         initialSourceBranch={
-          pendingPublishBranch || (!isOfficial && !isReadOnlyMode ? currentBranch : undefined)
+          pendingPublishBranch ||
+          (isOfficial ? defaultBranch : !isReadOnlyMode ? currentBranch : undefined)
         }
         existingProposal={hasOpenProposal ? activeNode?.proposal : undefined}
         onCreated={async (pr) => {

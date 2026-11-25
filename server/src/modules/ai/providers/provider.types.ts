@@ -7,6 +7,14 @@ export interface ProviderMessage {
   content: string;
 }
 
+export interface ChatMediaAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataBase64: string;
+}
+
 export type StreamEventType = 
   | 'start'
   | 'token'
@@ -93,6 +101,7 @@ export interface IAgentProvider {
       briefing?: string;
       contextPointers?: string[];
       content?: string;
+      attachments?: ChatMediaAttachment[];
     }
   ): Promise<{ reply: string; toolCalls?: any[] }>;
 

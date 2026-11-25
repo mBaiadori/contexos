@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { AISettingsState, ChatMessage, RawTurnTelemetry, RawTurnMetrics } from '../types';
+import type { AISettingsState, ChatMessage, ChatMediaAttachment, RawTurnTelemetry, RawTurnMetrics } from '../types';
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 import { useTemplateStore } from '../stores/templateStore';
@@ -41,7 +41,7 @@ interface AIContextType {
     claude_model?: string;
     agent_effort?: 'low' | 'medium' | 'high';
   }) => Promise<boolean>;
-  sendMessage: (prompt: string, contextBadges?: string[]) => Promise<void>;
+  sendMessage: (prompt: string, contextBadges?: string[], attachments?: ChatMediaAttachment[]) => Promise<void>;
   stopGeneration: () => Promise<void>;
   clearMessages: () => void;
   newChatSession: () => string;
@@ -426,8 +426,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   };
 
-  const sendMessage = async (prompt: string, contextBadges?: string[]) => {
-    if (!prompt.trim()) return;
+  const sendMessage = async (prompt: string, contextBadges?: string[], attachments?: ChatMediaAttachment[]) => {
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!prompt.trim() && !hasAttachments) return;
 
     let effectivePath = 'Global';
     let effectiveContent = '';
@@ -537,8 +538,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     const userMessage: ChatMessage = {
       id: generateUniqueMessageId('msg-user'),
       sender: 'user',
-      content: prompt,
+      content: prompt.trim() || (hasAttachments ? '📎 Mídia anexada' : ''),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      attachments: hasAttachments ? attachments : undefined,
       contextBadges: effectiveBadges,
       skill_id: isRawMode ? undefined : (activeSkillId || undefined),
     };
@@ -613,6 +615,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         skill_ids: isRawMode ? undefined : (activeSkillsList.length > 0 ? activeSkillsList : (primarySkillId ? [primarySkillId] : undefined)),
         provider_id: isRawMode ? 'direct-api' : (activeProviderId || 'direct-api'),
         auto_rag: isAutoRag,
+        attachments: hasAttachments
+          ? attachments!.map(({ id, name, mimeType, size, dataBase64 }) => ({
+              id,
+              name,
+              mimeType,
+              size,
+              dataBase64,
+            }))
+          : undefined,
       };
 
       let accumulatedReply = '';

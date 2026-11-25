@@ -5,14 +5,11 @@ import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { SkillsHubModal } from "../modals/SkillsHubModal";
 import { AgentApprovalCard } from "./AgentApprovalCard";
-import { RagSearchModal } from "./RagSearchModal";
 import { useCopilotStore } from "../../stores/copilotStore";
 import { API } from "../../services/api";
 import { Button, IconButton } from "../ui";
 import { CopilotModelSelector } from "./CopilotModelSelector";
-import { CopilotContextBar } from "./CopilotContextBar";
-import { CopilotPromptsSection } from "./CopilotPromptsSection";
-import { CopilotSkillsBar } from "./CopilotSkillsBar";
+import type { ChatMediaAttachment } from "../../types";
 
 interface AICopilotPanelProps {
   isOpen: boolean;
@@ -41,18 +38,11 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     sendMessage,
     stopGeneration,
     templatePrompt,
-    templateTitle,
     isTemplatePromptEnabled,
-    toggleTemplatePrompt,
     docPrompt,
     isDocPromptEnabled,
-    toggleDocPrompt,
     activeSkillIds,
-    templateSkills,
     setActiveSkillId,
-    setActiveSkillIds,
-    toggleSkill,
-    removeActiveSkill,
     isSkillsModalOpen,
     openSkillsModal,
     closeSkillsModal,
@@ -70,16 +60,15 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     newChatSession,
     referencedDocs,
     isGlobalScope,
-    removeReferencedDoc,
-    setIsGlobalScope,
   } = useAI();
-  const { activeRepo, setFileContent, tree } = useWorkspace();
+  const { activeRepo, setFileContent } = useWorkspace();
   const [inputText, setInputText] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<ChatMediaAttachment[]>([]);
+  const [isDraggingMedia, setIsDraggingMedia] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isInspectorActive, setIsInspectorActive] = useState(false);
   const [inspectorFlash, setInspectorFlash] = useState<string | null>(null);
-
-  // Skills state
-  const [availableSkills, setAvailableSkills] = useState<any[]>([]);
 
   // Live CLI / Provider Detection State
   const [detectedProviders, setDetectedProviders] = useState<
@@ -121,7 +110,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   );
   const activeCliInfo = detectedProviders.find((p) => p.id === activeProviderId);
   const isActiveConnectionReady =
-    activeProviderId === "direct-api"
+    isRawMode || activeProviderId === "direct-api"
       ? isApiConfigured
       : Boolean(activeCliInfo?.isAvailable && activeCliInfo?.isAuthenticated);
 
@@ -155,38 +144,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   };
 
 
-
-  // Load available skills from Hub & Project
-  const loadSkills = useCallback(async () => {
-    try {
-      const [hubRes, projRes] = await Promise.all([
-        API.getSkillsHub(),
-        API.getSkillsProject(activeRepo?.name),
-      ]);
-      const hub = hubRes.ok && hubRes.data?.skills ? hubRes.data.skills : [];
-      const proj =
-        projRes.ok && projRes.data?.installed_skills
-          ? projRes.data.installed_skills
-          : [];
-
-      const map = new Map<string, any>();
-      for (const s of hub) {
-        map.set(s.id, s);
-      }
-      for (const s of proj) {
-        map.set(s.id, { ...map.get(s.id), ...s, isInstalled: true });
-      }
-      setAvailableSkills(Array.from(map.values()));
-    } catch (err) {
-      console.warn("[AICopilotPanel] Erro ao carregar skills:", err);
-    }
-  }, [activeRepo?.name]);
-
-  useEffect(() => {
-    if (isOpen) {
-      loadSkills();
-    }
-  }, [isOpen, loadSkills]);
 
   // Scroll state
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -451,21 +408,148 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     };
   }, []);
 
+  const readFilesAsAttachments = useCallback(async (files: File[]) => {
+    if (!files || files.length === 0) return;
+    setAttachmentError(null);
+
+    const MAX_FILES = 10;
+    const MAX_BYTES = 20 * 1024 * 1024;
+    const availableSlots = MAX_FILES - pendingAttachments.length;
+    if (availableSlots <= 0) {
+      setAttachmentError("Limite máximo de 10 anexos por mensagem atingido.");
+      return;
+    }
+
+    const toProcess = files.slice(0, availableSlots);
+    const loaded: ChatMediaAttachment[] = [];
+
+    for (const file of toProcess) {
+      if (file.size > MAX_BYTES) {
+        setAttachmentError(`"${file.name || "Arquivo"}" excede o limite de 20 MB.`);
+        continue;
+      }
+
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("Falha ao ler arquivo"));
+          reader.readAsDataURL(file);
+        });
+
+        const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+        const mimeType = file.type || base64Match?.[1] || "application/octet-stream";
+        const dataBase64 = base64Match?.[2] || dataUrl;
+        const fallbackExt = mimeType.split("/")[1]?.split("+")[0] || "bin";
+        const fileName = file.name || `colado-${Date.now()}.${fallbackExt}`;
+
+        loaded.push({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: fileName,
+          mimeType,
+          size: file.size,
+          dataBase64,
+          previewUrl: mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("audio/") ? dataUrl : undefined,
+        });
+      } catch {
+        setAttachmentError(`Não foi possível ler "${file.name || "mídia"}".`);
+      }
+    }
+
+    if (loaded.length > 0) {
+      setPendingAttachments((prev) => [...prev, ...loaded]);
+    }
+  }, [pendingAttachments.length]);
+
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const clipboardData = e.clipboardData;
+      if (!clipboardData) return;
+
+      const files: File[] = [];
+      if (clipboardData.items && clipboardData.items.length > 0) {
+        for (let i = 0; i < clipboardData.items.length; i++) {
+          const item = clipboardData.items[i];
+          if (item.kind === "file") {
+            const file = item.getAsFile();
+            if (file) files.push(file);
+          }
+        }
+      } else if (clipboardData.files && clipboardData.files.length > 0) {
+        for (let i = 0; i < clipboardData.files.length; i++) {
+          files.push(clipboardData.files[i]);
+        }
+      }
+
+      if (files.length > 0) {
+        const hasPlainText = Boolean(clipboardData.getData("text/plain"));
+        if (!hasPlainText) {
+          e.preventDefault();
+        }
+        await readFilesAsAttachments(files);
+      }
+    },
+    [readFilesAsAttachments],
+  );
+
   if (!isOpen) return null;
+
+  const handleDragOver = (e: React.DragEvent<HTMLFormElement>) => {
+    if (e.dataTransfer?.types?.includes("Files")) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isDraggingMedia) setIsDraggingMedia(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLFormElement>) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingMedia(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingMedia(false);
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length > 0) {
+      await readFilesAsAttachments(files);
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      await readFilesAsAttachments(files);
+    }
+    e.target.value = "";
+  };
+
+  const removePendingAttachment = (id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+    setAttachmentError(null);
+  };
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || isThinking) return;
+    if ((!inputText.trim() && pendingAttachments.length === 0) || isThinking) return;
+    if (isRawMode && !isApiConfigured) {
+      openSettingsModal();
+      return;
+    }
 
     const textToSend = inputText.trim();
+    const attachmentsToSend = [...pendingAttachments];
     setInputText("");
+    setPendingAttachments([]);
+    setAttachmentError(null);
 
     if (isInspectorActive) {
       stopInspector();
     }
 
     isUserScrolledUp.current = false;
-    await sendMessage(textToSend);
+    await sendMessage(textToSend, undefined, attachmentsToSend);
     setTimeout(() => scrollToBottom("smooth"), 50);
   };
 
@@ -496,123 +580,24 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     aiSettings?.model || aiSettings?.active_model || "gemini-2.5-flash";
   const activeProviderDisplay = aiSettings?.provider || "gemini";
 
-
-
-  const extraActiveSkills = activeSkillIds.filter(
-    (id) => !templateSkills.includes(id),
-  );
-
   return (
     <>
+      {/* Unified Top Toolbar: Mode, RAG & Session Actions */}
       <div
         className="ai-pane-header"
-        style={{ position: "relative", overflow: "visible", zIndex: 30 }}
-      >
-        {/* 1. Header: Unified Connector & Model Switcher */}
-        <CopilotModelSelector
-          activeModel={activeModelDisplay}
-          activeProvider={activeProviderDisplay}
-          activeProviderId={activeProviderId}
-          agentModel={aiSettings?.agent_model}
-          claudeModel={aiSettings?.claude_model}
-          agentEffort={aiSettings?.agent_effort}
-          detectedProviders={detectedProviders}
-          isApiConfigured={isApiConfigured}
-          onSelectModel={handleQuickModelSelect}
-          onSelectProvider={(providerId) =>
-            quickSetCliConfig({ default_provider: providerId })
-          }
-          onSelectCliModel={(providerId, modelId) =>
-            quickSetCliConfig(
-              providerId === "antigravity"
-                ? { default_provider: "antigravity", agent_model: modelId }
-                : { default_provider: "claude-code", claude_model: modelId },
-            )
-          }
-          onSelectEffort={(effort) => quickSetCliConfig({ agent_effort: effort })}
-          onOpenSettings={openSettingsModal}
-        />
-
-        {/* Right Header Action Icons - Harmonized Alignment & Sizing */}
-        <div
-          className="ai-copilot-header-right"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "5px",
-            flexShrink: 0,
-          }}
-        >
-          {/* New Chat Session Button */}
-          <Button
-            size="xs"
-            variant="subtle"
-            title="Iniciar nova conversa (arquiva a anterior no histórico)"
-            onClick={newChatSession}
-            icon={
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "14px" }}
-              >
-                add_comment
-              </span>
-            }
-          >
-            Novo Chat
-          </Button>
-
-          <Button
-            size="xs"
-            variant="ghost"
-            title="Telemetria & Logs (Tokens, custos, payloads e chamadas de ferramentas)"
-            onClick={onOpenRaw}
-            icon={
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "14px" }}
-              >
-                query_stats
-              </span>
-            }
-          >
-            Telemetria
-          </Button>
-
-          <IconButton
-            size="sm"
-            variant="ghost"
-            title="Linha de Raciocínio & Histórico de Sessões"
-            onClick={onOpenHistory}
-            icon={
-              <span className="material-symbols-outlined icon-sm">history</span>
-            }
-          />
-
-          <IconButton
-            size="sm"
-            variant="ghost"
-            title="Recolher Assistente"
-            onClick={onClose}
-            icon={
-              <span className="material-symbols-outlined icon-sm">close</span>
-            }
-          />
-        </div>
-      </div>
-
-      {/* Mode & Skill Toolbar - Interactive Activation / Deactivation */}
-      <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "6px 12px",
-          background: "var(--color-surface-container-low, #f8f9fa)",
+          gap: "6px",
+          padding: "6px 10px",
+          background: "#ffffff",
           borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
           fontSize: "11px",
           position: "relative",
-          zIndex: 25,
+          zIndex: 30,
           overflow: "visible",
+          minHeight: "40px",
         }}
       >
         <div
@@ -621,6 +606,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             alignItems: "center",
             gap: "6px",
             position: "relative",
+            minWidth: 0,
           }}
         >
           {/* Harness / RAW Toggle */}
@@ -631,22 +617,22 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              padding: "3px 8px",
-              borderRadius: "12px",
-              fontSize: "10.5px",
+              padding: "4px 8px",
+              borderRadius: "8px",
+              fontSize: "11px",
               fontWeight: 600,
               cursor: "pointer",
-              border: "1px solid",
+              border: isRawMode
+                ? "1px solid var(--color-warning, #d97706)"
+                : "1px solid transparent",
               background: isRawMode
                 ? "var(--color-warning-container, #fef7e0)"
                 : "var(--color-surface-container, #f1f3f4)",
               color: isRawMode
                 ? "var(--color-warning, #b45309)"
                 : "var(--text-muted, #64748b)",
-              borderColor: isRawMode
-                ? "var(--color-warning, #d97706)"
-                : "var(--color-outline-variant, #cbd5e1)",
               transition: "all 0.15s ease",
+              whiteSpace: "nowrap",
             }}
             title={
               isRawMode
@@ -656,85 +642,47 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           >
             <span
               className="material-symbols-outlined"
-              style={{ fontSize: "13px" }}
+              style={{ fontSize: "14px" }}
             >
               {isRawMode ? "bolt" : "psychology"}
             </span>
             {isRawMode ? "RAW" : "Harness"}
           </button>
 
-          {/* Provider Connection Pill */}
-          {!isRawMode && (
-            <button
-              type="button"
-              onClick={openSettingsModal}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "3px 8px",
-                borderRadius: "12px",
-                fontSize: "10.5px",
-                fontWeight: 600,
-                cursor: "pointer",
-                border: "1px solid",
-                background: isActiveConnectionReady
-                  ? "rgba(34, 197, 94, 0.14)"
-                  : "rgba(245, 158, 11, 0.14)",
-                color: isActiveConnectionReady ? "#16a34a" : "#d97706",
-                borderColor: isActiveConnectionReady ? "#22c55e" : "#f59e0b",
-                transition: "all 0.15s ease",
-              }}
-              title="Clique para conectar ou trocar entre CLI instalada e Chave de API"
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  width: "6px",
-                  height: "6px",
-                  borderRadius: "50%",
-                  backgroundColor: isActiveConnectionReady
-                    ? "#22c55e"
-                    : "#f59e0b",
-                }}
-              />
-              {!isActiveConnectionReady
-                ? "Conectar IA"
-                : activeProviderId === "antigravity"
-                  ? "Antigravity CLI"
-                  : activeProviderId === "claude-code"
-                    ? "Claude Code CLI"
-                    : `API • ${activeProviderDisplay}`}
-            </button>
-          )}
-
-          {/* RAG Search Button (Top Bar) */}
+          {/* RAG Search Button */}
           <button
             type="button"
-            onClick={openRagModal}
+            onClick={() => {
+              const { isRagModalOpen, closeRagModal } = useCopilotStore.getState();
+              if (isRagModalOpen) {
+                closeRagModal();
+              } else {
+                openRagModal();
+              }
+            }}
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              padding: "3px 8px",
-              borderRadius: "12px",
-              fontSize: "10.5px",
+              padding: "4px 8px",
+              borderRadius: "8px",
+              fontSize: "11px",
               fontWeight: 600,
               cursor: "pointer",
-              border: "1px solid",
+              border:
+                ragReferences.length > 0 || isAutoRagEnabled
+                  ? "1px solid rgba(59, 130, 246, 0.35)"
+                  : "1px solid transparent",
               background:
                 ragReferences.length > 0 || isAutoRagEnabled
-                  ? "rgba(37, 99, 235, 0.15)"
+                  ? "rgba(37, 99, 235, 0.12)"
                   : "var(--color-surface-container, #f1f3f4)",
               color:
                 ragReferences.length > 0 || isAutoRagEnabled
                   ? "#2563eb"
                   : "var(--text-muted, #64748b)",
-              borderColor:
-                ragReferences.length > 0 || isAutoRagEnabled
-                  ? "#3b82f6"
-                  : "var(--color-outline-variant, #cbd5e1)",
               transition: "all 0.15s ease",
+              whiteSpace: "nowrap",
             }}
             title="Buscar e anexar fragmentos de outros documentos do projeto (Mini-RAG Local)"
           >
@@ -760,57 +708,186 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             </span>
           </button>
         </div>
+
+        {/* Right Header Action Icons */}
+        <div
+          className="ai-copilot-header-right"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            flexShrink: 0,
+          }}
+        >
+          <IconButton
+            size="sm"
+            variant="ghost"
+            title="Novo Chat — Iniciar nova conversa (arquiva a anterior no histórico)"
+            onClick={newChatSession}
+            icon={
+              <span className="material-symbols-outlined icon-sm">
+                add_comment
+              </span>
+            }
+          />
+
+          <IconButton
+            size="sm"
+            variant="ghost"
+            title="Telemetria & Logs (Tokens, custos, payloads e chamadas de ferramentas)"
+            onClick={onOpenRaw}
+            icon={
+              <span className="material-symbols-outlined icon-sm">
+                query_stats
+              </span>
+            }
+          />
+
+          <IconButton
+            size="sm"
+            variant="ghost"
+            title="Linha de Raciocínio & Histórico de Sessões"
+            onClick={onOpenHistory}
+            icon={
+              <span className="material-symbols-outlined icon-sm">history</span>
+            }
+          />
+
+          <IconButton
+            size="sm"
+            variant="ghost"
+            title="Recolher Assistente"
+            onClick={onClose}
+            icon={
+              <span className="material-symbols-outlined icon-sm">close</span>
+            }
+          />
+        </div>
       </div>
 
-      {/* 2. Interactive Document References & Global Scope Bar */}
-      <CopilotContextBar
-        referencedDocs={referencedDocs}
-        isGlobalScope={isGlobalScope}
-        tree={tree}
-        onOpenContext={onOpenContext}
-        onRemoveDoc={removeReferencedDoc}
-        onSetGlobalScope={setIsGlobalScope}
-      />
-
-      {/* 2.1 Fixed Context Controls Bar: Context Prompts & Context Skills */}
+      {/* 2. Unified Lightweight Context, Prompts & Skills Bar */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "6px",
-          padding: "5px 12px",
-          background: "var(--color-surface-container-low, #f8fafc)",
-          borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
+          gap: "4px",
+          padding: "5px 10px",
+          borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
+          background: "var(--color-surface, #ffffff)",
           position: "relative",
           zIndex: 20,
+          flexWrap: "wrap",
         }}
       >
-        <CopilotPromptsSection
-          templatePrompt={templatePrompt}
-          templateTitle={templateTitle}
-          isTemplatePromptEnabled={isTemplatePromptEnabled}
-          onToggleTemplatePrompt={toggleTemplatePrompt}
-          docPrompt={docPrompt}
-          isDocPromptEnabled={isDocPromptEnabled}
-          onToggleDocPrompt={toggleDocPrompt}
-          onOpenPrompt={onOpenPrompt}
-        />
+        {/* Contexto */}
+        <button
+          type="button"
+          onClick={onOpenContext}
+          title={
+            referencedDocs.length > 0 && !isGlobalScope
+              ? `${referencedDocs.length} item(ns) no contexto. Clique para gerenciar.`
+              : "Anexar arquivos ou pastas ao contexto"
+          }
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "3px 8px",
+            borderRadius: "7px",
+            border: "none",
+            background:
+              referencedDocs.length > 0 && !isGlobalScope
+                ? "rgba(37, 99, 235, 0.08)"
+                : "transparent",
+            color:
+              referencedDocs.length > 0 && !isGlobalScope
+                ? "var(--color-primary, #2563eb)"
+                : "var(--color-on-surface-variant, #475569)",
+            fontSize: "11.5px",
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+            attachment
+          </span>
+          <span>
+            Contexto
+            {referencedDocs.length > 0 && !isGlobalScope
+              ? ` (${referencedDocs.length})`
+              : ""}
+          </span>
+        </button>
 
-        <CopilotSkillsBar
-          templateSkills={templateSkills}
-          activeSkillIds={activeSkillIds}
-          extraActiveSkills={extraActiveSkills}
-          availableSkills={availableSkills}
-          onToggleSkill={toggleSkill}
-          onRemoveActiveSkill={removeActiveSkill}
-          onClearAllSkills={() => setActiveSkillIds([])}
-          onOpenSkillsHub={() => {
+        {/* Prompts */}
+        <button
+          type="button"
+          onClick={onOpenPrompt}
+          title="Abrir instruções e prompts do documento/template"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "3px 8px",
+            borderRadius: "7px",
+            border: "none",
+            background:
+              (templatePrompt && isTemplatePromptEnabled) ||
+              (docPrompt && isDocPromptEnabled)
+                ? "rgba(37, 99, 235, 0.08)"
+                : "transparent",
+            color:
+              (templatePrompt && isTemplatePromptEnabled) ||
+              (docPrompt && isDocPromptEnabled)
+                ? "var(--color-primary, #2563eb)"
+                : "var(--color-on-surface-variant, #475569)",
+            fontSize: "11.5px",
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+            tune
+          </span>
+          <span>Prompts</span>
+        </button>
+
+        {/* Skills */}
+        <button
+          type="button"
+          onClick={() => {
             if (onOpenSkills) onOpenSkills();
             else openSkillsModal();
           }}
-        />
+          title="Gerenciar skills ativas do Copilot"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "3px 8px",
+            borderRadius: "7px",
+            border: "none",
+            background:
+              activeSkillIds.length > 0
+                ? "rgba(37, 99, 235, 0.08)"
+                : "transparent",
+            color:
+              activeSkillIds.length > 0
+                ? "var(--color-primary, #2563eb)"
+                : "var(--color-on-surface-variant, #475569)",
+            fontSize: "11.5px",
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+            auto_awesome
+          </span>
+          <span>
+            Skills
+            {activeSkillIds.length > 0 ? ` (${activeSkillIds.length})` : ""}
+          </span>
+        </button>
       </div>
 
       {/* 3. Scrollable Message History Stream with Robust Scroll Management */}
@@ -847,7 +924,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             }}
           >
             <div style={{ fontWeight: 600, fontSize: "13px" }}>
-              Conecte uma IA para começar
+              {isRawMode ? "Modo RAW requer uma Chave de API" : "Conecte uma IA para começar"}
             </div>
             <p
               style={{
@@ -856,7 +933,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 lineHeight: 1.45,
               }}
             >
-              Use uma CLI instalada no computador (com agentes e harness) ou informe uma Chave de API.
+              {isRawMode
+                ? "O modo RAW faz chamadas diretas via API sem usar o harness da CLI. Informe uma Chave de API para continuar ou volte para o modo Harness."
+                : "Use uma CLI instalada no computador (com agentes e harness) ou informe uma Chave de API."}
             </p>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
@@ -939,6 +1018,42 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             key={msg.id}
             className={`chat-bubble ${msg.sender === "user" ? "user" : "ai"}`}
           >
+            {msg.attachments && msg.attachments.length > 0 && (
+              <div className="chat-bubble-attachments">
+                {msg.attachments.map((att) =>
+                  att.mimeType.startsWith("image/") && att.previewUrl ? (
+                    <a
+                      key={att.id}
+                      href={att.previewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={att.name}
+                      className="chat-bubble-attachment-img-link"
+                    >
+                      <img
+                        src={att.previewUrl}
+                        alt={att.name}
+                        className="chat-bubble-attachment-img"
+                      />
+                    </a>
+                  ) : (
+                    <span key={att.id} className="chat-bubble-attachment-file" title={att.mimeType}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                        {att.mimeType.startsWith("video/")
+                          ? "movie"
+                          : att.mimeType.startsWith("audio/")
+                            ? "audio_file"
+                            : att.mimeType === "application/pdf"
+                              ? "picture_as_pdf"
+                              : "attach_file"}
+                      </span>
+                      <span>{att.name}</span>
+                    </span>
+                  )
+                )}
+              </div>
+            )}
+
             <div
               className={
                 msg.sender === "user"
@@ -1277,7 +1392,13 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
       )}
 
       {/* 5. Full-Width Prompt Container */}
-      <form className="ai-copilot-input-container" onSubmit={handleSend}>
+      <form
+        className={`ai-copilot-input-container${isDraggingMedia ? " dragging-media" : ""}`}
+        onSubmit={handleSend}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {inspectorFlash && (
           <div className="ai-inspector-mini-toast">{inspectorFlash}</div>
         )}
@@ -1359,39 +1480,181 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           </div>
         )}
 
+        {pendingAttachments.length > 0 && (
+          <div className="ai-media-preview-strip">
+            {pendingAttachments.map((att) => (
+              <div key={att.id} className="ai-media-chip" title={`${att.name} (${att.mimeType})`}>
+                {att.mimeType.startsWith("image/") && att.previewUrl ? (
+                  <img src={att.previewUrl} alt={att.name} className="ai-media-chip-thumb" />
+                ) : (
+                  <span className="material-symbols-outlined ai-media-chip-icon">
+                    {att.mimeType.startsWith("video/")
+                      ? "movie"
+                      : att.mimeType.startsWith("audio/")
+                        ? "audio_file"
+                        : att.mimeType === "application/pdf"
+                          ? "picture_as_pdf"
+                          : "attach_file"}
+                  </span>
+                )}
+                <span className="ai-media-chip-name">{att.name}</span>
+                <button
+                  type="button"
+                  className="ai-media-chip-remove"
+                  onClick={() => removePendingAttachment(att.id)}
+                  title="Remover anexo"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+                    close
+                  </span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {attachmentError && (
+          <div className="ai-media-error-banner">{attachmentError}</div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*,audio/*,application/pdf,text/*,.md,.json,.csv"
+          style={{ display: "none" }}
+          onChange={handleFileSelect}
+        />
+
+        {isRawMode && !isApiConfigured && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              padding: "6px 10px",
+              borderRadius: "8px",
+              background: "var(--color-warning-container, #fef7e0)",
+              border: "1px solid rgba(217, 119, 6, 0.3)",
+              color: "var(--color-warning, #b45309)",
+              fontSize: "11px",
+              fontWeight: 500,
+            }}
+          >
+            <span>Modo RAW usa API Direta e exige uma Chave de API.</span>
+            <button
+              type="button"
+              onClick={openSettingsModal}
+              style={{
+                border: "none",
+                background: "rgba(217, 119, 6, 0.14)",
+                color: "#92400e",
+                borderRadius: "6px",
+                padding: "3px 8px",
+                fontSize: "11px",
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Configurar API Key
+            </button>
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           className="ai-copilot-textarea"
-          placeholder="Mensagem para o Agente... (Shift+Enter para nova linha)"
+          placeholder="Mensagem para o Agente... (Cole imagens/mídias ou Shift+Enter para nova linha)"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           rows={1}
         />
 
         <div className="ai-input-bottom-bar">
-          <Button
-            size="xs"
-            variant={isInspectorActive ? "primary" : "subtle"}
-            active={isInspectorActive}
-            type="button"
-            onClick={toggleInspector}
-            icon={
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "16px" }}
-              >
-                ads_click
-              </span>
-            }
-            title={
-              isInspectorActive
-                ? "Desativar seleção de blocos (ESC)"
-                : "Alvo: Selecionar trechos na tela para colar no chat"
-            }
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              minWidth: 0,
+              flex: 1,
+            }}
           >
-            {isInspectorActive ? "Alvo Ativo" : "Capturar"}
-          </Button>
+            <IconButton
+              size="xs"
+              variant="subtle"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              title="Anexar imagem, PDF, áudio, vídeo ou arquivo"
+              icon={
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "16px" }}
+                >
+                  attach_file
+                </span>
+              }
+            />
+
+            <Button
+              size="xs"
+              variant={isInspectorActive ? "primary" : "subtle"}
+              active={isInspectorActive}
+              type="button"
+              onClick={toggleInspector}
+              icon={
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "16px" }}
+                >
+                  ads_click
+                </span>
+              }
+              title={
+                isInspectorActive
+                  ? "Desativar seleção de blocos (ESC)"
+                  : "Alvo: Selecionar trechos na tela para colar no chat"
+              }
+            >
+              {isInspectorActive ? "Alvo Ativo" : "Capturar"}
+            </Button>
+
+            <CopilotModelSelector
+              activeModel={activeModelDisplay}
+              activeProvider={activeProviderDisplay}
+              activeProviderId={isRawMode ? "direct-api" : activeProviderId}
+              agentModel={aiSettings?.agent_model}
+              claudeModel={aiSettings?.claude_model}
+              agentEffort={aiSettings?.agent_effort}
+              detectedProviders={detectedProviders}
+              isApiConfigured={isApiConfigured}
+              onSelectModel={handleQuickModelSelect}
+              onSelectProvider={(providerId) => {
+                if (providerId !== "direct-api" && isRawMode) {
+                  setIsRawMode(false);
+                }
+                quickSetCliConfig({ default_provider: providerId });
+              }}
+              onSelectCliModel={(providerId, modelId) => {
+                if (isRawMode) {
+                  setIsRawMode(false);
+                }
+                quickSetCliConfig(
+                  providerId === "antigravity"
+                    ? { default_provider: "antigravity", agent_model: modelId }
+                    : { default_provider: "claude-code", claude_model: modelId },
+                );
+              }}
+              onSelectEffort={(effort) =>
+                quickSetCliConfig({ agent_effort: effort })
+              }
+              onOpenSettings={openSettingsModal}
+            />
+          </div>
 
           <div className="ai-input-actions-right">
             {!isThinking && <span className="ai-input-hint">Enter ↵</span>}
@@ -1416,8 +1679,15 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 size="sm"
                 variant="primary"
                 type="submit"
-                disabled={!inputText.trim()}
-                title="Enviar mensagem (Enter)"
+                disabled={
+                  (!inputText.trim() && pendingAttachments.length === 0) ||
+                  (isRawMode && !isApiConfigured)
+                }
+                title={
+                  isRawMode && !isApiConfigured
+                    ? "Configure uma Chave de API para usar o modo RAW"
+                    : "Enviar mensagem (Enter)"
+                }
                 icon={
                   <span
                     className="material-symbols-outlined"
@@ -1442,9 +1712,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           closeSkillsModal();
         }}
       />
-
-      {/* Local Workspace RAG Search Modal */}
-      <RagSearchModal />
     </>
   );
 };

@@ -23,8 +23,6 @@ interface PromptSidebarProps {
 export const PromptSidebar: React.FC<PromptSidebarProps> = ({
   isOpen,
   onClose,
-  onOpenAIModal,
-  modelName = "gemini-3.5-flash",
   agentName = "Agent",
 }) => {
   const {
@@ -37,6 +35,13 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
     isDocPromptEnabled,
     toggleDocPrompt,
   } = useAI();
+
+  const openPromptInEditor = () => {
+    const tabBtn = document.getElementById("tab-mode-copilot-prompt");
+    if (tabBtn) {
+      tabBtn.click();
+    }
+  };
 
   // Mode specific tabs
   const [docTab, setDocTab] = useState<"doc_prompt" | "template_linked">(
@@ -114,49 +119,6 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
           background: "#ffffff",
         }}
       >
-        {/* Model Selection Block */}
-        <div
-          style={{
-            padding: "8px 12px",
-            background: "var(--bg-hover, #f8fafc)",
-            borderRadius: "8px",
-            border: "1px solid var(--border-color, #e2e8f0)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "8px",
-            flexShrink: 0,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: "10px",
-                color: "var(--text-muted, #64748b)",
-                fontWeight: 600,
-                textTransform: "uppercase",
-              }}
-            >
-              Modelo Ativo
-            </div>
-            <strong
-              className="ai-copilot-model-name-label"
-              style={{ fontSize: "12px", color: "var(--primary, #2563eb)" }}
-            >
-              {modelName}
-            </strong>
-          </div>
-          {onOpenAIModal && (
-            <Button
-              size="xs"
-              variant="secondary"
-              onClick={onOpenAIModal}
-              icon={<span className="material-symbols-outlined" style={{ fontSize: "14px" }}>tune</span>}
-            >
-              Provedores
-            </Button>
-          )}
-        </div>
 
         {/* MODO DOCUMENTO REGULAR */}
         <>
@@ -307,33 +269,69 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
                       </span>
                     )}
                   </div>
-                  <div
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "6px",
-                      background: "#ffffff",
-                      border: "1px solid var(--border-color, #cbd5e1)",
-                      fontSize: "11px",
-                      fontFamily: "var(--font-mono, monospace)",
-                      whiteSpace: "pre-wrap",
-                      maxHeight: "160px",
-                      overflowY: "auto",
-                    }}
-                  >
-                    {docPrompt
-                      ? docPrompt
-                      : "Nenhum prompt específico gravado neste documento."}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      fontSize: "10.5px",
-                      color: "var(--primary, #2563eb)",
-                    }}
-                  >
-                    💡 Dica: Para editar este prompt, use a aba{" "}
-                    <strong>Prompt do Copilot</strong> no editor do documento.
-                  </div>
+                  {docPrompt ? (
+                    <>
+                      <div
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          background: "#ffffff",
+                          border: "1px solid var(--border-color, #cbd5e1)",
+                          fontSize: "11px",
+                          fontFamily: "var(--font-mono, monospace)",
+                          whiteSpace: "pre-wrap",
+                          maxHeight: "160px",
+                          overflowY: "auto",
+                        }}
+                      >
+                        {docPrompt}
+                      </div>
+                      <div style={{ marginTop: "8px", display: "flex", justifyContent: "flex-end" }}>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={openPromptInEditor}
+                          icon={
+                            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                              edit_note
+                            </span>
+                          }
+                        >
+                          Editar no Editor
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div
+                      style={{
+                        padding: "12px 10px",
+                        borderRadius: "6px",
+                        background: "#ffffff",
+                        border: "1px dashed var(--border-color, #cbd5e1)",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "8px",
+                        textAlign: "center",
+                      }}
+                    >
+                      <span style={{ fontSize: "11.5px", color: "var(--text-muted, #64748b)" }}>
+                        Nenhum prompt específico gravado neste documento.
+                      </span>
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        onClick={openPromptInEditor}
+                        icon={
+                          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                            edit_note
+                          </span>
+                        }
+                      >
+                        Criar Prompt no Editor
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -542,11 +542,21 @@ export interface RawTurnTelemetry {
   metrics: RawTurnMetrics;
 }
 
+export interface ChatMediaAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataBase64: string;
+  previewUrl?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
+  attachments?: ChatMediaAttachment[];
   diff?: {
     path: string;
     old_content: string;

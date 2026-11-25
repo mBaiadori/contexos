@@ -7,6 +7,8 @@ import { HistorySidebar } from "../components/copilot/HistorySidebar";
 import { RawInspectorSidebar } from "../components/copilot/RawInspectorSidebar";
 import { ContextSidebar } from "../components/copilot/ContextSidebar";
 import { SkillsSidebar } from "../components/copilot/SkillsSidebar";
+import { RagSearchModal } from "../components/copilot/RagSearchModal";
+import { useCopilotStore } from "../stores/copilotStore";
 import { ScaffoldModal } from "../components/modals/ScaffoldModal";
 import { AISettingsModal } from "../components/modals/AISettingsModal";
 import { SelectOrgModal } from "../components/modals/SelectOrgModal";
@@ -73,6 +75,22 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<
     "prompt" | "history" | "raw" | "context" | "skills" | null
   >(null);
+  const isRagModalOpen = useCopilotStore((s) => s.isRagModalOpen);
+  const closeRagModal = useCopilotStore((s) => s.closeRagModal);
+
+  useEffect(() => {
+    if (isRagModalOpen) {
+      setActiveCopilotSidebar(null);
+    }
+  }, [isRagModalOpen]);
+
+  const toggleCopilotSidebar = useCallback(
+    (name: "prompt" | "history" | "raw" | "context" | "skills") => {
+      closeRagModal();
+      setActiveCopilotSidebar((prev) => (prev === name ? null : name));
+    },
+    [closeRagModal],
+  );
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isSelectOrgModalOpen, setIsSelectOrgModalOpen] = useState(false);
 
@@ -527,6 +545,8 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
           />
         )}
 
+        {isCopilotOpen && isRagModalOpen && <RagSearchModal />}
+
         {/* Vertical Resizer: Workspace Content <-> Global AI Copilot */}
         {isCopilotOpen && (
           <div
@@ -551,32 +571,13 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             onClose={() => {
               setIsCopilotOpen(false);
               setActiveCopilotSidebar(null);
+              closeRagModal();
             }}
-            onOpenPrompt={() =>
-              setActiveCopilotSidebar(
-                activeCopilotSidebar === "prompt" ? null : "prompt",
-              )
-            }
-            onOpenHistory={() =>
-              setActiveCopilotSidebar(
-                activeCopilotSidebar === "history" ? null : "history",
-              )
-            }
-            onOpenRaw={() =>
-              setActiveCopilotSidebar(
-                activeCopilotSidebar === "raw" ? null : "raw",
-              )
-            }
-            onOpenContext={() =>
-              setActiveCopilotSidebar(
-                activeCopilotSidebar === "context" ? null : "context",
-              )
-            }
-            onOpenSkills={() =>
-              setActiveCopilotSidebar(
-                activeCopilotSidebar === "skills" ? null : "skills",
-              )
-            }
+            onOpenPrompt={() => toggleCopilotSidebar("prompt")}
+            onOpenHistory={() => toggleCopilotSidebar("history")}
+            onOpenRaw={() => toggleCopilotSidebar("raw")}
+            onOpenContext={() => toggleCopilotSidebar("context")}
+            onOpenSkills={() => toggleCopilotSidebar("skills")}
           />
         </aside>
       </div>

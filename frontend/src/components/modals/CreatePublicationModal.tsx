@@ -50,7 +50,14 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
       }),
     [nodes, defaultBranch],
   );
-  const isLockedSource = Boolean(initialSourceBranch && initialSourceBranch !== defaultBranch);
+  const isLockedSource = Boolean(initialSourceBranch);
+  const defaultNode = useMemo(
+    () => nodes.find((n) => n.isDefault || n.name === defaultBranch),
+    [nodes, defaultBranch],
+  );
+  const defaultHasUncommitted = Boolean(
+    defaultNode?.isCurrent && (defaultNode?.uncommittedFiles?.length || 0) > 0,
+  );
 
   const [sourceBranch, setSourceBranch] = useState("");
   const [title, setTitle] = useState("");
@@ -80,24 +87,25 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
     wasOpenRef.current = isOpen;
     if (!isOpen) return;
     if (justOpened || (isLockedSource && initialSourceBranch && sourceBranch !== initialSourceBranch)) {
-      const preferred =
-        initialSourceBranch && initialSourceBranch !== defaultBranch
-          ? initialSourceBranch
-          : candidateNodes[0]?.name || "";
+      const preferred = initialSourceBranch
+        ? initialSourceBranch
+        : candidateNodes[0]?.name || (defaultHasUncommitted ? defaultBranch : "");
       setSourceBranch(preferred);
       const node = nodes.find((n) => n.name === preferred);
       const activeProp =
         node?.proposal?.status === "OPEN" ? node.proposal : existingProposal;
       const autoTitle =
         activeProp?.title ||
-        (node?.displayName && node.displayName !== preferred ? node.displayName : "");
+        (node && !node.isDefault && node.displayName && node.displayName !== preferred
+          ? node.displayName
+          : "");
       setTitle(autoTitle);
       lastAutoTitleRef.current = autoTitle;
       setDescription(activeProp?.description || "");
       setErrorMsg(null);
       setExpandedFile(null);
     }
-  }, [isOpen, isLockedSource, initialSourceBranch, defaultBranch, candidateNodes, nodes, existingProposal, sourceBranch]);
+  }, [isOpen, isLockedSource, initialSourceBranch, defaultBranch, candidateNodes, defaultHasUncommitted, nodes, existingProposal, sourceBranch]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -166,6 +174,9 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
     (p) => !diffFiles.some((f) => f.path === p),
   );
   const totalChangedCount = diffFiles.length + uncommittedOnly.length;
+  const isDirectDefaultPublish =
+    sourceBranch === defaultBranch ||
+    (!sourceBranch && candidateNodes.length === 0 && activeWsChanges.length > 0);
 
   const handleGenerateSummary = async () => {
     setIsGenerating(true);
@@ -200,7 +211,8 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
       const res = await API.createPR({
         title: title.trim(),
         description: description.trim(),
-        sourceBranch: sourceBranch || undefined,
+        sourceBranch:
+          sourceBranch && sourceBranch !== defaultBranch ? sourceBranch : undefined,
         targetProposalId: activeProposal?.id,
         squash: true,
         repo: repoName,
@@ -271,7 +283,9 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
             <span style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
               {isUpdateMode
                 ? "Revise as alterações e atualize o pedido de publicação existente."
-                : "Envie seu rascunho de versão para ser integrado na Versão Oficial."}
+                : isDirectDefaultPublish
+                  ? "Suas edições locais serão agrupadas automaticamente em um novo rascunho para publicação na Versão Oficial."
+                  : "Envie seu rascunho de versão para ser integrado na Versão Oficial."}
             </span>
           </div>
           <button
@@ -332,7 +346,9 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                   color: "var(--text-secondary)",
                 }}
               >
-                Nenhum rascunho com alterações pendentes encontrado. Crie um rascunho e salve um checkpoint no Editor primeiro.
+                {activeWsChanges.length > 0
+                  ? "Suas edições locais na Versão Oficial serão agrupadas automaticamente em um novo rascunho ao enviar a publicação."
+                  : "Nenhuma alteração pendente encontrada. Faça edições no Editor para enviar uma publicação."}
               </div>
             ) : (
               <div
@@ -420,7 +436,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
           />
         </div>
 
-        {sourceBranch && (
+        {(sourceBranch || totalChangedCount > 0) && (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-heading)" }}>

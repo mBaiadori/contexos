@@ -6,8 +6,22 @@ import { skillsService } from '../skills/skills.service.js';
 import { providerManager } from './providers/ProviderManager.js';
 import { contextPointerService } from './context/ContextPointerService.js';
 import { ragService } from '../rag/rag.service.js';
-import { ProviderId, ProviderStreamEvent } from './providers/provider.types.js';
+import { ProviderId, ProviderStreamEvent, ChatMediaAttachment } from './providers/provider.types.js';
+import { normalizeAttachments } from './providers/media-attachments.js';
 import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
+
+function redactAttachmentPayloads(body: any): any {
+  if (!body || !Array.isArray(body.attachments)) return body;
+  return {
+    ...body,
+    attachments: body.attachments.map((a: any) => ({
+      id: a?.id,
+      name: a?.name,
+      mimeType: a?.mimeType,
+      size: a?.size,
+    })),
+  };
+}
 
 /**
  * Serializador JSON seguro contra referências circulares para eventos SSE e telemetria
@@ -75,7 +89,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
   /**
    * Endpoint de Chat Unificado (Suporta Modo Direto e Modo Conectado / Antigravity)
    */
-  fastify.post('/api/chat', async (request, reply) => {
+  fastify.post('/api/chat', { bodyLimit: 50 * 1024 * 1024 }, async (request, reply) => {
     const startTime = Date.now();
     const body = request.body as {
       prompt?: string;
@@ -89,13 +103,21 @@ export async function aiRoutes(fastify: FastifyInstance) {
       allowed_tools?: string[];
       skill_id?: string;
       provider_id?: ProviderId;
+      attachments?: ChatMediaAttachment[];
     };
 
     const cfg = loadConfig();
     const repoName = body.repo || cfg.active_repo?.name || 'local';
     const sessionId = body.session_id || `sess-${Date.now()}`;
     const filePath = body.path || 'index.md';
-    const prompt = (body.prompt || '').trim();
+    let attachments: ChatMediaAttachment[] = [];
+    try {
+      attachments = normalizeAttachments(body.attachments);
+    } catch (attErr: any) {
+      return reply.status(400).send({ error: attErr?.message || 'Anexo inválido.' });
+    }
+    const rawPrompt = (body.prompt || '').trim();
+    const prompt = rawPrompt || (attachments.length > 0 ? 'Analise as mídias/arquivos anexados.' : '');
     const isRawMode = Boolean(body.raw_mode);
     const providerId = body.provider_id || (body.raw_mode ? 'direct-api' : cfg.ai_settings?.default_provider || 'direct-api');
 
@@ -157,6 +179,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
             briefing,
             contextPointers,
             content: body.content,
+            attachments,
           }
         );
 
@@ -183,7 +206,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
             dynamic_context: body.content,
             history_messages: body.history || [],
             tools_schema: [],
-            full_payload: body,
+            full_payload: redactAttachmentPayloads(body),
           },
           response: {
             reply: result.reply,
@@ -275,7 +298,8 @@ export async function aiRoutes(fastify: FastifyInstance) {
       filePath,
       body.history || [],
       customSystem,
-      repoName
+      repoName,
+      attachments
     );
 
     const durationMs = result.duration_ms || (Date.now() - startTime);
@@ -301,7 +325,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
         dynamic_context: body.content,
         history_messages: body.history || [],
         tools_schema: resolvedAllowedTools || [],
-        full_payload: body,
+        full_payload: redactAttachmentPayloads(body),
       },
       response: {
         reply: result.reply,
@@ -340,7 +364,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
   /**
    * Endpoint de Streaming SSE em tempo real com Telemetria e Rastreamento de Tokens
    */
-  fastify.post('/api/chat/stream', async (request, reply) => {
+  fastify.post('/api/chat/stream', { bodyLimit: 50 * 1024 * 1024 }, async (request, reply) => {
     const startTime = Date.now();
     const body = request.body as {
       prompt?: string;
@@ -354,13 +378,21 @@ export async function aiRoutes(fastify: FastifyInstance) {
       allowed_tools?: string[];
       skill_id?: string;
       provider_id?: ProviderId;
+      attachments?: ChatMediaAttachment[];
     };
 
     const cfg = loadConfig();
     const repoName = body.repo || cfg.active_repo?.name || 'local';
     const sessionId = body.session_id || `sess-${Date.now()}`;
     const filePath = body.path || 'index.md';
-    const prompt = (body.prompt || '').trim();
+    let attachments: ChatMediaAttachment[] = [];
+    try {
+      attachments = normalizeAttachments(body.attachments);
+    } catch (attErr: any) {
+      return reply.status(400).send({ error: attErr?.message || 'Anexo inválido.' });
+    }
+    const rawPrompt = (body.prompt || '').trim();
+    const prompt = rawPrompt || (attachments.length > 0 ? 'Analise as mídias/arquivos anexados.' : '');
     const isRawMode = Boolean(body.raw_mode);
     const providerId = body.provider_id || (body.raw_mode ? 'direct-api' : cfg.ai_settings?.default_provider || 'direct-api');
 
@@ -460,6 +492,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
         contextPointers,
         history: (body.history || []).map((h) => ({ role: h.role, content: h.text || h.content || '' })),
         content: body.content || '',
+        attachments,
       });
 
       if (result && result.reply && !accumulatedReply) {
@@ -489,7 +522,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
           dynamic_context: body.content,
           history_messages: body.history || [],
           tools_schema: body.allowed_tools || [],
-          full_payload: body,
+          full_payload: redactAttachmentPayloads(body),
         },
         response: {
           reply: accumulatedReply,

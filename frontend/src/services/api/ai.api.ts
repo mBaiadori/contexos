@@ -1,4 +1,4 @@
-import type { AISettingsState, ToolCallRecord, AgentDefinition, MCPServerDefinition, ToolItem, CustomToolItem, CommunityToolItem } from '../../types';
+import type { AISettingsState, ToolCallRecord, AgentDefinition, MCPServerDefinition, ToolItem, CustomToolItem, CommunityToolItem, ChatMediaAttachment } from '../../types';
 import type { ApiResponse } from './client';
 
 export const aiApi = {
@@ -18,6 +18,7 @@ export const aiApi = {
     skill_id?: string;
     allowed_tools?: string[];
     provider_id?: string;
+    attachments?: Array<Omit<ChatMediaAttachment, 'previewUrl'>>;
   }): Promise<ApiResponse<{ reply: string; diff?: any; actions?: any[]; tool_calls?: ToolCallRecord[]; steps_count?: number; provider?: string; model?: string; usage?: any; telemetry_turn?: any }>> {
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -40,6 +41,7 @@ export const aiApi = {
       skill_id?: string;
       allowed_tools?: string[];
       provider_id?: string;
+      attachments?: Array<Omit<ChatMediaAttachment, 'previewUrl'>>;
     },
     onEvent: (event: any) => void
   ): Promise<void> {

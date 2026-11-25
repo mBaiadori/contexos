@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { marked } from 'marked';
 import { useCopilotStore } from '../../stores/copilotStore';
 import { ragService } from '../../services/ragService';
@@ -82,139 +81,87 @@ export const RagSearchModal: React.FC = () => {
 
   if (!isRagModalOpen) return null;
 
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100vw',
-        height: '100vh',
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        zIndex: 2147483647,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-        boxSizing: 'border-box',
-        isolation: 'isolate',
-      }}
-      onClick={closeRagModal}
+  return (
+    <aside
+      className="ai-copilot-prompt-sidebar ui-sidebar-drawer"
+      style={{ width: '420px', maxWidth: '50vw' }}
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '780px',
-          height: '640px',
-          maxHeight: '90vh',
-          backgroundColor: '#ffffff',
-          borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.08)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          border: '1px solid #cbd5e1',
-          position: 'relative',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: '#f8fafc',
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span
-              className="material-symbols-outlined"
-              style={{
-                fontSize: '22px',
-                color: '#2563eb',
-                padding: '6px',
-                borderRadius: '8px',
-                background: 'rgba(37, 99, 235, 0.1)',
-              }}
-            >
-              manage_search
-            </span>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
-                Busca RAG no Workspace
-              </h3>
-              <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#64748b' }}>
-                {stats
-                  ? `${stats.totalDocuments} documentos mapeados • ${stats.totalChunks} seções indexadas`
-                  : 'Pesquise regras, schemas e trechos do projeto instantaneamente'}
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={handleReindex}
-              disabled={isReindexing}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '5px 10px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                background: '#ffffff',
-                color: '#334155',
-                fontSize: '11.5px',
-                fontWeight: 600,
-                cursor: isReindexing ? 'wait' : 'pointer',
-              }}
-              title="Recarregar índice dos arquivos do disco"
-            >
-              <span className={`material-symbols-outlined ${isReindexing ? 'spin' : ''}`} style={{ fontSize: '14px' }}>
-                sync
-              </span>
-              <span>{isReindexing ? 'Indexando...' : 'Reindexar'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={closeRagModal}
-              style={{
-                padding: '6px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'transparent',
-                color: '#64748b',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                close
-              </span>
-            </button>
+      {/* Header */}
+      <div className="ui-sidebar-drawer__header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <span
+            className="material-symbols-outlined"
+            style={{
+              fontSize: '18px',
+              color: '#2563eb',
+              padding: '5px',
+              borderRadius: '7px',
+              background: 'rgba(37, 99, 235, 0.1)',
+              flexShrink: 0,
+            }}
+          >
+            manage_search
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary, #0f172a)' }}>
+              Busca RAG no Workspace
+            </h3>
+            <p className="ui-text-muted" style={{ margin: '1px 0 0 0', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {stats
+                ? `${stats.totalDocuments} docs • ${stats.totalChunks} seções indexadas`
+                : 'Pesquise regras, schemas e trechos do projeto'}
+            </p>
           </div>
         </div>
 
-        {/* Search Bar & Auto-RAG Controls */}
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid #f1f5f9',
-            background: '#ffffff',
-            flexShrink: 0,
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={handleReindex}
+            disabled={isReindexing}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 8px',
+              borderRadius: '7px',
+              border: '1px solid rgba(15, 23, 42, 0.1)',
+              background: '#ffffff',
+              color: '#334155',
+              fontSize: '11px',
+              fontWeight: 500,
+              cursor: isReindexing ? 'wait' : 'pointer',
+            }}
+            title="Recarregar índice dos arquivos do disco"
+          >
+            <span className={`material-symbols-outlined ${isReindexing ? 'spin' : ''}`} style={{ fontSize: '13px' }}>
+              sync
+            </span>
+            <span>{isReindexing ? 'Indexando...' : 'Reindexar'}</span>
+          </button>
+
+          <button
+            className="btn-icon"
+            type="button"
+            onClick={closeRagModal}
+            title="Fechar busca RAG"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+              close
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Search Bar & Auto-RAG Controls */}
+      <div
+        style={{
+          padding: '12px 14px',
+          borderBottom: '1px solid rgba(15, 23, 42, 0.06)',
+          background: '#ffffff',
+          flexShrink: 0,
+        }}
+      >
           {/* Neutral Clean Input Bar without nested blue-on-blue outline */}
           <div
             style={{
@@ -467,7 +414,6 @@ export const RagSearchModal: React.FC = () => {
                       type="button"
                       onClick={() => {
                         loadFile(res.relativePath);
-                        closeRagModal();
                       }}
                       style={{
                         display: 'inline-flex',
@@ -551,8 +497,6 @@ export const RagSearchModal: React.FC = () => {
             );
           })}
         </div>
-      </div>
-    </div>,
-    document.body
+    </aside>
   );
 };

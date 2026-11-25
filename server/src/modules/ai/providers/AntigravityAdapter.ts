@@ -1,7 +1,8 @@
 import { spawn, execFile, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderModelOption, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
+import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderModelOption, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent, ChatMediaAttachment } from './provider.types.js';
+import { materializeAttachmentsForCli } from './media-attachments.js';
 import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
 import { validateCliExecutable } from '../../../utils/cli-validate.js';
@@ -158,6 +159,7 @@ export class AntigravityAdapter implements IAgentProvider {
       history?: ProviderMessage[];
       briefing?: string;
       contextPointers?: string[];
+      attachments?: ChatMediaAttachment[];
     }
   ): Promise<{ reply: string; toolCalls?: any[] }> {
     const cli = this.resolveCliCommand();
@@ -204,11 +206,14 @@ export class AntigravityAdapter implements IAgentProvider {
       fs.mkdirSync(targetCwd, { recursive: true });
     }
 
+    const { promptBlock: mediaPromptBlock } = materializeAttachmentsForCli(sessionId, options?.attachments);
+
     const formattedPrompt = [
       options?.contextPointers && options.contextPointers.length > 0
         ? `[DIRETRIZES DE CONTEXTO DO PROJETO]\n${options.contextPointers.join('\n')}\n`
         : '',
       options?.briefing ? `[MEMÓRIA / HANDOFF]\n${options.briefing}\n` : '',
+      mediaPromptBlock,
       `[INSTRUÇÃO DO USUÁRIO]\n${message}`,
     ].filter(Boolean).join('\n\n');
 
