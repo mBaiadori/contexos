@@ -1,13 +1,10 @@
 import { spawn, execFile, ChildProcess } from 'node:child_process';
-import { promisify } from 'node:util';
 import path from 'node:path';
 import fs from 'node:fs';
 import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderModelOption, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
 import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
 import { validateCliExecutable } from '../../../utils/cli-validate.js';
-
-const execFileAsync = promisify(execFile);
 
 const FALLBACK_AGY_MODELS: ProviderModelOption[] = [
   { id: 'gemini-4-neon-medium', name: 'Gemini 4 Neon', badge: 'Medium' },
@@ -53,9 +50,19 @@ export class AntigravityAdapter implements IAgentProvider {
     }
 
     try {
-      const { stdout } = await execFileAsync(cliCommand, ['models'], {
-        timeout: 4000,
-        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      const stdout = await new Promise<string>((resolve, reject) => {
+        execFile(
+          cliCommand,
+          ['models'],
+          {
+            timeout: 4000,
+            env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+          },
+          (err, out) => {
+            if (err) reject(err);
+            else resolve(out);
+          }
+        );
       });
       const parsed: ProviderModelOption[] = [];
       for (const rawLine of stdout.split(/\r?\n/)) {
