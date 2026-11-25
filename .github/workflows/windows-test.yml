@@ -58,8 +58,7 @@ jobs:
           Write-Host "Executando instalador oficial: $($installer.FullName)..."
           
           # Executa o instalador NSIS em modo estritamente silencioso
-          # No Windows, executando como Administrador (runneradmin), passamos /currentuser e /D para garantir destino esperado
-          $proc = Start-Process -FilePath $installer.FullName -ArgumentList @("/S", "/currentuser", "/D=$defaultUserDir") -PassThru
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -PassThru
           
           # Resolução resiliente dos caminhos candidatos de instalação (per-user e per-machine)
           $candidateDirs = @(

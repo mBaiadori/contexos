@@ -65,6 +65,7 @@
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": false,
+    "runAfterFinish": false,
     "include": "scripts/installer.nsh"
   },
   "linux": {
