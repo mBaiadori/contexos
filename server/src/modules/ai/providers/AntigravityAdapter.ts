@@ -9,13 +9,29 @@ import { loadConfig } from '../../../config/storage.js';
 import { validateCliExecutable } from '../../../utils/cli-validate.js';
 
 const FALLBACK_AGY_MODELS: ProviderModelOption[] = [
+  { id: 'gemini-4-neon-low', name: 'Gemini 4 Neon', badge: 'Low' },
   { id: 'gemini-4-neon-medium', name: 'Gemini 4 Neon', badge: 'Medium' },
+  { id: 'gemini-4-neon-high', name: 'Gemini 4 Neon', badge: 'High' },
+  { id: 'gemini-4-neon-xhigh', name: 'Gemini 4 Neon', badge: 'XHigh' },
+  { id: 'gemini-4-carbon-low', name: 'Gemini 4 Carbon', badge: 'Low' },
   { id: 'gemini-4-carbon-medium', name: 'Gemini 4 Carbon', badge: 'Medium' },
+  { id: 'gemini-4-carbon-high', name: 'Gemini 4 Carbon', badge: 'High' },
+  { id: 'gemini-4-argon-low', name: 'Gemini 4 Argon', badge: 'Low' },
   { id: 'gemini-4-argon-medium', name: 'Gemini 4 Argon', badge: 'Medium' },
+  { id: 'gemini-4-argon-high', name: 'Gemini 4 Argon', badge: 'High' },
+  { id: 'gemini-4-hydrogen-low', name: 'Gemini 4 Hydrogen', badge: 'Low' },
   { id: 'gemini-4-hydrogen-medium', name: 'Gemini 4 Hydrogen', badge: 'Medium' },
+  { id: 'gemini-4-hydrogen-high', name: 'Gemini 4 Hydrogen', badge: 'High' },
+  { id: 'gemini-4-hydrogen-xhigh', name: 'Gemini 4 Hydrogen', badge: 'XHigh' },
+  { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash', badge: 'Low' },
   { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash', badge: 'Medium' },
+  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash', badge: 'High' },
+  { id: 'claude-opus-5-5-low', name: 'Claude Opus 5.5', badge: 'Low' },
   { id: 'claude-opus-5-5-medium', name: 'Claude Opus 5.5', badge: 'Medium' },
+  { id: 'claude-opus-5-5-high', name: 'Claude Opus 5.5', badge: 'High' },
+  { id: 'claude-sonnet-5-5-low', name: 'Claude Sonnet 5.5', badge: 'Low' },
   { id: 'claude-sonnet-5-5-medium', name: 'Claude Sonnet 5.5', badge: 'Medium' },
+  { id: 'claude-sonnet-5-5-high', name: 'Claude Sonnet 5.5', badge: 'High' },
   { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', badge: 'Medium' },
 ];
 
@@ -71,7 +87,7 @@ export class AntigravityAdapter implements IAgentProvider {
         // Strip ANSI escape sequences and spinner fragments
         const clean = rawLine.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏\s]+/, '').trim();
         if (!clean || clean.startsWith('Fetching')) continue;
-        const match = clean.match(/^([a-z0-9._-]+)\s{2,}(.+)$/i);
+        const match = clean.match(/^([a-z0-9._-]+)(?:\t+|\s{2,})(.+)$/i);
         if (!match) continue;
         const id = match[1].trim();
         const fullLabel = match[2].trim();

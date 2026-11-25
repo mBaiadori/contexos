@@ -73,4 +73,21 @@ describe('Frontend XSS Sanitization & URL Safety', () => {
     expect(safeSvg).not.toContain('onload=');
     expect(safeSvg).toContain('<rect');
   });
+
+  it('sanitizeSvg should preserve SVG text/tspan labels while stripping unsafe scripts', () => {
+    const mermaidSvg = `
+      <svg viewBox="0 0 200 100">
+        <g class="node">
+          <rect width="120" height="40"></rect>
+          <text x="60" y="20"><tspan>Microcontrolador</tspan></text>
+        </g>
+        <script>alert('xss')</script>
+      </svg>
+    `;
+    const safeSvg = sanitizeSvg(mermaidSvg);
+
+    expect(safeSvg).toContain('<text');
+    expect(safeSvg).toContain('Microcontrolador');
+    expect(safeSvg).not.toContain('<script');
+  });
 });

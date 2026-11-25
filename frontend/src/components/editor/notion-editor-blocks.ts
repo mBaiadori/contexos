@@ -95,7 +95,8 @@ export function createMermaidBlockHtml(
           <span>Diagrama Mermaid</span>
         </div>
         <div class="notion-mermaid-actions">
-          <button type="button" class="btn-mermaid-action btn-toggle-mermaid-editor">Editar Código</button>
+          <button type="button" class="btn-mermaid-action btn-toggle-mermaid-editor">Ver Código</button>
+          <button type="button" class="btn-mermaid-action btn-copy-mermaid">Copiar</button>
           <button type="button" class="btn-mermaid-action btn-refresh-mermaid">Renderizar</button>
         </div>
       </div>

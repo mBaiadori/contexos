@@ -61,6 +61,10 @@ try {
     startOnLoad: false,
     theme: 'default',
     securityLevel: 'strict',
+    htmlLabels: false,
+    flowchart: {
+      htmlLabels: false,
+    },
     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
   });
 } catch (e) {
@@ -1058,25 +1062,63 @@ export class NotionEditorEngine {
     });
 
     this.canvas.querySelectorAll('.notion-mermaid-block').forEach(block => {
-      const btnToggle = block.querySelector('.btn-toggle-mermaid-editor') as HTMLElement | null;
-      const btnRefresh = block.querySelector('.btn-refresh-mermaid') as HTMLElement | null;
-      const editorPanel = block.querySelector('.notion-mermaid-editor') as HTMLElement | null;
-      const textarea = block.querySelector('.notion-mermaid-textarea') as HTMLTextAreaElement | null;
+      const mermaidBlock = block as HTMLElement;
+      // Restaura contenteditable="false" removido pelo sanitizeHtml ao carregar Markdown
+      mermaidBlock.setAttribute('contenteditable', 'false');
+
+      const btnToggle = mermaidBlock.querySelector('.btn-toggle-mermaid-editor') as HTMLElement | null;
+      const btnCopy = mermaidBlock.querySelector('.btn-copy-mermaid') as HTMLElement | null;
+      const btnRefresh = mermaidBlock.querySelector('.btn-refresh-mermaid') as HTMLElement | null;
+      const editorPanel = mermaidBlock.querySelector('.notion-mermaid-editor') as HTMLElement | null;
+      const textarea = mermaidBlock.querySelector('.notion-mermaid-textarea') as HTMLTextAreaElement | null;
 
       if (btnToggle && editorPanel) {
-        btnToggle.onclick = () => {
+        btnToggle.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
           const isHidden = editorPanel.style.display === 'none' || !editorPanel.style.display;
           editorPanel.style.display = isHidden ? 'block' : 'none';
-          btnToggle.textContent = isHidden ? 'Fechar Editor' : 'Editar Código';
+          btnToggle.textContent = isHidden ? 'Ocultar Código' : 'Ver Código';
           if (isHidden && textarea) textarea.focus();
         };
       }
 
+      if (btnCopy) {
+        btnCopy.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const code = textarea ? textarea.value : (mermaidBlock.dataset.mermaidCode || '');
+          navigator.clipboard.writeText(code);
+          btnCopy.textContent = 'Copiado!';
+          setTimeout(() => { btnCopy.textContent = 'Copiar'; }, 1500);
+        };
+      }
+
       if (btnRefresh && textarea) {
-        btnRefresh.onclick = () => {
-          (block as HTMLElement).dataset.mermaidCode = textarea.value.trim();
-          this.renderMermaidBlock(block as HTMLElement);
+        btnRefresh.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          mermaidBlock.dataset.mermaidCode = textarea.value.trim();
+          this.renderMermaidBlock(mermaidBlock);
           this.recordChange();
+        };
+      }
+
+      if (textarea) {
+        textarea.oninput = () => {
+          mermaidBlock.dataset.mermaidCode = textarea.value.trim();
+          this.recordChange();
+        };
+        textarea.onkeydown = (e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            mermaidBlock.dataset.mermaidCode = textarea.value.trim();
+            this.renderMermaidBlock(mermaidBlock);
+            this.recordChange();
+            return;
+          }
+          e.stopPropagation();
         };
       }
     });

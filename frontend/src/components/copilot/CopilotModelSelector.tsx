@@ -59,7 +59,9 @@ function groupAgyModels(models: ModelItem[]): AgyModelGroup[] {
   }
 
   return Array.from(groups.entries()).map(([name, variants]) => {
-    const hasEffortVariants = variants.some((v) => Boolean(parseEffortFromBadge(v.badge)));
+    const hasEffortVariants = variants.some((v) =>
+      Boolean(parseEffortFromBadge(v.badge)),
+    );
     const sortedVariants = hasEffortVariants
       ? [...variants].sort((a, b) => {
           const ordA = EFFORT_ORDER[(a.badge || "").trim().toLowerCase()] ?? 99;
@@ -97,9 +99,17 @@ const DEFAULT_API_MODELS_BY_PROVIDER: ProviderGroup[] = [
     providerName: "Google Gemini",
     icon: "smart_toy",
     models: [
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", badge: "Recomendado" },
+      {
+        id: "gemini-2.5-flash",
+        name: "Gemini 2.5 Flash",
+        badge: "Recomendado",
+      },
       { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", badge: "Raciocínio" },
-      { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash Lite", badge: "Super Rápido" },
+      {
+        id: "gemini-3.5-flash-lite",
+        name: "Gemini 3.5 Flash Lite",
+        badge: "Super Rápido",
+      },
     ],
   },
   {
@@ -108,8 +118,16 @@ const DEFAULT_API_MODELS_BY_PROVIDER: ProviderGroup[] = [
     icon: "auto_awesome",
     models: [
       { id: "claude-3-7-sonnet", name: "Claude 3.7 Sonnet", badge: "Híbrido" },
-      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", badge: "Código" },
-      { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", badge: "Rápido" },
+      {
+        id: "claude-3-5-sonnet-20241022",
+        name: "Claude 3.5 Sonnet",
+        badge: "Código",
+      },
+      {
+        id: "claude-3-5-haiku-20241022",
+        name: "Claude 3.5 Haiku",
+        badge: "Rápido",
+      },
     ],
   },
   {
@@ -135,14 +153,38 @@ const DEFAULT_API_MODELS_BY_PROVIDER: ProviderGroup[] = [
 ];
 
 const FALLBACK_AGY_MODELS: ModelItem[] = [
-  { id: "gemini-4-neon-medium", name: "Gemini 4 Neon" },
-  { id: "gemini-4-carbon-medium", name: "Gemini 4 Carbon" },
-  { id: "gemini-4-argon-medium", name: "Gemini 4 Argon" },
-  { id: "gemini-4-hydrogen-medium", name: "Gemini 4 Hydrogen" },
-  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash" },
-  { id: "claude-opus-5-5-medium", name: "Claude Opus 5.5" },
-  { id: "claude-sonnet-5-5-medium", name: "Claude Sonnet 5.5" },
-  { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B" },
+  { id: "gemini-4-neon-low", name: "Gemini 4 Neon", badge: "Low" },
+  { id: "gemini-4-neon-medium", name: "Gemini 4 Neon", badge: "Medium" },
+  { id: "gemini-4-neon-high", name: "Gemini 4 Neon", badge: "High" },
+  { id: "gemini-4-neon-xhigh", name: "Gemini 4 Neon", badge: "XHigh" },
+  { id: "gemini-4-carbon-low", name: "Gemini 4 Carbon", badge: "Low" },
+  { id: "gemini-4-carbon-medium", name: "Gemini 4 Carbon", badge: "Medium" },
+  { id: "gemini-4-carbon-high", name: "Gemini 4 Carbon", badge: "High" },
+  { id: "gemini-4-argon-low", name: "Gemini 4 Argon", badge: "Low" },
+  { id: "gemini-4-argon-medium", name: "Gemini 4 Argon", badge: "Medium" },
+  { id: "gemini-4-argon-high", name: "Gemini 4 Argon", badge: "High" },
+  { id: "gemini-4-hydrogen-low", name: "Gemini 4 Hydrogen", badge: "Low" },
+  {
+    id: "gemini-4-hydrogen-medium",
+    name: "Gemini 4 Hydrogen",
+    badge: "Medium",
+  },
+  { id: "gemini-4-hydrogen-high", name: "Gemini 4 Hydrogen", badge: "High" },
+  { id: "gemini-4-hydrogen-xhigh", name: "Gemini 4 Hydrogen", badge: "XHigh" },
+  { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash", badge: "Low" },
+  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash", badge: "Medium" },
+  { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash", badge: "High" },
+  { id: "claude-opus-5-5-low", name: "Claude Opus 5.5", badge: "Low" },
+  { id: "claude-opus-5-5-medium", name: "Claude Opus 5.5", badge: "Medium" },
+  { id: "claude-opus-5-5-high", name: "Claude Opus 5.5", badge: "High" },
+  { id: "claude-sonnet-5-5-low", name: "Claude Sonnet 5.5", badge: "Low" },
+  {
+    id: "claude-sonnet-5-5-medium",
+    name: "Claude Sonnet 5.5",
+    badge: "Medium",
+  },
+  { id: "claude-sonnet-5-5-high", name: "Claude Sonnet 5.5", badge: "High" },
+  { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B", badge: "Medium" },
 ];
 
 const FALLBACK_CLAUDE_CLI_MODELS: ModelItem[] = [
@@ -166,12 +208,22 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
   onOpenSettings,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [hoveredAgyModelId, setHoveredAgyModelId] = useState<string | null>(null);
+  const [hoveredAgyModelId, setHoveredAgyModelId] = useState<string | null>(
+    null,
+  );
+  const [hoveredVariantId, setHoveredVariantId] = useState<string | null>(null);
+  const [submenuPos, setSubmenuPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
         setHoveredAgyModelId(null);
       }
@@ -183,10 +235,13 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
   const agyInfo = detectedProviders.find((p) => p.id === "antigravity");
   const claudeInfo = detectedProviders.find((p) => p.id === "claude-code");
 
-  const agyModels =
-    agyInfo?.models && agyInfo.models.length > 0
-      ? agyInfo.models
-      : FALLBACK_AGY_MODELS;
+  const backendAgyHasVariants =
+    Boolean(agyInfo?.models && agyInfo.models.length > 0) &&
+    groupAgyModels(agyInfo!.models!).some((g) => g.variants.length > 1);
+
+  const agyModels = backendAgyHasVariants
+    ? agyInfo!.models!
+    : FALLBACK_AGY_MODELS;
   const claudeModels =
     claudeInfo?.models && claudeInfo.models.length > 0
       ? claudeInfo.models
@@ -266,9 +321,7 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
         padding: "6px 8px",
         borderRadius: "7px",
         border: "none",
-        background: isSelected
-          ? "rgba(37, 99, 235, 0.08)"
-          : "transparent",
+        background: isSelected ? "rgba(37, 99, 235, 0.08)" : "transparent",
         color: isSelected
           ? "var(--color-primary, #2563eb)"
           : "var(--color-on-surface, #1e293b)",
@@ -384,9 +437,7 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
             background: isCliMode
               ? "rgba(16, 185, 129, 0.12)"
               : "rgba(37, 99, 235, 0.1)",
-            color: isCliMode
-              ? "#059669"
-              : "var(--color-primary, #2563eb)",
+            color: isCliMode ? "#059669" : "var(--color-primary, #2563eb)",
             flexShrink: 0,
           }}
         >
@@ -541,12 +592,17 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
             </div>
 
             {activeProviderId === "antigravity" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "2px" }}
+              >
                 {agyGroups.map((group) => {
-                  const selectedVariant = group.variants.find((v) => v.id === agentModel);
+                  const selectedVariant = group.variants.find(
+                    (v) => v.id === agentModel,
+                  );
                   const isSelected = Boolean(selectedVariant);
                   const hasMultipleVariants = group.variants.length > 1;
-                  const isSubmenuOpen = hasMultipleVariants && hoveredAgyModelId === group.name;
+                  const isHovered = hoveredAgyModelId === group.name;
+                  const isSubmenuOpen = hasMultipleVariants && isHovered;
 
                   const pickDefaultVariant = (): ModelItem => {
                     if (selectedVariant) return selectedVariant;
@@ -563,25 +619,53 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                     return group.variants[0];
                   };
 
-                  const activeBadge = selectedVariant?.badge ?? (!hasMultipleVariants ? group.variants[0]?.badge : undefined);
+                  const activeBadge =
+                    selectedVariant?.badge ??
+                    (!hasMultipleVariants
+                      ? group.variants[0]?.badge
+                      : undefined);
 
                   return (
                     <div
                       key={group.name}
                       style={{ position: "relative" }}
-                      onMouseEnter={() => {
-                        if (hasMultipleVariants) setHoveredAgyModelId(group.name);
+                      onMouseEnter={(e) => {
+                        setHoveredAgyModelId(group.name);
+                        if (hasMultipleVariants) {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const submenuWidth = 156;
+                          const gap = 6;
+                          const left =
+                            rect.left - submenuWidth - gap >= 8
+                              ? rect.left - submenuWidth - gap
+                              : rect.right + gap;
+                          setSubmenuPos({
+                            top: Math.max(
+                              8,
+                              Math.min(rect.top - 4, window.innerHeight - 220),
+                            ),
+                            left,
+                          });
+                        }
                       }}
-                      onMouseLeave={() =>
-                        setHoveredAgyModelId((prev) => (prev === group.name ? null : prev))
-                      }
+                      onMouseLeave={() => {
+                        setHoveredAgyModelId((prev) =>
+                          prev === group.name ? null : prev,
+                        );
+                      }}
                     >
                       <button
                         type="button"
                         onClick={() => {
                           const targetVariant = pickDefaultVariant();
-                          const targetEffort = parseEffortFromBadge(targetVariant.badge);
-                          onSelectCliModel("antigravity", targetVariant.id, targetEffort);
+                          const targetEffort = parseEffortFromBadge(
+                            targetVariant.badge,
+                          );
+                          onSelectCliModel(
+                            "antigravity",
+                            targetVariant.id,
+                            targetEffort,
+                          );
                           setIsOpen(false);
                           setHoveredAgyModelId(null);
                         }}
@@ -594,10 +678,13 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                           borderRadius: "7px",
                           border: "none",
                           background: isSelected
-                            ? "rgba(37, 99, 235, 0.08)"
-                            : isSubmenuOpen
+                            ? isHovered
+                              ? "rgba(37, 99, 235, 0.14)"
+                              : "rgba(37, 99, 235, 0.08)"
+                            : isHovered
                               ? "var(--color-surface-container, #f1f5f9)"
                               : "transparent",
+                          transition: "background 0.12s ease",
                           color: isSelected
                             ? "var(--color-primary, #2563eb)"
                             : "var(--color-on-surface, #1e293b)",
@@ -605,7 +692,6 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                           fontSize: "12px",
                           textAlign: "left",
                           width: "100%",
-                          transition: "background 0.12s ease",
                         }}
                       >
                         <div
@@ -648,7 +734,14 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                           )}
                         </div>
 
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            flexShrink: 0,
+                          }}
+                        >
                           {isSelected && (
                             <span
                               className="material-symbols-outlined"
@@ -675,82 +768,99 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
                       </button>
 
                       {/* Dynamic Variants / Effort Submenu from harness model list */}
-                      {isSubmenuOpen && (
+                      {isSubmenuOpen && submenuPos && (
                         <div
                           style={{
-                            position: "absolute",
-                            top: "-4px",
-                            right: "calc(100% + 6px)",
+                            position: "fixed",
+                            top: `${submenuPos.top}px`,
+                            left: `${submenuPos.left}px`,
                             zIndex: 1120,
-                            width: "156px",
-                            background: "var(--color-surface, #ffffff)",
-                            border: "1px solid rgba(15, 23, 42, 0.08)",
-                            borderRadius: "10px",
-                            boxShadow: "0 8px 24px rgba(15, 23, 42, 0.12)",
-                            padding: "6px",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "2px",
+                            paddingRight: "8px",
+                            marginRight: "-8px",
                           }}
                         >
                           <div
                             style={{
-                              fontSize: "10px",
-                              fontWeight: 600,
-                              color: "var(--text-muted, #94a3b8)",
-                              padding: "3px 8px 5px",
+                              width: "156px",
+                              background: "var(--color-surface, #ffffff)",
+                              border: "1px solid rgba(15, 23, 42, 0.08)",
+                              borderRadius: "10px",
+                              boxShadow: "0 8px 24px rgba(15, 23, 42, 0.12)",
+                              padding: "6px",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "2px",
                             }}
                           >
-                            {group.hasEffortVariants ? "Thinking effort" : "Variante"}
+                            {group.variants.map((variant) => {
+                              const isVariantActive = agentModel === variant.id;
+                              const isVariantHovered =
+                                hoveredVariantId === variant.id;
+                              const variantEffort = parseEffortFromBadge(
+                                variant.badge,
+                              );
+                              return (
+                                <button
+                                  key={variant.id}
+                                  type="button"
+                                  onMouseEnter={() =>
+                                    setHoveredVariantId(variant.id)
+                                  }
+                                  onMouseLeave={() =>
+                                    setHoveredVariantId((prev) =>
+                                      prev === variant.id ? null : prev,
+                                    )
+                                  }
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectCliModel(
+                                      "antigravity",
+                                      variant.id,
+                                      variantEffort,
+                                    );
+                                    setIsOpen(false);
+                                    setHoveredAgyModelId(null);
+                                    setHoveredVariantId(null);
+                                  }}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    padding: "6px 8px",
+                                    borderRadius: "7px",
+                                    border: "none",
+                                    background: isVariantActive
+                                      ? "rgba(37, 99, 235, 0.08)"
+                                      : isVariantHovered
+                                        ? "var(--color-surface-container, #f1f5f9)"
+                                        : "transparent",
+                                    color: isVariantActive
+                                      ? "var(--color-primary, #2563eb)"
+                                      : "var(--color-on-surface, #1e293b)",
+                                    fontSize: "12px",
+                                    fontWeight: isVariantActive ? 600 : 400,
+                                    cursor: "pointer",
+                                    textAlign: "left",
+                                    width: "100%",
+                                    transition: "background 0.12s ease",
+                                  }}
+                                >
+                                  <span>{variant.badge || variant.id}</span>
+                                  {isVariantActive && (
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{
+                                        fontSize: "15px",
+                                        color: "var(--color-primary, #2563eb)",
+                                      }}
+                                    >
+                                      check
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
-                          {group.variants.map((variant) => {
-                            const isVariantActive = agentModel === variant.id;
-                            const variantEffort = parseEffortFromBadge(variant.badge);
-                            return (
-                              <button
-                                key={variant.id}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSelectCliModel("antigravity", variant.id, variantEffort);
-                                  setIsOpen(false);
-                                  setHoveredAgyModelId(null);
-                                }}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  padding: "6px 8px",
-                                  borderRadius: "7px",
-                                  border: "none",
-                                  background: isVariantActive
-                                    ? "rgba(37, 99, 235, 0.08)"
-                                    : "transparent",
-                                  color: isVariantActive
-                                    ? "var(--color-primary, #2563eb)"
-                                    : "var(--color-on-surface, #1e293b)",
-                                  fontSize: "12px",
-                                  fontWeight: isVariantActive ? 600 : 400,
-                                  cursor: "pointer",
-                                  textAlign: "left",
-                                  width: "100%",
-                                }}
-                              >
-                                <span>{variant.badge || variant.id}</span>
-                                {isVariantActive && (
-                                  <span
-                                    className="material-symbols-outlined"
-                                    style={{
-                                      fontSize: "15px",
-                                      color: "var(--color-primary, #2563eb)",
-                                    }}
-                                  >
-                                    check
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
                         </div>
                       )}
                     </div>
@@ -761,14 +871,10 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
 
             {activeProviderId === "claude-code" &&
               claudeModels.map((m) =>
-                renderModelRow(
-                  m,
-                  (claudeModel || "sonnet") === m.id,
-                  () => {
-                    onSelectCliModel("claude-code", m.id);
-                    setIsOpen(false);
-                  },
-                ),
+                renderModelRow(m, (claudeModel || "sonnet") === m.id, () => {
+                  onSelectCliModel("claude-code", m.id);
+                  setIsOpen(false);
+                }),
               )}
 
             {activeProviderId === "direct-api" &&
