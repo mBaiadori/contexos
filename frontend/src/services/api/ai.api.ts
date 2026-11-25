@@ -215,11 +215,55 @@ export const aiApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async finalizeMemorySession(payload: { repo?: string; path?: string; session_id?: string; summary?: string }): Promise<ApiResponse<any>> {
+  async finalizeMemorySession(payload: { repo?: string; path?: string; session_id?: string; summary?: string; category?: string; title?: string }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/chat/memory/finalize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async exportMemoryDatabase(params: { repo?: string; scope?: 'repo' | 'all' } = {}): Promise<{ ok: boolean; blob?: Blob; filename?: string; error?: string }> {
+    const query = new URLSearchParams();
+    if (params.repo) query.set('repo', params.repo);
+    if (params.scope) query.set('scope', params.scope);
+    const res = await fetch(`/api/chat/memory/export?${query.toString()}`);
+    if (!res.ok) {
+      let errMsg = 'Falha ao exportar banco SQLite.';
+      try {
+        const data = await res.json();
+        if (data?.error) errMsg = data.error;
+      } catch {}
+      return { ok: false, error: errMsg };
+    }
+    const disposition = res.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match?.[1] || `contexos-history-${params.repo || 'all'}.sqlite`;
+    return { ok: true, blob: await res.blob(), filename };
+  },
+
+  async importMemoryDatabase(
+    file: File,
+    params: { repo?: string; strategy?: 'merge' | 'keep_local' | 'overwrite' } = {}
+  ): Promise<ApiResponse<{
+    success: boolean;
+    addedSessions: number;
+    mergedSessions: number;
+    overwrittenSessions: number;
+    skippedSessions: number;
+    addedEvents: number;
+    totalImportedSessions: number;
+    error?: string;
+  }>> {
+    const query = new URLSearchParams();
+    if (params.repo) query.set('repo', params.repo);
+    if (params.strategy) query.set('strategy', params.strategy);
+    const buffer = await file.arrayBuffer();
+    const res = await fetch(`/api/chat/memory/import?${query.toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: buffer,
     });
     return { ok: res.ok, data: await res.json() };
   },

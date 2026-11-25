@@ -1274,6 +1274,19 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   };
 
+  // Hidrata abas abertas sob demanda a partir do SQLite do backend após reload
+  const hydratedSessionsRef = React.useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeRepo?.name || !currentSessionId) return;
+    if (hydratedSessionsRef.current.has(currentSessionId)) return;
+    const st = useCopilotStore.getState();
+    const activeTab = st.sessions[currentSessionId];
+    if (activeTab && activeTab.messages.length === 0 && !activeTab.isThinking) {
+      hydratedSessionsRef.current.add(currentSessionId);
+      void restoreSession(currentSessionId);
+    }
+  }, [activeRepo?.name, currentSessionId]);
+
   return (
     <AIContext.Provider
       value={{

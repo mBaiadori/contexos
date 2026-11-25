@@ -108,7 +108,6 @@ function persistTabsState(state: {
       compactSessions[id] = {
         id: s.id,
         title: s.title,
-        messages: s.messages.slice(-100),
         referencedDocs: s.referencedDocs,
         isGlobalScope: s.isGlobalScope,
         updatedAt: s.updatedAt,

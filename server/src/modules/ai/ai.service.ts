@@ -11,6 +11,7 @@ import { ToolCallExecutionRecord } from './tools/tool.types.js';
 import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
 import { wikiService } from '../wiki/wiki.service.js';
 import { checkAiPolicy } from './ai-policy.service.js';
+import { sessionStoreService } from './session-store.service.js';
 
 export interface ChatMessage {
   role: 'user' | 'model' | 'assistant' | 'system';
@@ -757,256 +758,166 @@ export class AIService {
     metadata?: { model?: string; author?: string },
     telemetryTurn?: RawTurnTelemetryRecord
   ) {
-    const sessionsDir = this.getSessionsDir(repoName);
-    fs.mkdirSync(sessionsDir, { recursive: true });
-
-    const sessionFile = path.join(sessionsDir, `${sessionId}.json`);
-    let sessionData: SessionDataRecord = {
-      session_id: sessionId,
-      path: filePath,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      author: { name: metadata?.author || 'Developer', role: 'Developer' },
-      model: metadata?.model || 'gemini',
-      events: [],
-      telemetry_turns: [],
-    };
-
-    if (fs.existsSync(sessionFile)) {
-      try {
-        sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
-      } catch {}
-    }
-
-    if (!Array.isArray(sessionData.telemetry_turns)) {
-      sessionData.telemetry_turns = [];
-    }
-    if (!Array.isArray(sessionData.events)) {
-      sessionData.events = [];
-    }
-
-    sessionData.updated_at = new Date().toISOString();
-    if (metadata?.model) sessionData.model = metadata.model;
-    if (filePath && (!sessionData.path || sessionData.path === 'Global')) sessionData.path = filePath;
-
-    sessionData.events.push({
-      role,
-      text,
-      timestamp: new Date().toISOString(),
-    });
-
-    if (telemetryTurn) {
-      // Verifica se já existe o turno pelo turn_id ou substitui/adiciona
-      const existingIdx = sessionData.telemetry_turns.findIndex((t) => t.turn_id === telemetryTurn.turn_id);
-      if (existingIdx >= 0) {
-        sessionData.telemetry_turns[existingIdx] = telemetryTurn;
-      } else {
-        sessionData.telemetry_turns.push(telemetryTurn);
-      }
-    }
-
-    // Calcula métricas consolidadas
-    const rounds = Math.ceil(sessionData.events.length / 2);
-    const approxTokens = sessionData.events.reduce((acc, ev) => acc + Math.ceil((ev.text?.length || 0) / 4), 0);
-    
-    const totalPromptTokens = sessionData.telemetry_turns.reduce((acc, t) => acc + (t.metrics?.prompt_tokens || 0), 0);
-    const totalCompletionTokens = sessionData.telemetry_turns.reduce((acc, t) => acc + (t.metrics?.completion_tokens || 0), 0);
-    const totalTokens = (totalPromptTokens + totalCompletionTokens) || approxTokens;
-    const totalCostUsd = sessionData.telemetry_turns.reduce((acc, t) => acc + (t.metrics?.cost_usd || 0), 0);
-
-    sessionData.metrics = {
-      rounds,
-      total_tokens: totalTokens,
-      prompt_tokens: totalPromptTokens,
-      completion_tokens: totalCompletionTokens,
-      total_cost_usd: totalCostUsd,
-      event_count: sessionData.events.length,
-      turns_count: sessionData.telemetry_turns.length,
-    };
-
-    fs.writeFileSync(sessionFile, JSON.stringify(sessionData, null, 2), 'utf-8');
+    sessionStoreService.appendEvent(repoName, filePath, sessionId, role, text, metadata, telemetryTurn);
   }
 
-  getChatHistory(repoName: string, sessionId?: string, filePath?: string) {
-    let sessionsDir = this.getSessionsDir(repoName);
-    if (!fs.existsSync(sessionsDir)) {
-      const cfg = loadConfig();
-      if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackDir = path.join(resolveRepoDir(cfg.active_repo.name), '.sessions');
-        if (fs.existsSync(fallbackDir)) {
-          sessionsDir = fallbackDir;
-        } else {
-          return { sessions: [] };
-        }
-      } else {
-        return { sessions: [] };
-      }
-    }
-
-    if (sessionId) {
-      const sessionFile = path.join(sessionsDir, `${sessionId}.json`);
-      if (fs.existsSync(sessionFile)) {
-        try {
-          const session = JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
-          if (session && Array.isArray(session.events)) {
-            session.events = sanitizeSessionEvents(session.events);
-          }
-          return { session, sessions: [session] };
-        } catch {}
-      }
-    }
-
-    const files = fs.readdirSync(sessionsDir).filter((f) => f.endsWith('.json'));
-    const sessions = [];
-
-    const parseTimestamp = (val?: string | number, fallbackMs: number = 0): number => {
-      if (!val) return fallbackMs;
-      if (typeof val === 'number') return val;
-      const t = new Date(val).getTime();
-      if (!isNaN(t) && t > 0) return t;
-      const match = String(val).match(/\d{10,13}/);
-      if (match) return parseInt(match[0], 10);
-      return fallbackMs;
-    };
-
-    for (const f of files) {
-      try {
-        const fullPath = path.join(sessionsDir, f);
-        const stats = fs.statSync(fullPath);
-        const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
-        if (Array.isArray(data.events)) {
-          data.events = sanitizeSessionEvents(data.events);
-        }
-
-        const lastEvent = data.events && data.events.length > 0 ? data.events[data.events.length - 1] : null;
-        const firstUserEvent = data.events ? data.events.find((e: SessionEventRecord) => e.role === 'user') : null;
-
-        const mtimeIso = stats.mtime.toISOString();
-        const rawUpdated = data.updated_at || lastEvent?.timestamp || mtimeIso;
-        const rawCreated = data.created_at || data.events?.[0]?.timestamp || mtimeIso;
-
-        const updatedTs = Math.max(
-          parseTimestamp(rawUpdated, stats.mtimeMs),
-          parseTimestamp(lastEvent?.timestamp, stats.mtimeMs),
-          stats.mtimeMs
-        );
-
-        const userText = firstUserEvent?.text || firstUserEvent?.content || '';
-        const previewText = userText
-          ? (userText.length > 90 ? userText.slice(0, 90) + '...' : userText)
-          : (lastEvent?.text ? (lastEvent.text.length > 90 ? lastEvent.text.slice(0, 90) + '...' : lastEvent.text) : 'Conversa com Copilot');
-
-        sessions.push({
-          session_id: data.session_id || f.replace('.json', ''),
-          path: data.path || 'Global',
-          event_count: data.events?.length || 0,
-          created_at: rawCreated,
-          updated_at: rawUpdated,
-          timestamp: updatedTs,
-          model: data.model || 'AI Assistant',
-          author: data.author || { name: 'Developer' },
-          preview: previewText,
-          metrics: data.metrics || {
-            rounds: Math.ceil((data.events?.length || 1) / 2),
-            total_tokens: 0,
-            total_cost_usd: 0,
-          },
-          telemetry_turns: data.telemetry_turns || [],
-        });
-      } catch {}
-    }
-
-    // Ordena rigorosamente da mais recente para a mais antiga
-    sessions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-    return { sessions };
+  getChatHistory(repoName: string, sessionId?: string, _filePath?: string) {
+    return sessionStoreService.getChatHistory(repoName, sessionId);
   }
 
   getSessionDetails(repoName: string, sessionId?: string) {
-    if (!sessionId) return null;
-    const sessionsDir = this.getSessionsDir(repoName);
-    let sessionFile = path.join(sessionsDir, `${sessionId}.json`);
-    if (!fs.existsSync(sessionFile)) {
-      const cfg = loadConfig();
-      if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackFile = path.join(resolveRepoDir(cfg.active_repo.name), '.sessions', `${sessionId}.json`);
-        if (fs.existsSync(fallbackFile)) {
-          sessionFile = fallbackFile;
-        }
-      }
-    }
-    if (fs.existsSync(sessionFile)) {
-      try {
-        return JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
-      } catch {}
-    }
-    return null;
+    return sessionStoreService.getSessionDetails(repoName, sessionId);
   }
 
   deleteSession(repoName: string, sessionId: string) {
-    const sessionsDir = this.getSessionsDir(repoName);
-    let sessionFile = path.join(sessionsDir, `${sessionId}.json`);
-    if (!fs.existsSync(sessionFile)) {
-      const cfg = loadConfig();
-      if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackFile = path.join(resolveRepoDir(cfg.active_repo.name), '.sessions', `${sessionId}.json`);
-        if (fs.existsSync(fallbackFile)) {
-          sessionFile = fallbackFile;
-        }
-      }
-    }
-    if (fs.existsSync(sessionFile)) {
-      try {
-        fs.unlinkSync(sessionFile);
-        return { success: true, message: 'Sessão removida com sucesso.' };
-      } catch (err: unknown) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) };
-      }
-    }
-    return { success: false, error: 'Sessão não encontrada.' };
+    return sessionStoreService.deleteSession(repoName, sessionId);
   }
 
-  finalizeSession(repoName: string, filePath: string, sessionId: string, summary?: string) {
+  async finalizeSession(
+    repoName: string,
+    filePath: string,
+    sessionId: string,
+    summary?: string,
+    options?: { category?: string; title?: string }
+  ) {
     const sessionData = this.getSessionDetails(repoName, sessionId);
-    const nowStr = new Date().toLocaleString('pt-BR');
+    const now = new Date();
+    const nowStr = now.toLocaleString('pt-BR');
+    const datePrefix = now.toISOString().slice(0, 10);
+    const category = (options?.category || 'handoffs').toLowerCase().trim();
+    const events = (sessionData?.events || []) as SessionEventRecord[];
 
-    let generatedSummary = summary;
-    if (!generatedSummary && sessionData && sessionData.events?.length > 0) {
-      const userQuestions = (sessionData.events as SessionEventRecord[])
-        .filter((e) => e.role === 'user')
-        .map((e) => `- ${e.text.slice(0, 140)}`)
-        .join('\n');
-      generatedSummary = `### Decisões e Tópicos Discutidos:\n${userQuestions || 'Sessão de pareamento.'}`;
+    let generatedSummary = summary?.trim() || '';
+    let usedLLM = false;
+
+    if (!generatedSummary && events.length > 0) {
+      const transcript = events
+        .slice(-40)
+        .map((e) => {
+          const speaker = e.role === 'user' ? 'Usuário' : 'Assistente';
+          const text = (e.text || e.content || '').trim();
+          const clipped = text.length > 1500 ? `${text.slice(0, 1500)}...` : text;
+          return `**${speaker}:** ${clipped}`;
+        })
+        .join('\n\n');
+
+      const cfg = loadConfig();
+      const aiSettings = cfg.ai_settings || {};
+      const hasApiKey = Boolean(
+        aiSettings.api_key ||
+          process.env.GEMINI_API_KEY ||
+          process.env.OPENAI_API_KEY ||
+          process.env.ANTHROPIC_API_KEY
+      );
+
+      if (hasApiKey) {
+        try {
+          const synthesisPrompt = `Analise a transcrição da conversa abaixo e gere um documento técnico estruturado em Markdown (em Português) para a Wiki do projeto (categoria: ${category}).
+
+Use exatamente esta estrutura:
+## Resumo Executivo
+(2 a 4 frases objetivas explicando o contexto, o que foi investigado e o resultado final)
+
+## Decisões e Conclusões
+- (bullet points com decisões técnicas, arquiteturais ou de produto tomadas)
+
+## Arquivos e Conceitos Relacionados
+- (liste caminhos de arquivos, módulos ou símbolos relevantes mencionados; se não houver, omita itens inventados)
+
+## Próximos Passos / Pendências
+- (itens em aberto ou ações recomendadas, se houver)
+
+Não invente informações que não estejam na transcrição. Seja direto e conciso.
+
+--- TRANSCRIÇÃO ---
+${transcript.slice(0, 14000)}
+--- FIM DA TRANSCRIÇÃO ---`;
+
+          const llmRes = await this.callLLM(
+            {
+              provider: aiSettings.provider || 'gemini',
+              model: aiSettings.model || 'gemini-2.5-flash',
+              api_key: aiSettings.api_key,
+              custom_endpoint: aiSettings.custom_endpoint,
+              allowed_tools: [],
+            },
+            synthesisPrompt,
+            '',
+            filePath || 'Global',
+            [],
+            'Você é um engenheiro de software sênior documentando decisões e handoffs técnicos para a Wiki do projeto.',
+            repoName
+          );
+
+          if (llmRes?.reply && llmRes.reply.trim().length > 40) {
+            generatedSummary = llmRes.reply.trim();
+            usedLLM = true;
+          }
+        } catch (llmErr) {
+          console.warn('[AIService] Síntese via LLM indisponível, usando fallback local:', llmErr);
+        }
+      }
+
+      if (!generatedSummary) {
+        const userPoints = events
+          .filter((e) => e.role === 'user')
+          .slice(-10)
+          .map((e) => `- ${(e.text || e.content || '').trim().slice(0, 220)}`)
+          .join('\n');
+        const assistantLast = [...events]
+          .reverse()
+          .find((e) => e.role === 'model' || e.role === 'assistant');
+        const lastConclusion = assistantLast
+          ? (assistantLast.text || assistantLast.content || '').trim().slice(0, 900)
+          : '';
+
+        generatedSummary = [
+          '## Tópicos Discutidos',
+          userPoints || '- Sessão de pareamento.',
+          lastConclusion ? `\n## Última Síntese / Resposta do Assistente\n${lastConclusion}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n');
+      }
     }
 
-    const content = `# Handoff de Sessão (${nowStr})\n\n**Arquivo / Escopo:** \`${filePath || 'Global'}\`\n**Sessão:** \`${sessionId}\`\n**Modelo:** \`${sessionData?.model || 'AI'}\`\n\n${generatedSummary || 'Sessão finalizada com sucesso.'}\n`;
+    const firstUserText = events.find((e) => e.role === 'user')?.text || '';
+    const topicSource = options?.title?.trim() || firstUserText.slice(0, 50) || filePath || sessionId;
+    const topicSlug = topicSource
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .slice(0, 48);
+    const slug = `${datePrefix}-${topicSlug || sessionId}`;
+    const docTitle =
+      options?.title?.trim() ||
+      `${category === 'decisions' ? 'Decisão' : 'Handoff'}: ${firstUserText ? firstUserText.slice(0, 60) : filePath || 'Sessão'} (${datePrefix})`;
 
-    // Persistir na Base Wiki sob a categoria 'handoffs'
+    const content = `# ${docTitle}\n\n**Data:** ${nowStr}  \n**Arquivo / Escopo:** \`${filePath || 'Global'}\`  \n**Sessão:** \`${sessionId}\`  \n**Modelo:** \`${sessionData?.model || 'AI'}\`\n\n${generatedSummary || 'Sessão documentada sem eventos registrados.'}\n`;
+
     try {
-      wikiService.saveWikiPage(
-        'handoffs',
-        `handoff-${sessionId}`,
-        `Handoff: ${filePath || 'Global'} (${nowStr})`,
-        content,
-        repoName
-      );
+      wikiService.saveWikiPage(category, slug, docTitle, content, repoName);
     } catch (wikiErr) {
-      console.error('[AIService] Erro ao sincronizar handoff na Wiki:', wikiErr);
+      console.error('[AIService] Erro ao sincronizar documento na Wiki:', wikiErr);
     }
 
     return {
       success: true,
-      message: 'Sessão finalizada com sucesso.',
+      message: `Documento salvo na Wiki (${category}/${slug}).`,
       briefing: content,
+      usedLLM,
+      wikiPage: {
+        category,
+        slug,
+        title: docTitle,
+      },
     };
   }
 
   resetMemory(repoName: string) {
-    const sessionsDir = this.getSessionsDir(repoName);
-    if (fs.existsSync(sessionsDir)) {
-      fs.rmSync(sessionsDir, { recursive: true, force: true });
-    }
-    return { success: true, message: 'Histórico de sessões resetado com sucesso.' };
+    return sessionStoreService.resetRepo(repoName);
   }
 }
 

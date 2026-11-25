@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { API } from "../../services/api";
 import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
@@ -71,6 +71,9 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isHandoffExpanded, setIsHandoffExpanded] = useState<boolean>(false);
+  const [wikiCategory, setWikiCategory] = useState<"handoffs" | "decisions" | "architecture">("handoffs");
+  const [isTransferring, setIsTransferring] = useState<boolean>(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const effectiveRepo =
     repo && repo !== "default" && repo !== "local"
@@ -188,21 +191,30 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     }
   };
 
-  const handleConsolidateMemory = async () => {
+  const handleConsolidateMemory = async (targetSessionId?: string) => {
     setIsConsolidating(true);
     try {
       const res = await API.finalizeMemorySession({
         repo: effectiveRepo,
         path: docPath,
-        session_id: currentSessionId,
+        session_id: targetSessionId || currentSessionId,
+        category: wikiCategory,
       });
       if (res.ok && res.data?.briefing) {
         setBriefing(res.data.briefing);
-        setFeedback("Memória persistida com sucesso! 🧠");
-        setTimeout(() => setFeedback(null), 2500);
+        setIsHandoffExpanded(true);
+        const wikiPage = res.data?.wikiPage;
+        setFeedback(
+          wikiPage
+            ? `Salvo na Wiki (${wikiPage.category}/${wikiPage.slug})!`
+            : "Documento salvo na Wiki!"
+        );
+        setTimeout(() => setFeedback(null), 3000);
       }
     } catch (err) {
-      console.error("Erro ao consolidar memória:", err);
+      console.error("Erro ao documentar sessão na Wiki:", err);
+      setFeedback("Erro ao gerar documento na Wiki.");
+      setTimeout(() => setFeedback(null), 2500);
     } finally {
       setIsConsolidating(false);
     }
@@ -227,6 +239,65 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedIndex(idx);
     setTimeout(() => setCopiedIndex(null), 1500);
+  };
+
+  const handleExportSqlite = async () => {
+    setIsTransferring(true);
+    try {
+      const res = await API.exportMemoryDatabase({ repo: effectiveRepo, scope: "repo" });
+      if (!res.ok || !res.blob) {
+        setFeedback(res.error || "Erro ao exportar histórico.");
+        setTimeout(() => setFeedback(null), 3000);
+        return;
+      }
+      const url = URL.createObjectURL(res.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.filename || `contexos-history-${effectiveRepo}.sqlite`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setFeedback("Histórico exportado (.sqlite)!");
+      setTimeout(() => setFeedback(null), 2500);
+    } catch (err) {
+      console.error("[HistorySidebar] Erro ao exportar SQLite:", err);
+      setFeedback("Erro ao exportar histórico.");
+      setTimeout(() => setFeedback(null), 3000);
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const handleImportSqlite = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setIsTransferring(true);
+    try {
+      const res = await API.importMemoryDatabase(file, {
+        repo: effectiveRepo,
+        strategy: "merge",
+      });
+      if (!res.ok || !res.data?.success) {
+        setFeedback(res.data?.error || "Arquivo .sqlite inválido ou incompatível.");
+        setTimeout(() => setFeedback(null), 3500);
+        return;
+      }
+      const { addedSessions, mergedSessions, addedEvents } = res.data;
+      await loadHistory();
+      setFeedback(
+        `Importado: ${addedSessions} nova(s), ${mergedSessions} mesclada(s) (+${addedEvents} msgs)`
+      );
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err) {
+      console.error("[HistorySidebar] Erro ao importar SQLite:", err);
+      setFeedback("Erro ao importar arquivo .sqlite.");
+      setTimeout(() => setFeedback(null), 3500);
+    } finally {
+      setIsTransferring(false);
+    }
   };
 
   // Filtragem dinâmica por termo de busca
@@ -257,13 +328,15 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   return (
     <aside className="ai-copilot-prompt-sidebar ai-copilot-history-sidebar ui-sidebar-drawer">
       {/* 1. Header do Painel */}
-      <div className="ui-sidebar-drawer__header">
+      <div className="ui-sidebar-drawer__header" style={{ gap: "8px" }}>
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: "8px",
+            flex: 1,
             minWidth: 0,
+            overflow: "hidden",
           }}
         >
           <div
@@ -287,13 +360,17 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             </span>
           </div>
           <div
-            style={{ display: "flex", flexDirection: "column", minWidth: 0 }}
+            style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}
           >
             <strong
+              title="Histórico de Conversas"
               style={{
                 fontSize: "12.5px",
                 color: "var(--color-text-primary, #0f172a)",
                 whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "block",
               }}
             >
               Histórico de Conversas
@@ -305,26 +382,50 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "4px",
+            gap: "2px",
             flexShrink: 0,
           }}
         >
-          <Button
-            variant="ghost"
+          <IconButton
             size="sm"
-            onClick={handleNewChat}
+            variant="ghost"
             title="Iniciar novo chat limpo"
+            onClick={handleNewChat}
             icon={
               <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "14px" }}
+                className="material-symbols-outlined icon-xs"
               >
                 add_comment
               </span>
             }
-          >
-            Novo
-          </Button>
+          />
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".sqlite,.db,.sqlite3"
+            style={{ display: "none" }}
+            onChange={handleImportSqlite}
+          />
+          <IconButton
+            size="sm"
+            variant="ghost"
+            title="Exportar histórico (.sqlite)"
+            disabled={isTransferring}
+            onClick={handleExportSqlite}
+            icon={
+              <span className="material-symbols-outlined icon-xs">download</span>
+            }
+          />
+          <IconButton
+            size="sm"
+            variant="ghost"
+            title="Importar e mesclar histórico (.sqlite)"
+            disabled={isTransferring}
+            onClick={() => importInputRef.current?.click()}
+            icon={
+              <span className="material-symbols-outlined icon-xs">upload</span>
+            }
+          />
           <IconButton
             size="sm"
             variant="ghost"
@@ -429,6 +530,21 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 >
                   Restaurar no Chat
                 </Button>
+                <IconButton
+                  size="sm"
+                  variant="ghost"
+                  disabled={isConsolidating}
+                  title="Documentar esta conversa na Wiki"
+                  onClick={() => handleConsolidateMemory(selectedSession.session_id)}
+                  icon={
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "15px" }}
+                    >
+                      post_add
+                    </span>
+                  }
+                />
                 <IconButton
                   size="sm"
                   variant="danger"
@@ -626,7 +742,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         ) : (
           /* ================= LISTA GERAL DE SESSÕES ================= */
           <>
-            {/* 1. Card de Memória Consolidada (Handoff) */}
+            {/* 1. Card de Documentação na Wiki */}
             <div
               className="ui-card"
               style={{
@@ -654,7 +770,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                     className="material-symbols-outlined icon-xs"
                     style={{ color: "var(--color-primary, #2563eb)" }}
                   >
-                    psychology
+                    menu_book
                   </span>
                   <strong
                     style={{
@@ -662,7 +778,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                       color: "var(--color-primary, #2563eb)",
                     }}
                   >
-                    Memória Consolidada
+                    Documentar na Wiki
                   </strong>
                 </div>
                 <div
@@ -687,7 +803,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                       fontSize: "11px",
                       lineHeight: "1.4",
                       color: "var(--color-text-primary)",
-                      maxHeight: "110px",
+                      maxHeight: "130px",
                       overflowY: "auto",
                       whiteSpace: "pre-wrap",
                       fontFamily: "var(--font-family-mono)",
@@ -698,30 +814,57 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                     }}
                   >
                     {briefing ||
-                      'Nenhum handoff gerado ainda. Clique em "Consolidar" para salvar a síntese desta sessão.'}
+                      'Gere um resumo estruturado da conversa atual (decisões, contexto e próximos passos) diretamente na Wiki do repositório.'}
                   </div>
 
                   <div
-                    style={{ display: "flex", gap: "6px", marginTop: "7px" }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginTop: "7px",
+                    }}
                   >
+                    <select
+                      value={wikiCategory}
+                      onChange={(e) =>
+                        setWikiCategory(
+                          e.target.value as "handoffs" | "decisions" | "architecture"
+                        )
+                      }
+                      title="Categoria da Wiki"
+                      style={{
+                        height: "28px",
+                        fontSize: "11px",
+                        padding: "0 6px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border-subtle, #cbd5e1)",
+                        background: "var(--color-surface, #fff)",
+                        color: "var(--color-text-primary)",
+                      }}
+                    >
+                      <option value="handoffs">Handoffs</option>
+                      <option value="decisions">Decisões (ADR)</option>
+                      <option value="architecture">Arquitetura</option>
+                    </select>
                     <Button
                       variant="secondary"
                       size="sm"
                       style={{ flex: 1 }}
                       disabled={isConsolidating}
-                      onClick={handleConsolidateMemory}
+                      onClick={() => handleConsolidateMemory()}
                       icon={
                         <span
                           className="material-symbols-outlined"
                           style={{ fontSize: "13px" }}
                         >
-                          save_as
+                          post_add
                         </span>
                       }
                     >
                       {isConsolidating
-                        ? "Consolidando..."
-                        : "Consolidar Memória"}
+                        ? "Gerando..."
+                        : "Gerar na Wiki"}
                     </Button>
                     {briefing && (
                       <IconButton

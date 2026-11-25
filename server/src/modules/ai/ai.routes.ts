@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { aiService, RawTurnTelemetryRecord } from './ai.service.js';
+import { sessionStoreService, ImportConflictStrategy } from './session-store.service.js';
 import { loadConfig } from '../../config/storage.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 import { skillsService } from '../skills/skills.service.js';
@@ -42,6 +43,14 @@ function safeJsonStringify(obj: unknown): string {
 }
 
 export async function aiRoutes(fastify: FastifyInstance) {
+  // Parser binário escopado para upload de arquivos .sqlite/.db
+  fastify.addContentTypeParser(
+    ['application/octet-stream', 'application/x-sqlite3', 'application/vnd.sqlite3'],
+    { parseAs: 'buffer' },
+    (_req, body, done) => {
+      done(null, body);
+    }
+  );
   /**
    * Lista todos os provedores disponíveis e seus status (Direct API, Antigravity, etc.)
    */
@@ -686,13 +695,27 @@ export async function aiRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/chat/memory/finalize', async (request, reply) => {
-    const body = request.body as { repo?: string; path?: string; session_id?: string; summary?: string };
+    const body = request.body as {
+      repo?: string;
+      path?: string;
+      session_id?: string;
+      summary?: string;
+      category?: string;
+      title?: string;
+    };
     const cfg = loadConfig();
     const repoName = body.repo || cfg.active_repo?.name || 'local';
     if (!body.session_id) {
       return reply.status(400).send({ error: 'session_id é obrigatório' });
     }
-    return reply.send(aiService.finalizeSession(repoName, body.path || 'index.md', body.session_id, body.summary));
+    const result = await aiService.finalizeSession(
+      repoName,
+      body.path || 'index.md',
+      body.session_id,
+      body.summary,
+      { category: body.category, title: body.title }
+    );
+    return reply.send(result);
   });
 
   fastify.post('/api/chat/memory/reset', async (request, reply) => {
@@ -700,5 +723,41 @@ export async function aiRoutes(fastify: FastifyInstance) {
     const cfg = loadConfig();
     const repoName = body?.repo || cfg.active_repo?.name || 'local';
     return reply.send(aiService.resetMemory(repoName));
+  });
+
+  fastify.get('/api/chat/memory/export', async (request, reply) => {
+    const query = request.query as { repo?: string; scope?: 'repo' | 'all' };
+    const cfg = loadConfig();
+    const repoFilter = query.scope === 'all' ? 'all' : (query.repo || cfg.active_repo?.name || 'local');
+    const { buffer, filename } = sessionStoreService.exportDatabase(repoFilter);
+    return reply
+      .header('Content-Type', 'application/x-sqlite3')
+      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(buffer);
+  });
+
+  fastify.post('/api/chat/memory/import', { bodyLimit: 100 * 1024 * 1024 }, async (request, reply) => {
+    const query = request.query as { repo?: string; strategy?: ImportConflictStrategy };
+    const cfg = loadConfig();
+    const targetRepo = query.repo || cfg.active_repo?.name || 'keep_original';
+    const strategy: ImportConflictStrategy =
+      query.strategy === 'keep_local' || query.strategy === 'overwrite' ? query.strategy : 'merge';
+
+    const buffer = request.body;
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+      return reply.status(400).send({ error: 'Arquivo .sqlite não enviado ou vazio.' });
+    }
+
+    try {
+      const summary = sessionStoreService.importDatabase(buffer, {
+        targetRepo,
+        conflictStrategy: strategy,
+      });
+      return reply.send(summary);
+    } catch (err: unknown) {
+      return reply.status(400).send({
+        error: err instanceof Error ? err.message : 'Falha ao importar banco SQLite.',
+      });
+    }
   });
 }
