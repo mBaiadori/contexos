@@ -38,6 +38,12 @@ export interface ProviderCapabilities {
   supportsTerminalExecution: boolean;
 }
 
+export interface ProviderModelOption {
+  id: string;
+  name: string;
+  badge?: string;
+}
+
 export interface ProviderStatus {
   id: ProviderId;
   name: string;
@@ -47,6 +53,7 @@ export interface ProviderStatus {
   isAuthenticated: boolean;
   statusMessage?: string;
   capabilities: ProviderCapabilities;
+  models?: ProviderModelOption[];
 }
 
 export interface ProviderSessionConfig {

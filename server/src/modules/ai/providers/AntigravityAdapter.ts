@@ -1,10 +1,24 @@
-import { spawn, ChildProcess } from 'node:child_process';
+import { spawn, execFile, ChildProcess } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'node:path';
 import fs from 'node:fs';
-import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
+import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderModelOption, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
 import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
 import { validateCliExecutable } from '../../../utils/cli-validate.js';
+
+const execFileAsync = promisify(execFile);
+
+const FALLBACK_AGY_MODELS: ProviderModelOption[] = [
+  { id: 'gemini-4-neon-medium', name: 'Gemini 4 Neon', badge: 'Medium' },
+  { id: 'gemini-4-carbon-medium', name: 'Gemini 4 Carbon', badge: 'Medium' },
+  { id: 'gemini-4-argon-medium', name: 'Gemini 4 Argon', badge: 'Medium' },
+  { id: 'gemini-4-hydrogen-medium', name: 'Gemini 4 Hydrogen', badge: 'Medium' },
+  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash', badge: 'Medium' },
+  { id: 'claude-opus-5-5-medium', name: 'Claude Opus 5.5', badge: 'Medium' },
+  { id: 'claude-sonnet-5-5-medium', name: 'Claude Sonnet 5.5', badge: 'Medium' },
+  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', badge: 'Medium' },
+];
 
 interface ActiveProcessSession {
   config: ProviderSessionConfig;
@@ -30,6 +44,42 @@ export class AntigravityAdapter implements IAgentProvider {
   };
 
   private activeSessions = new Map<string, ActiveProcessSession>();
+  private cachedModels: { items: ProviderModelOption[]; fetchedAt: number } | null = null;
+
+  private async listModels(cliCommand: string): Promise<ProviderModelOption[]> {
+    const now = Date.now();
+    if (this.cachedModels && now - this.cachedModels.fetchedAt < 5 * 60 * 1000) {
+      return this.cachedModels.items;
+    }
+
+    try {
+      const { stdout } = await execFileAsync(cliCommand, ['models'], {
+        timeout: 4000,
+        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      });
+      const parsed: ProviderModelOption[] = [];
+      for (const rawLine of stdout.split(/\r?\n/)) {
+        // Strip ANSI escape sequences and spinner fragments
+        const clean = rawLine.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏\s]+/, '').trim();
+        if (!clean || clean.startsWith('Fetching')) continue;
+        const match = clean.match(/^([a-z0-9._-]+)\s{2,}(.+)$/i);
+        if (!match) continue;
+        const id = match[1].trim();
+        const fullLabel = match[2].trim();
+        const badgeMatch = fullLabel.match(/\(([^)]+)\)\s*$/);
+        const badge = badgeMatch ? badgeMatch[1] : undefined;
+        const name = badgeMatch ? fullLabel.replace(/\s*\([^)]+\)\s*$/, '').trim() : fullLabel;
+        parsed.push({ id, name, badge });
+      }
+      if (parsed.length > 0) {
+        this.cachedModels = { items: parsed, fetchedAt: now };
+        return parsed;
+      }
+    } catch {
+      // Fallback silencioso para lista conhecida quando offline/timeout
+    }
+    return FALLBACK_AGY_MODELS;
+  }
 
   /**
    * Identifica o executável ou comando do Antigravity verificando caminhos reais
@@ -68,6 +118,7 @@ export class AntigravityAdapter implements IAgentProvider {
     const cli = this.resolveCliCommand();
     const geminiDir = path.join(process.env.HOME || '', '.gemini');
     const hasGeminiEnv = fs.existsSync(geminiDir);
+    const models = cli.available ? await this.listModels(cli.command) : FALLBACK_AGY_MODELS;
 
     return {
       id: this.id,
@@ -80,6 +131,7 @@ export class AntigravityAdapter implements IAgentProvider {
         ? `CLI do Antigravity pronta (${cli.command})`
         : 'CLI do Antigravity (agy) não localizada no PATH. Configure o caminho em Configurações.',
       capabilities: this.capabilities,
+      models,
     };
   }
 

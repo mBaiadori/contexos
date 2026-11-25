@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
+import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderModelOption, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
 import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
 import { validateCliExecutable } from '../../../utils/cli-validate.js';
@@ -14,6 +14,12 @@ interface ActiveProcessSession {
   approvalPrompt?: string;
   onEvent?: (event: ProviderStreamEvent) => void;
 }
+
+const CLAUDE_CLI_MODELS: ProviderModelOption[] = [
+  { id: 'sonnet', name: 'Claude Sonnet', badge: 'Padrão' },
+  { id: 'opus', name: 'Claude Opus', badge: 'Avançado' },
+  { id: 'haiku', name: 'Claude Haiku', badge: 'Rápido' },
+];
 
 export class ClaudeCodeAdapter implements IAgentProvider {
   readonly id: ProviderId = 'claude-code';
@@ -69,6 +75,7 @@ export class ClaudeCodeAdapter implements IAgentProvider {
       isAuthenticated: isAvailable,
       statusMessage: isAvailable ? `Claude CLI localizado em ${cliPath}` : 'Claude CLI não localizado em ~/.local/bin/claude',
       capabilities: this.capabilities,
+      models: CLAUDE_CLI_MODELS,
     };
   }
 
@@ -143,8 +150,16 @@ export class ClaudeCodeAdapter implements IAgentProvider {
       let finalReply = '';
 
       try {
+        const cfg = loadConfig();
+        const claudeModel = (cfg.settings as any)?.claude_model;
+        const spawnArgs: string[] = [];
+        if (claudeModel) {
+          spawnArgs.push('--model', claudeModel);
+        }
         // Usa -p (print/non-interactive prompt) para execução segura
-        const child = spawn(cliPath, ['-p', formattedPrompt], {
+        spawnArgs.push('-p', formattedPrompt);
+
+        const child = spawn(cliPath, spawnArgs, {
           cwd: targetCwd,
           env: {
             ...process.env,

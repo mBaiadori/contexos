@@ -467,6 +467,7 @@ export interface AISettingsState {
   claude_cli_path?: string;
   agent_effort?: 'low' | 'medium' | 'high';
   agent_model?: string;
+  claude_model?: string;
 }
 
 export interface TemplateItem {

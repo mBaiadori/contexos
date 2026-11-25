@@ -63,6 +63,7 @@ export interface AppConfig {
     claude_cli_path?: string;
     agent_effort?: 'low' | 'medium' | 'high' | string;
     agent_model?: string;
+    claude_model?: string;
     default_provider?: string;
   };
   workspace_changes: Record<string, WorkspaceChange[]>;

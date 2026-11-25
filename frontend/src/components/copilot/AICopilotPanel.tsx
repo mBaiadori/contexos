@@ -66,6 +66,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     isSettingsModalOpen,
     openSettingsModal,
     quickSetModel,
+    quickSetCliConfig,
     newChatSession,
     referencedDocs,
     isGlobalScope,
@@ -507,11 +508,28 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         className="ai-pane-header"
         style={{ position: "relative", overflow: "visible", zIndex: 30 }}
       >
-        {/* 1. Header: Quick Model Switcher */}
+        {/* 1. Header: Unified Connector & Model Switcher */}
         <CopilotModelSelector
           activeModel={activeModelDisplay}
           activeProvider={activeProviderDisplay}
+          activeProviderId={activeProviderId}
+          agentModel={aiSettings?.agent_model}
+          claudeModel={aiSettings?.claude_model}
+          agentEffort={aiSettings?.agent_effort}
+          detectedProviders={detectedProviders}
+          isApiConfigured={isApiConfigured}
           onSelectModel={handleQuickModelSelect}
+          onSelectProvider={(providerId) =>
+            quickSetCliConfig({ default_provider: providerId })
+          }
+          onSelectCliModel={(providerId, modelId) =>
+            quickSetCliConfig(
+              providerId === "antigravity"
+                ? { default_provider: "antigravity", agent_model: modelId }
+                : { default_provider: "claude-code", claude_model: modelId },
+            )
+          }
+          onSelectEffort={(effort) => quickSetCliConfig({ agent_effort: effort })}
           onOpenSettings={openSettingsModal}
         />
 

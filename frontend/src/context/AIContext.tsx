@@ -30,10 +30,17 @@ interface AIContextType {
       claude_cli_path?: string;
       agent_effort?: 'low' | 'medium' | 'high';
       agent_model?: string;
+      claude_model?: string;
     }
   ) => Promise<boolean>;
   saveSettings: (payload: { active_provider: string; active_model: string; api_keys?: Record<string, string>; custom_endpoint?: string }) => Promise<boolean>;
   quickSetModel: (provider: string, model: string) => Promise<boolean>;
+  quickSetCliConfig: (payload: {
+    default_provider?: string;
+    agent_model?: string;
+    claude_model?: string;
+    agent_effort?: 'low' | 'medium' | 'high';
+  }) => Promise<boolean>;
   sendMessage: (prompt: string, contextBadges?: string[]) => Promise<void>;
   stopGeneration: () => Promise<void>;
   clearMessages: () => void;
@@ -220,6 +227,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       const res = await API.getAISettings();
       if (res.ok && res.data) {
         setAiSettings(res.data);
+        if (res.data.default_provider) {
+          useCopilotStore.getState().setActiveProviderId(res.data.default_provider);
+        }
       }
     } catch (err) {
       console.error('[AIContext] Erro ao carregar configurações de IA:', err);
@@ -241,6 +251,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       claude_cli_path?: string;
       agent_effort?: 'low' | 'medium' | 'high';
       agent_model?: string;
+      claude_model?: string;
     }
   ): Promise<boolean> => {
     try {
@@ -276,6 +287,28 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       return false;
     } catch (err) {
       console.error('[AIContext] Erro ao trocar modelo rapidamente:', err);
+      return false;
+    }
+  };
+
+  const quickSetCliConfig = async (payload: {
+    default_provider?: string;
+    agent_model?: string;
+    claude_model?: string;
+    agent_effort?: 'low' | 'medium' | 'high';
+  }): Promise<boolean> => {
+    try {
+      if (payload.default_provider) {
+        useCopilotStore.getState().setActiveProviderId(payload.default_provider);
+      }
+      const res = await API.saveAISettings(payload);
+      if (res.ok) {
+        await loadAISettings();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('[AIContext] Erro ao atualizar conexão/modelo CLI:', err);
       return false;
     }
   };
@@ -909,6 +942,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         saveAISettings,
         saveSettings,
         quickSetModel,
+        quickSetCliConfig,
         sendMessage,
         stopGeneration,
         clearMessages,

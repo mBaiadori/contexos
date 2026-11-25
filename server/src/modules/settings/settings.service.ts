@@ -50,6 +50,7 @@ export class SettingsService {
       claude_cli_path: (cfg.settings as any)?.claude_cli_path || "",
       agent_effort: (cfg.settings as any)?.agent_effort || "medium",
       agent_model: (cfg.settings as any)?.agent_model || "",
+      claude_model: (cfg.settings as any)?.claude_model || "",
     };
   }
 
@@ -64,7 +65,8 @@ export class SettingsService {
       aiData.claude_cli_path !== undefined ||
       aiData.agent_effort !== undefined ||
       aiData.default_provider !== undefined ||
-      aiData.agent_model !== undefined
+      aiData.agent_model !== undefined ||
+      aiData.claude_model !== undefined
     ) {
       cfg.settings = {
         ...cfg.settings,
@@ -76,6 +78,7 @@ export class SettingsService {
         agent_effort:
           aiData.agent_effort ?? (cfg.settings as any)?.agent_effort,
         agent_model: aiData.agent_model ?? (cfg.settings as any)?.agent_model,
+        claude_model: aiData.claude_model ?? (cfg.settings as any)?.claude_model,
         default_provider:
           aiData.default_provider ?? (cfg.settings as any)?.default_provider,
       };

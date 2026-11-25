@@ -77,7 +77,7 @@ export const aiApi = {
     }
   },
 
-  async getAIProviders(): Promise<ApiResponse<{ providers: Array<{ id: string; name: string; description: string; mode: string; isAvailable: boolean; isAuthenticated: boolean; statusMessage?: string }> }>> {
+  async getAIProviders(): Promise<ApiResponse<{ providers: Array<{ id: string; name: string; description: string; mode: string; isAvailable: boolean; isAuthenticated: boolean; statusMessage?: string; models?: Array<{ id: string; name: string; badge?: string }> }> }>> {
     const res = await fetch('/api/ai/providers');
     return { ok: res.ok, data: await res.json() };
   },
@@ -205,7 +205,18 @@ export const aiApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async saveAISettings(payload: { provider: string; model: string; api_key?: string; custom_endpoint?: string }): Promise<ApiResponse<any>> {
+  async saveAISettings(payload: {
+    provider?: string;
+    model?: string;
+    api_key?: string;
+    custom_endpoint?: string;
+    default_provider?: string;
+    antigravity_cli_path?: string;
+    claude_cli_path?: string;
+    agent_effort?: 'low' | 'medium' | 'high';
+    agent_model?: string;
+    claude_model?: string;
+  }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/ai/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
