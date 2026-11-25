@@ -36,6 +36,7 @@ interface CopilotModelSelectorProps {
   onSelectCliModel: (
     providerId: "antigravity" | "claude-code",
     modelId: string,
+    effort?: "low" | "medium" | "high",
   ) => void;
   onSelectEffort?: (effort: "low" | "medium" | "high") => void;
   onOpenSettings: () => void;
@@ -85,14 +86,14 @@ const DEFAULT_API_MODELS_BY_PROVIDER: ProviderGroup[] = [
 ];
 
 const FALLBACK_AGY_MODELS: ModelItem[] = [
-  { id: "gemini-4-neon-medium", name: "Gemini 4 Neon", badge: "Medium" },
-  { id: "gemini-4-carbon-medium", name: "Gemini 4 Carbon", badge: "Medium" },
-  { id: "gemini-4-argon-medium", name: "Gemini 4 Argon", badge: "Medium" },
-  { id: "gemini-4-hydrogen-medium", name: "Gemini 4 Hydrogen", badge: "Medium" },
-  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash", badge: "Medium" },
-  { id: "claude-opus-5-5-medium", name: "Claude Opus 5.5", badge: "Medium" },
-  { id: "claude-sonnet-5-5-medium", name: "Claude Sonnet 5.5", badge: "Medium" },
-  { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B", badge: "Medium" },
+  { id: "gemini-4-neon-medium", name: "Gemini 4 Neon" },
+  { id: "gemini-4-carbon-medium", name: "Gemini 4 Carbon" },
+  { id: "gemini-4-argon-medium", name: "Gemini 4 Argon" },
+  { id: "gemini-4-hydrogen-medium", name: "Gemini 4 Hydrogen" },
+  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash" },
+  { id: "claude-opus-5-5-medium", name: "Claude Opus 5.5" },
+  { id: "claude-sonnet-5-5-medium", name: "Claude Sonnet 5.5" },
+  { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B" },
 ];
 
 const FALLBACK_CLAUDE_CLI_MODELS: ModelItem[] = [
@@ -117,12 +118,14 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
   onOpenSettings,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [hoveredAgyModelId, setHoveredAgyModelId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        setHoveredAgyModelId(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -144,13 +147,17 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
   const isCliMode =
     activeProviderId === "antigravity" || activeProviderId === "claude-code";
 
+  const formatEffortLabel = (eff: "low" | "medium" | "high") =>
+    eff.charAt(0).toUpperCase() + eff.slice(1);
+
   // Resolve human-readable label for the trigger pill
   const getTriggerLabel = (): { prefix: string; label: string } => {
     if (activeProviderId === "antigravity") {
       const found = agyModels.find((m) => m.id === agentModel);
+      const effortLabel = formatEffortLabel(agentEffort);
       const label = found
-        ? `${found.name}${found.badge ? ` ${found.badge}` : ""}`
-        : agentModel || "Modelo padrão";
+        ? `${found.name} ${effortLabel}`
+        : `${agentModel || "Modelo padrão"} ${effortLabel}`;
       return { prefix: "agy", label };
     }
     if (activeProviderId === "claude-code") {
@@ -277,6 +284,7 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
         alignItems: "center",
         gap: "4px",
         minWidth: 0,
+        maxWidth: "100%",
         flex: "0 1 auto",
         position: "relative",
         overflow: "visible",
@@ -304,7 +312,7 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
           fontSize: "11.5px",
           fontWeight: 500,
           transition: "background 0.15s ease, color 0.15s ease",
-          maxWidth: "190px",
+          maxWidth: "260px",
           minWidth: 0,
         }}
       >
@@ -367,8 +375,9 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
             display: "flex",
             flexDirection: "column",
             gap: "8px",
-            maxHeight: "420px",
-            overflowY: "auto",
+            maxHeight: activeProviderId === "antigravity" ? "none" : "420px",
+            overflowY: activeProviderId === "antigravity" ? "visible" : "auto",
+            overflowX: "visible",
             animation: "fadeIn 0.15s ease-out",
           }}
         >
@@ -474,79 +483,196 @@ export const CopilotModelSelector: React.FC<CopilotModelSelectorProps> = ({
             </div>
 
             {activeProviderId === "antigravity" && (
-              <>
-                {agyModels.map((m) =>
-                  renderModelRow(m, agentModel === m.id, () => {
-                    onSelectCliModel("antigravity", m.id);
-                    setIsOpen(false);
-                  }),
-                )}
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                {agyModels.map((m) => {
+                  const isSelected = agentModel === m.id;
+                  const isSubmenuOpen = hoveredAgyModelId === m.id;
+                  const effortLabel = formatEffortLabel(agentEffort);
 
-                {onSelectEffort && (
-                  <div
-                    style={{
-                      marginTop: "6px",
-                      paddingTop: "8px",
-                      borderTop: "1px solid rgba(15, 23, 42, 0.06)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "6px",
-                      paddingLeft: "4px",
-                      paddingRight: "4px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 500,
-                        color: "var(--text-muted, #64748b)",
-                      }}
-                    >
-                      Effort
-                    </span>
+                  return (
                     <div
-                      style={{
-                        display: "flex",
-                        gap: "2px",
-                        background: "var(--color-surface-container, #f1f5f9)",
-                        padding: "2px",
-                        borderRadius: "7px",
-                      }}
+                      key={m.id}
+                      style={{ position: "relative" }}
+                      onMouseEnter={() => setHoveredAgyModelId(m.id)}
+                      onMouseLeave={() =>
+                        setHoveredAgyModelId((prev) => (prev === m.id ? null : prev))
+                      }
                     >
-                      {(["low", "medium", "high"] as const).map((eff) => {
-                        const active = agentEffort === eff;
-                        return (
-                          <button
-                            key={eff}
-                            type="button"
-                            onClick={() => onSelectEffort(eff)}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectCliModel("antigravity", m.id);
+                          setIsOpen(false);
+                          setHoveredAgyModelId(null);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                          padding: "6px 8px",
+                          borderRadius: "7px",
+                          border: "none",
+                          background: isSelected
+                            ? "rgba(37, 99, 235, 0.08)"
+                            : isSubmenuOpen
+                              ? "var(--color-surface-container, #f1f5f9)"
+                              : "transparent",
+                          color: isSelected
+                            ? "var(--color-primary, #2563eb)"
+                            : "var(--color-on-surface, #1e293b)",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          textAlign: "left",
+                          width: "100%",
+                          transition: "background 0.12s ease",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            overflow: "hidden",
+                            minWidth: 0,
+                          }}
+                        >
+                          <span
                             style={{
-                              padding: "2px 8px",
-                              borderRadius: "5px",
-                              border: "none",
-                              background: active ? "#ffffff" : "transparent",
-                              boxShadow: active
-                                ? "0 1px 2px rgba(15, 23, 42, 0.08)"
-                                : "none",
-                              color: active
-                                ? "var(--color-primary, #2563eb)"
-                                : "var(--text-muted, #64748b)",
-                              fontSize: "10.5px",
-                              fontWeight: active ? 600 : 500,
-                              cursor: "pointer",
-                              textTransform: "capitalize",
-                              transition: "all 0.12s ease",
+                              fontWeight: isSelected ? 600 : 400,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
                             }}
                           >
-                            {eff}
-                          </button>
-                        );
-                      })}
+                            {m.name}
+                          </span>
+                          {isSelected && (
+                            <span
+                              style={{
+                                fontSize: "9.5px",
+                                padding: "1px 6px",
+                                borderRadius: "999px",
+                                background: "rgba(37, 99, 235, 0.12)",
+                                color: "var(--color-primary, #2563eb)",
+                                flexShrink: 0,
+                                fontWeight: 500,
+                              }}
+                            >
+                              {effortLabel}
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                          {isSelected && (
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: "15px",
+                                color: "var(--color-primary, #2563eb)",
+                              }}
+                            >
+                              check
+                            </span>
+                          )}
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: "15px",
+                              color: "var(--text-muted, #94a3b8)",
+                            }}
+                          >
+                            chevron_right
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Thinking Effort Submenu (opens to the left so it never clips off the right edge) */}
+                      {isSubmenuOpen && onSelectEffort && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "-4px",
+                            right: "calc(100% + 6px)",
+                            zIndex: 1120,
+                            width: "156px",
+                            background: "var(--color-surface, #ffffff)",
+                            border: "1px solid rgba(15, 23, 42, 0.08)",
+                            borderRadius: "10px",
+                            boxShadow: "0 8px 24px rgba(15, 23, 42, 0.12)",
+                            padding: "6px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "2px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              color: "var(--text-muted, #94a3b8)",
+                              padding: "3px 8px 5px",
+                            }}
+                          >
+                            Thinking effort
+                          </div>
+                          {(["low", "medium", "high"] as const).map((eff) => {
+                            const isEffActive = isSelected && agentEffort === eff;
+                            const isCurrentEffort = agentEffort === eff;
+                            return (
+                              <button
+                                key={eff}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectCliModel("antigravity", m.id, eff);
+                                  setIsOpen(false);
+                                  setHoveredAgyModelId(null);
+                                }}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  padding: "6px 8px",
+                                  borderRadius: "7px",
+                                  border: "none",
+                                  background: isEffActive
+                                    ? "rgba(37, 99, 235, 0.08)"
+                                    : "transparent",
+                                  color: isEffActive
+                                    ? "var(--color-primary, #2563eb)"
+                                    : "var(--color-on-surface, #1e293b)",
+                                  fontSize: "12px",
+                                  fontWeight: isEffActive ? 600 : 400,
+                                  cursor: "pointer",
+                                  textAlign: "left",
+                                  width: "100%",
+                                }}
+                              >
+                                <span style={{ textTransform: "capitalize" }}>{eff}</span>
+                                {isCurrentEffort && (
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{
+                                      fontSize: "15px",
+                                      color: isEffActive
+                                        ? "var(--color-primary, #2563eb)"
+                                        : "var(--text-muted, #64748b)",
+                                    }}
+                                  >
+                                    check
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
-              </>
+                  );
+                })}
+              </div>
             )}
 
             {activeProviderId === "claude-code" &&

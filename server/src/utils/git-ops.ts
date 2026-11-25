@@ -202,7 +202,13 @@ export async function commitChanges(
       validFiles.push(assertGitPath(file));
     }
     if (validFiles.length > 0) {
-      await executeGit(["add", "--", ...validFiles], repoDir);
+      const addRes = await executeGit(["add", "--", ...validFiles], repoDir);
+      if (!addRes.success) {
+        return {
+          success: false,
+          message: addRes.stderr || "Falha ao preparar arquivos para commit.",
+        };
+      }
     }
   } else {
     await executeGit(["add", "."], repoDir);

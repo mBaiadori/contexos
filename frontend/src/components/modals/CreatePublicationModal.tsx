@@ -89,7 +89,9 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
     if (justOpened || (isLockedSource && initialSourceBranch && sourceBranch !== initialSourceBranch)) {
       const preferred = initialSourceBranch
         ? initialSourceBranch
-        : candidateNodes[0]?.name || (defaultHasUncommitted ? defaultBranch : "");
+        : defaultHasUncommitted
+          ? defaultBranch
+          : candidateNodes[0]?.name || "";
       setSourceBranch(preferred);
       const node = nodes.find((n) => n.name === preferred);
       const activeProp =
@@ -348,7 +350,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
             <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-heading)" }}>
               Escolha o rascunho de versão para enviar
             </label>
-            {candidateNodes.length === 0 ? (
+            {candidateNodes.length === 0 && !defaultHasUncommitted ? (
               <div
                 style={{
                   padding: "10px 12px",
@@ -373,6 +375,37 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                   overflowY: "auto",
                 }}
               >
+                {defaultHasUncommitted && (
+                  <button
+                    key={defaultBranch}
+                    type="button"
+                    onClick={() => {
+                      setSourceBranch(defaultBranch);
+                      if (title === lastAutoTitleRef.current) {
+                        setTitle("");
+                        lastAutoTitleRef.current = "";
+                      }
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: `1px solid ${sourceBranch === defaultBranch ? "var(--color-primary, #2563eb)" : "var(--border-color, #e2e8f0)"}`,
+                      background: sourceBranch === defaultBranch ? "rgba(37, 99, 235, 0.06)" : "var(--bg-surface, #ffffff)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-heading)" }}>
+                      Edições locais (sem commit)
+                    </span>
+                    <span style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>
+                      {defaultNode?.uncommittedFiles?.length || 0} arquivo{(defaultNode?.uncommittedFiles?.length || 0) === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                )}
                 {candidateNodes.map((n) => {
                   const isSelected = sourceBranch === n.name;
                   return (
@@ -715,11 +748,18 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
             borderTop: "1px solid var(--border-color, #e2e8f0)",
             background: "var(--bg-surface, #ffffff)",
             display: "flex",
-            justifyContent: "flex-end",
-            gap: "8px",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
             flexShrink: 0,
           }}
         >
+          <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+            {!isLoadingDiff && totalChangedCount > 0 && !title.trim()
+              ? "Preencha o Título da Publicação acima para habilitar o envio."
+              : ""}
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={isSubmitting}>
             Cancelar
           </Button>
@@ -739,6 +779,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                 ? "Atualizar Publicação"
                 : "Enviar Pedido de Publicação"}
           </Button>
+          </div>
         </div>
       </div>
     </div>,

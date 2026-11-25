@@ -102,7 +102,7 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
 
   // Status porcelain with all untracked files expanded individually
   const statusRes = await executeGit(
-    ["status", "--porcelain=v1", "-b", "-uall"],
+    ["-c", "core.quotepath=false", "status", "--porcelain=v1", "-b", "-uall"],
     repoDir,
   );
   const lines = statusRes.stdout.split("\n").filter(Boolean);
@@ -356,7 +356,7 @@ export async function getGitDiff(
   } else {
     // When no specific file requested, append any untracked files to the overall diff
     try {
-      const statusRes = await executeGit(["status", "--porcelain=v1", "-uall"], repoDir);
+      const statusRes = await executeGit(["-c", "core.quotepath=false", "status", "--porcelain=v1", "-uall"], repoDir);
       if (statusRes.success && statusRes.stdout) {
         const untracked = statusRes.stdout
           .split("\n")
@@ -612,8 +612,8 @@ export async function compareGitBranches(
       ["log", `${safeBase}..${safeHead}`, "-n", "100", "--format=%H|%h|%an|%cI|%s"],
       repoDir,
     ),
-    executeGit(["diff", "--numstat", range], repoDir),
-    executeGit(["diff", "--name-status", range], repoDir),
+    executeGit(["-c", "core.quotepath=false", "diff", "--numstat", range], repoDir),
+    executeGit(["-c", "core.quotepath=false", "diff", "--name-status", range], repoDir),
     executeGit(["merge-base", safeBase, safeHead], repoDir),
   ]);
   const baseRef =

@@ -271,7 +271,10 @@ export class PRsLifecycleService {
       if (allChangedPaths.length > 0) {
         const commitMsg =
           payload.title || `Atualização na Publicação #${existingPR.id}`;
-        await commitChanges(repoDir, commitMsg, allChangedPaths);
+        const commitRes = await commitChanges(repoDir, commitMsg, allChangedPaths);
+        if (!commitRes.success) {
+          throw new Error(`Falha ao salvar alterações antes de atualizar a publicação: ${commitRes.message}`);
+        }
       }
 
       const headHashRes = await executeGit(["rev-parse", "HEAD"], repoDir);
@@ -362,7 +365,10 @@ export class PRsLifecycleService {
         }
         if (allChangedPaths.length > 0) {
           const commitMsg = payload.title || `Checkpoint antes da publicação #${newId}`;
-          await commitChanges(repoDir, commitMsg, allChangedPaths);
+          const commitRes = await commitChanges(repoDir, commitMsg, allChangedPaths);
+          if (!commitRes.success) {
+            throw new Error(`Falha ao salvar alterações antes da publicação: ${commitRes.message}`);
+          }
         }
       } else {
         const pendingBuffers = new Map<string, Buffer | null>();
@@ -412,7 +418,10 @@ export class PRsLifecycleService {
         }
 
         const commitMsg = payload.title || `Publicação #${newId}`;
-        await commitChanges(repoDir, commitMsg, allChangedPaths);
+        const commitRes = await commitChanges(repoDir, commitMsg, allChangedPaths);
+        if (!commitRes.success) {
+          throw new Error(`Falha ao salvar alterações para publicação: ${commitRes.message}`);
+        }
       }
 
       const headHashRes = await executeGit(["rev-parse", "HEAD"], repoDir);

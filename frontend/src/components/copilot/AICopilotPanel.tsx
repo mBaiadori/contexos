@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { marked } from "marked";
 import { sanitizeHtml } from "../../utils/sanitize";
 import { useAI } from "../../context/AIContext";
@@ -1370,26 +1371,28 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
       )}
 
       {/* 4. Floating Inspector Banner */}
-      {isInspectorActive && (
-        <div id="ai-inspector-toast-banner">
-          <span
-            className="material-symbols-outlined"
-            style={{ color: "#60a5fa", fontSize: "18px" }}
-          >
-            ads_click
-          </span>
-          <span>
-            Modo Alvo Ativo: Clique nos blocos da tela para adicionar ao chat
-          </span>
-          <span
-            className="ai-kbd-badge"
-            onClick={stopInspector}
-            title="Finalizar modo de seleção"
-          >
-            ESC
-          </span>
-        </div>
-      )}
+      {isInspectorActive &&
+        createPortal(
+          <div id="ai-inspector-toast-banner">
+            <span
+              className="material-symbols-outlined"
+              style={{ color: "var(--color-primary, #2563eb)", fontSize: "18px" }}
+            >
+              ads_click
+            </span>
+            <span>
+              Modo Alvo Ativo: Clique nos blocos da tela para adicionar ao chat
+            </span>
+            <span
+              className="ai-kbd-badge"
+              onClick={stopInspector}
+              title="Finalizar modo de seleção"
+            >
+              ESC
+            </span>
+          </div>,
+          document.body
+        )}
 
       {/* 5. Full-Width Prompt Container */}
       <form
@@ -1639,13 +1642,17 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 }
                 quickSetCliConfig({ default_provider: providerId });
               }}
-              onSelectCliModel={(providerId, modelId) => {
+              onSelectCliModel={(providerId, modelId, effort) => {
                 if (isRawMode) {
                   setIsRawMode(false);
                 }
                 quickSetCliConfig(
                   providerId === "antigravity"
-                    ? { default_provider: "antigravity", agent_model: modelId }
+                    ? {
+                        default_provider: "antigravity",
+                        agent_model: modelId,
+                        ...(effort ? { agent_effort: effort } : {}),
+                      }
                     : { default_provider: "claude-code", claude_model: modelId },
                 );
               }}
