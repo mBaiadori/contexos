@@ -59,6 +59,11 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     quickSetModel,
     quickSetCliConfig,
     newChatSession,
+    sessions,
+    openTabIds,
+    currentSessionId,
+    switchSessionTab,
+    closeSessionTab,
     referencedDocs,
     isGlobalScope,
   } = useAI();
@@ -853,6 +858,80 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         />
       </div>
 
+      {/* 2. Multi-Session Tabs Bar */}
+      <div className="copilot-tab-bar" role="tablist" aria-label="Conversas do Copilot">
+        {openTabIds.map((tabId) => {
+          const tab = sessions[tabId];
+          if (!tab) return null;
+          const isActive = tabId === currentSessionId;
+          return (
+            <div
+              key={tabId}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={0}
+              onClick={() => switchSessionTab(tabId)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  switchSessionTab(tabId);
+                }
+              }}
+              className={`copilot-tab-pill${isActive ? " active" : ""}`}
+              title={
+                tab.isThinking
+                  ? `${tab.title} — ${tab.thinkingStep || "Processando..."}`
+                  : tab.title
+              }
+            >
+              {tab.isThinking && (
+                <span
+                  className="copilot-dot-loader"
+                  aria-label="Processando"
+                >
+                  <span className="copilot-dot" />
+                  <span className="copilot-dot" />
+                  <span className="copilot-dot" />
+                  <span className="copilot-dot" />
+                </span>
+              )}
+              <span className="copilot-tab-title">{tab.title}</span>
+              <button
+                type="button"
+                className="copilot-tab-close"
+                aria-label={`Fechar aba ${tab.title}`}
+                title="Fechar aba (a conversa permanece no Histórico)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeSessionTab(tabId);
+                }}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "12px" }}
+                >
+                  close
+                </span>
+              </button>
+            </div>
+          );
+        })}
+        <button
+          type="button"
+          className="copilot-tab-add"
+          onClick={newChatSession}
+          title="Nova aba de conversa"
+          aria-label="Nova aba de conversa"
+        >
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "15px" }}
+          >
+            add
+          </span>
+        </button>
+      </div>
+
       {/* 3. Scrollable Message History Stream with Robust Scroll Management */}
       <div
         ref={messagesContainerRef}
@@ -860,16 +939,59 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         className="ai-messages-scroll ai-copilot-messages-container"
         style={{ position: "relative" }}
       >
-        {/* Default Welcome Message */}
-        <div className="chat-bubble ai">
-          <div className="ai-reply-content">
-            <p style={{ margin: 0 }}>
+        {/* Minimal Centered Empty State */}
+        {messages.length === 0 && !isThinking && (
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "10px",
+              padding: "24px 16px",
+              textAlign: "center",
+              userSelect: "none",
+            }}
+          >
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: "var(--color-surface-container, #f1f5f9)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#94a3b8",
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "19px" }}
+              >
+                auto_awesome
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: 500,
+                color: "var(--text-muted, #94a3b8)",
+                maxWidth: "240px",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {isGlobalScope || referencedDocs.length === 0
-                ? "🌐 Operando em Modo Global. Posso responder sobre todo o repositório, cruzar arquivos ou criar novas especificações. Para focar em um arquivo específico, anexe-o na barra acima!"
-                : `Pareando com você em ${referencedDocs.length > 1 ? `${referencedDocs.length} documentos` : referencedDocs[0]}. Pergunte, solicite refatorações capture trechos da tela!`}
-            </p>
+                ? "Modo Global"
+                : referencedDocs.length > 1
+                  ? `${referencedDocs.length} documentos no contexto`
+                  : referencedDocs[0]}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Guided Connection Card when no CLI or API Key is ready */}
         {messages.length === 0 &&
@@ -1250,14 +1372,13 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 style={{ display: "flex", alignItems: "center", gap: "8px" }}
               >
                 <span
-                  className="material-symbols-outlined icon-xs"
-                  style={{
-                    animation: "spin 2s linear infinite",
-                    color: "#60a5fa",
-                    fontSize: "15px",
-                  }}
+                  className="copilot-dot-loader"
+                  aria-label="Processando"
                 >
-                  sync
+                  <span className="copilot-dot" />
+                  <span className="copilot-dot" />
+                  <span className="copilot-dot" />
+                  <span className="copilot-dot" />
                 </span>
                 <span
                   style={{

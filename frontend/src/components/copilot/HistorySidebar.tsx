@@ -144,11 +144,11 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     if (e) e.stopPropagation();
     const success = await restoreSession(sessionId);
     if (success) {
-      setFeedback("Conversa restaurada no Nexos! ✨");
+      setFeedback("Conversa aberta em aba! ✨");
       setTimeout(() => {
         setFeedback(null);
         onClose();
-      }, 1000);
+      }, 900);
     } else {
       setFeedback("Erro ao restaurar sessão.");
       setTimeout(() => setFeedback(null), 2500);

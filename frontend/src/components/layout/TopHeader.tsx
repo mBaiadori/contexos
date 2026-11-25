@@ -105,7 +105,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                 alignItems: "center",
                 width: "84px",
                 height: "20px",
-                borderRadius: "9999px",
+                borderRadius: "10px",
                 backgroundColor:
                   "var(--md-sys-color-surface-container-high, #e8eaed)",
                 opacity: 0.7,
@@ -133,7 +133,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                 fontSize: "11px",
                 fontWeight: 600,
                 padding: "2px 8px",
-                borderRadius: "9999px",
+                borderRadius: "10px",
                 whiteSpace: "nowrap",
                 transition: "all 0.15s ease",
                 backgroundColor:
@@ -224,7 +224,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                 fontSize: "11px",
                 fontWeight: 600,
                 padding: "3px 10px",
-                borderRadius: "9999px",
+                borderRadius: "10px",
                 backgroundColor: "rgba(37, 99, 235, 0.12)",
                 color: "var(--color-primary, #2563eb)",
                 border: "1px solid rgba(37, 99, 235, 0.3)",
@@ -334,9 +334,27 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
             id="btn-global-ai-copilot"
             variant="primary"
             size="sm"
-            leftIcon={<Sparkles size={16} />}
+            leftIcon={<Sparkles size={15} />}
             onClick={onToggleCopilot}
             title="Abrir Nexos em Qualquer Tela"
+            style={{
+              height: "32px",
+              borderRadius: "10px",
+              padding: "0 14px",
+              gap: "6px",
+              fontSize: "13px",
+              fontWeight: 600,
+              letterSpacing: "0.01em",
+              color: "#ffffff",
+              border: "1.5px solid transparent",
+              outline: "none",
+              backgroundImage:
+                "linear-gradient(120deg, #059669 0%, #10b981 35%, #0891b2 70%, #2563eb 100%), linear-gradient(120deg, #6ee7b7 0%, #34d399 35%, #22d3ee 70%, #60a5fa 100%)",
+              backgroundOrigin: "border-box",
+              backgroundClip: "padding-box, border-box",
+              boxShadow: "0 2px 12px -2px rgba(16, 185, 129, 0.4)",
+              transition: "all 0.2s ease",
+            }}
           >
             Nexos
           </Button>

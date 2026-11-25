@@ -252,13 +252,21 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       const saved = localStorage.getItem(AI_WIDTH_STORAGE_KEY);
       if (saved) {
         const parsed = parseInt(saved, 10);
-        if (!isNaN(parsed) && parsed >= 240 && parsed <= 750) {
+        if (!isNaN(parsed) && parsed >= 240 && parsed <= 1400) {
           return parsed;
         }
       }
     } catch (e) {}
     return DEFAULT_AI_WIDTH;
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AI_WIDTH_STORAGE_KEY, String(Math.round(aiWidth)));
+    } catch {
+      // ignore storage errors
+    }
+  }, [aiWidth]);
 
   const isAiDraggingRef = useRef(false);
   const startAiXRef = useRef(0);

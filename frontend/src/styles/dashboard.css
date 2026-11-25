@@ -4728,6 +4728,187 @@ span[title] {
   z-index: 20;
 }
 
+/* Copilot Multi-Session Chrome-Style Tab Bar */
+.copilot-tab-bar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  row-gap: 3px;
+  gap: 2px;
+  padding: 6px 8px 0 8px;
+  background: var(--color-surface-container, #f1f5f9);
+  border-bottom: 1px solid var(--color-outline-variant, #e2e8f0);
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.copilot-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  max-width: 164px;
+  min-width: 44px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--color-on-surface-variant, #64748b);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  outline: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.copilot-tab-pill:focus,
+.copilot-tab-pill:focus-visible {
+  outline: none;
+}
+
+.copilot-tab-pill + .copilot-tab-pill:not(.active)::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 7px;
+  bottom: 7px;
+  width: 1px;
+  background: rgba(148, 163, 184, 0.35);
+}
+
+.copilot-tab-pill.active + .copilot-tab-pill::before,
+.copilot-tab-pill:hover + .copilot-tab-pill::before,
+.copilot-tab-pill:hover::before {
+  display: none;
+}
+
+.copilot-tab-pill:hover {
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--color-on-surface, #334155);
+}
+
+.copilot-tab-pill.active {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-on-surface, #0f172a);
+  border: 1px solid var(--color-outline-variant, #e2e8f0);
+  border-bottom: 2px solid var(--color-surface, #ffffff);
+  margin-bottom: -1px;
+  height: 31px;
+  z-index: 3;
+  font-weight: 600;
+}
+
+.copilot-tab-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.copilot-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.65;
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.copilot-tab-pill:hover .copilot-tab-close,
+.copilot-tab-pill.active .copilot-tab-close {
+  opacity: 1;
+}
+
+.copilot-tab-close:hover {
+  background: rgba(148, 163, 184, 0.24);
+  color: #334155;
+}
+
+.copilot-tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 3px;
+  margin-left: 2px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.copilot-tab-add:hover {
+  background: rgba(148, 163, 184, 0.2);
+  color: #1e293b;
+}
+
+/* Elegant 2x2 Light-Gray Dot Matrix Loader (IDE-style) */
+@keyframes copilot-dot-pulse {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.88);
+  }
+  45% {
+    opacity: 0.95;
+    transform: scale(1.06);
+  }
+}
+
+.copilot-dot-loader {
+  display: inline-grid;
+  grid-template-columns: repeat(2, 4px);
+  grid-template-rows: repeat(2, 4px);
+  gap: 2.5px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-items: center;
+}
+
+.copilot-dot-loader .copilot-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background-color: #94a3b8;
+  animation: copilot-dot-pulse 1.3s ease-in-out infinite;
+}
+
+.copilot-dot-loader .copilot-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.copilot-dot-loader .copilot-dot:nth-child(2) {
+  animation-delay: 0.22s;
+}
+
+.copilot-dot-loader .copilot-dot:nth-child(4) {
+  animation-delay: 0.44s;
+}
+
+.copilot-dot-loader .copilot-dot:nth-child(3) {
+  animation-delay: 0.66s;
+}
+
 .proj-ai-agent-wrapper,
 .ai-copilot-agent-wrapper {
   display: inline-flex;

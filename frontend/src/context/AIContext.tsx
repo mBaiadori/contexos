@@ -1,13 +1,31 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { AISettingsState, ChatMessage, ChatMediaAttachment, RawTurnTelemetry, RawTurnMetrics, ToolCallRecord, TreeNode } from '../types';
-import { API } from '../services/api';
-import { useWorkspace } from './WorkspaceContext';
-import { useTemplateStore } from '../stores/templateStore';
-import { useEditorStore } from '../stores/editorStore';
-import { useCopilotStore, type DynamicContext } from '../stores/copilotStore';
-import { estimateTokens, calculateTokenCost } from '../utils/token-costs';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import type {
+  AISettingsState,
+  ChatMessage,
+  ChatMediaAttachment,
+  RawTurnTelemetry,
+  RawTurnMetrics,
+  ToolCallRecord,
+  TreeNode,
+} from "../types";
+import { API } from "../services/api";
+import { useWorkspace } from "./WorkspaceContext";
+import { useTemplateStore } from "../stores/templateStore";
+import { useEditorStore } from "../stores/editorStore";
+import {
+  useCopilotStore,
+  type DynamicContext,
+  type CopilotTabSession,
+} from "../stores/copilotStore";
+import { estimateTokens, calculateTokenCost } from "../utils/token-costs";
 
-export type { DynamicContext };
+export type { DynamicContext, CopilotTabSession };
 
 interface AIContextType {
   aiSettings: AISettingsState | null;
@@ -28,20 +46,29 @@ interface AIContextType {
       default_provider?: string;
       antigravity_cli_path?: string;
       claude_cli_path?: string;
-      agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+      agent_effort?: "low" | "medium" | "high" | "xhigh" | "max";
       agent_model?: string;
       claude_model?: string;
-    }
+    },
   ) => Promise<boolean>;
-  saveSettings: (payload: { active_provider: string; active_model: string; api_keys?: Record<string, string>; custom_endpoint?: string }) => Promise<boolean>;
+  saveSettings: (payload: {
+    active_provider: string;
+    active_model: string;
+    api_keys?: Record<string, string>;
+    custom_endpoint?: string;
+  }) => Promise<boolean>;
   quickSetModel: (provider: string, model: string) => Promise<boolean>;
   quickSetCliConfig: (payload: {
     default_provider?: string;
     agent_model?: string;
     claude_model?: string;
-    agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+    agent_effort?: "low" | "medium" | "high" | "xhigh" | "max";
   }) => Promise<boolean>;
-  sendMessage: (prompt: string, contextBadges?: string[], attachments?: ChatMediaAttachment[]) => Promise<void>;
+  sendMessage: (
+    prompt: string,
+    contextBadges?: string[],
+    attachments?: ChatMediaAttachment[],
+  ) => Promise<void>;
   stopGeneration: () => Promise<void>;
   clearMessages: () => void;
   newChatSession: () => string;
@@ -49,7 +76,11 @@ interface AIContextType {
   resetMemory: (scope: string) => Promise<void>;
 
   // Session & Multi-Document References
+  sessions: Record<string, CopilotTabSession>;
+  openTabIds: string[];
   currentSessionId: string;
+  switchSessionTab: (sessionId: string) => void;
+  closeSessionTab: (sessionId: string) => void;
   referencedDocs: string[];
   isGlobalScope: boolean;
   setReferencedDocs: (docs: string[]) => void;
@@ -60,8 +91,14 @@ interface AIContextType {
   // Connected Providers & Approvals
   activeProviderId: string;
   setActiveProviderId: (id: string) => void;
-  pendingApproval: { prompt: string; sessionId: string; providerId?: string } | null;
-  setPendingApproval: (approval: { prompt: string; sessionId: string; providerId?: string } | null) => void;
+  pendingApproval: {
+    prompt: string;
+    sessionId: string;
+    providerId?: string;
+  } | null;
+  setPendingApproval: (
+    approval: { prompt: string; sessionId: string; providerId?: string } | null,
+  ) => void;
   approveAction: (sessionId: string, customInput?: string) => Promise<void>;
   rejectAction: (sessionId: string) => Promise<void>;
 
@@ -94,14 +131,20 @@ interface AIContextType {
 }
 
 const generateUniqueMessageId = (prefix: string): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 };
 
 const generateTurnId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return `turn-${crypto.randomUUID()}`;
   }
   return `turn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -113,7 +156,9 @@ const getNowTimestamp = (): number => {
 
 const AIContext = createContext<AIContextType | undefined>(undefined);
 
-export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AIProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const {
     activeRepo,
     activeFile,
@@ -124,13 +169,12 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     refreshPendingChanges,
     refreshGitStatus,
   } = useWorkspace();
-  
+
   // Zustand Stores
   const resolveTemplate = useTemplateStore((s) => s.resolveTemplate);
 
   const messages = useCopilotStore((s) => s.messages);
   const isThinking = useCopilotStore((s) => s.isThinking);
-  const setIsThinking = useCopilotStore((s) => s.setIsThinking);
   const aiSettings = useCopilotStore((s) => s.aiSettings);
   const setAiSettings = useCopilotStore((s) => s.setAiSettings);
   const isSettingsModalOpen = useCopilotStore((s) => s.isSettingsModalOpen);
@@ -139,9 +183,12 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const dynamicContext = useCopilotStore((s) => s.dynamicContext);
   const setDynamicContext = useCopilotStore((s) => s.setDynamicContext);
 
+  const sessions = useCopilotStore((s) => s.sessions);
+  const openTabIds = useCopilotStore((s) => s.openTabIds);
   const currentSessionId = useCopilotStore((s) => s.currentSessionId);
-  const setCurrentSessionId = useCopilotStore((s) => s.setCurrentSessionId);
   const newChatSession = useCopilotStore((s) => s.newChatSession);
+  const switchSessionTab = useCopilotStore((s) => s.switchSessionTab);
+  const closeSessionTab = useCopilotStore((s) => s.closeSessionTab);
   const referencedDocs = useCopilotStore((s) => s.referencedDocs);
   const isGlobalScope = useCopilotStore((s) => s.isGlobalScope);
   const setReferencedDocs = useCopilotStore((s) => s.setReferencedDocs);
@@ -163,12 +210,16 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const openSkillsModal = useCopilotStore((s) => s.openSkillsModal);
   const closeSkillsModal = useCopilotStore((s) => s.closeSkillsModal);
 
-  const isTemplatePromptEnabled = useCopilotStore((s) => s.isTemplatePromptEnabled);
+  const isTemplatePromptEnabled = useCopilotStore(
+    (s) => s.isTemplatePromptEnabled,
+  );
   const toggleTemplatePrompt = useCopilotStore((s) => s.toggleTemplatePrompt);
   const isDocPromptEnabled = useCopilotStore((s) => s.isDocPromptEnabled);
   const toggleDocPrompt = useCopilotStore((s) => s.toggleDocPrompt);
 
-  const [docTemplatePrompt, setDocTemplatePrompt] = useState<string | null>(null);
+  const [docTemplatePrompt, setDocTemplatePrompt] = useState<string | null>(
+    null,
+  );
   const [docTemplateTitle, setDocTemplateTitle] = useState<string | null>(null);
   const docTemplateId = fileMetadata?.templateId || null;
   const [docTemplateSkills, setDocTemplateSkills] = useState<string[]>([]);
@@ -191,7 +242,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         if (tpl) {
           setDocTemplatePrompt(tpl.prompt || tpl.systemPrompt || null);
           setDocTemplateTitle(tpl.title || tpl.templateName || tpl.id || null);
-          const tplSkills = Array.isArray(tpl.skills) ? tpl.skills : (Array.isArray(fileMetadata?.skills) ? fileMetadata.skills : []);
+          const tplSkills = Array.isArray(tpl.skills)
+            ? tpl.skills
+            : Array.isArray(fileMetadata?.skills)
+              ? fileMetadata.skills
+              : [];
           setDocTemplateSkills(tplSkills);
           setTemplateSkills(tplSkills);
         } else {
@@ -213,7 +268,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     return () => {
       isCancelled = true;
     };
-  }, [fileMetadata?.templateId, fileMetadata?.skills, activeRepo?.name, resolveTemplate, setTemplateSkills]);
+  }, [
+    fileMetadata?.templateId,
+    fileMetadata?.skills,
+    activeRepo?.name,
+    resolveTemplate,
+    setTemplateSkills,
+  ]);
 
   // Keep activeFile referenced when not in global scope and no custom references set yet
   useEffect(() => {
@@ -228,11 +289,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       if (res.ok && res.data) {
         setAiSettings(res.data);
         if (res.data.default_provider) {
-          useCopilotStore.getState().setActiveProviderId(res.data.default_provider);
+          useCopilotStore
+            .getState()
+            .setActiveProviderId(res.data.default_provider);
         }
       }
     } catch (err) {
-      console.error('[AIContext] Erro ao carregar configurações de IA:', err);
+      console.error("[AIContext] Erro ao carregar configurações de IA:", err);
     }
   }, [setAiSettings]);
 
@@ -249,10 +312,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       default_provider?: string;
       antigravity_cli_path?: string;
       claude_cli_path?: string;
-      agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+      agent_effort?: "low" | "medium" | "high" | "xhigh" | "max";
       agent_model?: string;
       claude_model?: string;
-    }
+    },
   ): Promise<boolean> => {
     try {
       const res = await API.saveAISettings({
@@ -269,12 +332,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
       return false;
     } catch (err) {
-      console.error('[AIContext] Erro ao salvar configurações de IA:', err);
+      console.error("[AIContext] Erro ao salvar configurações de IA:", err);
       return false;
     }
   };
 
-  const quickSetModel = async (provider: string, model: string): Promise<boolean> => {
+  const quickSetModel = async (
+    provider: string,
+    model: string,
+  ): Promise<boolean> => {
     try {
       const res = await API.saveAISettings({
         provider,
@@ -286,7 +352,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
       return false;
     } catch (err) {
-      console.error('[AIContext] Erro ao trocar modelo rapidamente:', err);
+      console.error("[AIContext] Erro ao trocar modelo rapidamente:", err);
       return false;
     }
   };
@@ -295,11 +361,13 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     default_provider?: string;
     agent_model?: string;
     claude_model?: string;
-    agent_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+    agent_effort?: "low" | "medium" | "high" | "xhigh" | "max";
   }): Promise<boolean> => {
     try {
       if (payload.default_provider) {
-        useCopilotStore.getState().setActiveProviderId(payload.default_provider);
+        useCopilotStore
+          .getState()
+          .setActiveProviderId(payload.default_provider);
       }
       const res = await API.saveAISettings(payload);
       if (res.ok) {
@@ -308,36 +376,65 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
       return false;
     } catch (err) {
-      console.error('[AIContext] Erro ao atualizar conexão/modelo CLI:', err);
+      console.error("[AIContext] Erro ao atualizar conexão/modelo CLI:", err);
       return false;
     }
   };
 
   const restoreSession = async (sessionId: string): Promise<boolean> => {
+    const storeState = useCopilotStore.getState();
+    const existingTab = storeState.sessions[sessionId];
+    if (
+      storeState.openTabIds.includes(sessionId) &&
+      existingTab &&
+      existingTab.messages.length > 0
+    ) {
+      storeState.switchSessionTab(sessionId);
+      return true;
+    }
+
     try {
-      const res = await API.getMemorySession({ repo: activeRepo?.name || 'local', session_id: sessionId });
+      const res = await API.getMemorySession({
+        repo: activeRepo?.name || "local",
+        session_id: sessionId,
+      });
       const sess = res.ok && res.data?.session ? res.data.session : null;
       if (sess && Array.isArray(sess.events)) {
-        let telemetryTurns: RawTurnTelemetry[] = Array.isArray(sess.telemetry_turns) && sess.telemetry_turns.length > 0 ? sess.telemetry_turns : [];
+        let telemetryTurns: RawTurnTelemetry[] =
+          Array.isArray(sess.telemetry_turns) && sess.telemetry_turns.length > 0
+            ? sess.telemetry_turns
+            : [];
 
         if (telemetryTurns.length === 0) {
           // Reconstrói a telemetria com histórico cumulativo turno a turno para sessões legadas
           const reconstructed: RawTurnTelemetry[] = [];
           for (let i = 0; i < sess.events.length; i++) {
             const ev = sess.events[i];
-            const isAssistant = ev.role === 'model' || ev.role === 'assistant';
+            const isAssistant = ev.role === "model" || ev.role === "assistant";
             if (isAssistant) {
               const turnIdx = Math.floor(i / 2) + 1;
               const userEv = sess.events[i - 1];
               const priorEvents = sess.events.slice(0, i - 1);
               const histText = priorEvents
-                .map((h: { role?: string; sender?: string; text?: string; content?: string }) =>
-                  `${h.role || h.sender}: ${h.text || h.content || ''}`,
+                .map(
+                  (h: {
+                    role?: string;
+                    sender?: string;
+                    text?: string;
+                    content?: string;
+                  }) => `${h.role || h.sender}: ${h.text || h.content || ""}`,
                 )
-                .join('\n');
-              const activeModel = aiSettings?.active_model || 'gemini-2.5-flash';
-              const pTokens = estimateTokens((userEv?.text || userEv?.content || '') + (sess.path && sess.path !== 'Global' ? `\n${sess.path}` : '') + (histText ? `\n${histText}` : ''));
-              const cTokens = estimateTokens(ev.text || ev.content || '');
+                .join("\n");
+              const activeModel =
+                aiSettings?.active_model || "gemini-2.5-flash";
+              const pTokens = estimateTokens(
+                (userEv?.text || userEv?.content || "") +
+                  (sess.path && sess.path !== "Global"
+                    ? `\n${sess.path}`
+                    : "") +
+                  (histText ? `\n${histText}` : ""),
+              );
+              const cTokens = estimateTokens(ev.text || ev.content || "");
               const cost = calculateTokenCost(activeModel, pTokens, cTokens);
 
               reconstructed.push({
@@ -346,21 +443,24 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
                 session_id: sessionId,
                 timestamp: ev.timestamp || new Date().toISOString(),
                 duration_ms: 1000,
-                provider: 'direct-api',
+                provider: "direct-api",
                 model: activeModel,
                 raw_mode: false,
                 request: {
-                  prompt: userEv?.text || userEv?.content || '',
-                  system_prompt: '',
-                  context_files: sess.path && sess.path !== 'Global' ? [{ path: sess.path }] : [],
+                  prompt: userEv?.text || userEv?.content || "",
+                  system_prompt: "",
+                  context_files:
+                    sess.path && sess.path !== "Global"
+                      ? [{ path: sess.path }]
+                      : [],
                   history_messages: priorEvents,
                   tools_schema: [],
                   full_payload: { prompt: userEv?.text, path: sess.path },
                 },
                 response: {
-                  reply: ev.text || ev.content || '',
+                  reply: ev.text || ev.content || "",
                   tool_calls: [],
-                  finish_reason: 'stop',
+                  finish_reason: "stop",
                   raw_response: ev,
                 },
                 metrics: {
@@ -381,7 +481,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         }
 
         if (telemetryTurns.length > 0) {
-          useCopilotStore.getState().setSessionTelemetry(sessionId, telemetryTurns);
+          useCopilotStore
+            .getState()
+            .setSessionTelemetry(sessionId, telemetryTurns);
         }
 
         const restoredMessages: ChatMessage[] = sess.events.map(
@@ -395,63 +497,102 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             },
             idx: number,
           ) => {
-          const isAssistant = ev.role === 'model' || ev.role === 'assistant';
-          let turnMetrics: RawTurnMetrics | undefined = undefined;
-          let rawTurnId: string | undefined = undefined;
-          let turnIdx: number | undefined = undefined;
+            const isAssistant = ev.role === "model" || ev.role === "assistant";
+            let turnMetrics: RawTurnMetrics | undefined = undefined;
+            let rawTurnId: string | undefined = undefined;
+            let turnIdx: number | undefined = undefined;
 
-          if (isAssistant && telemetryTurns.length > 0) {
-            const roundNum = Math.floor(idx / 2);
-            const matchedTurn = telemetryTurns[roundNum] || telemetryTurns.find((t) => t.response?.reply === ev.text);
-            if (matchedTurn) {
-              turnMetrics = matchedTurn.metrics;
-              rawTurnId = matchedTurn.turn_id;
-              turnIdx = matchedTurn.turn_index;
+            if (isAssistant && telemetryTurns.length > 0) {
+              const roundNum = Math.floor(idx / 2);
+              const matchedTurn =
+                telemetryTurns[roundNum] ||
+                telemetryTurns.find((t) => t.response?.reply === ev.text);
+              if (matchedTurn) {
+                turnMetrics = matchedTurn.metrics;
+                rawTurnId = matchedTurn.turn_id;
+                turnIdx = matchedTurn.turn_index;
+              }
             }
-          }
 
-          let msgContent = ev.text || '';
-          if (msgContent.includes('Converting circular structure to JSON')) {
-            msgContent = '⚠️ [Interrupção na persistência do histórico]: A resposta deste turno foi transmitida em tempo real via agente, mas a serialização de telemetria no servidor sofreu uma referência circular que foi corrigida.';
-          }
+            let msgContent = ev.text || "";
+            if (msgContent.includes("Converting circular structure to JSON")) {
+              msgContent =
+                "⚠️ [Interrupção na persistência do histórico]: A resposta deste turno foi transmitida em tempo real via agente, mas a serialização de telemetria no servidor sofreu uma referência circular que foi corrigida.";
+            }
 
-          return {
-            id: `restored-${sessionId}-${idx}`,
-            sender: isAssistant ? 'assistant' : 'user',
-            content: msgContent,
-            timestamp: ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-            metrics: turnMetrics,
-            raw_turn_id: rawTurnId,
-            turn_index: turnIdx,
-          };
+            return {
+              id: `restored-${sessionId}-${idx}`,
+              sender: isAssistant ? "assistant" : "user",
+              content: msgContent,
+              timestamp: ev.timestamp
+                ? new Date(ev.timestamp).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : undefined,
+              metrics: turnMetrics,
+              raw_turn_id: rawTurnId,
+              turn_index: turnIdx,
+            };
+          },
+        );
+
+        const firstUserEvent = sess.events.find(
+          (ev: { role?: string; text?: string; content?: string }) =>
+            ev.role !== "model" &&
+            ev.role !== "assistant" &&
+            (ev.text || ev.content),
+        );
+        const derivedTitleRaw =
+          (typeof sess.preview === "string" && sess.preview.trim()) ||
+          firstUserEvent?.text ||
+          firstUserEvent?.content ||
+          "Conversa";
+        const derivedTitle = derivedTitleRaw.trim().slice(0, 32);
+
+        const hasPath = Boolean(sess.path && sess.path !== "Global");
+        useCopilotStore.getState().openSessionTab({
+          id: sessionId,
+          title: derivedTitle,
+          messages: restoredMessages,
+          referencedDocs: hasPath ? [sess.path] : [],
+          isGlobalScope: !hasPath,
         });
-
-        useCopilotStore.getState().setMessages(restoredMessages);
-        setCurrentSessionId(sessionId);
-        if (sess.path && sess.path !== 'Global') {
-          setReferencedDocs([sess.path]);
-        }
         return true;
       }
       return false;
     } catch (err) {
-      console.error('[AIContext] Erro ao restaurar sessão:', err);
+      console.error("[AIContext] Erro ao restaurar sessão:", err);
       return false;
     }
   };
 
-  const sendMessage = async (prompt: string, contextBadges?: string[], attachments?: ChatMediaAttachment[]) => {
+  const sendMessage = async (
+    prompt: string,
+    contextBadges?: string[],
+    attachments?: ChatMediaAttachment[],
+  ) => {
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
     if (!prompt.trim() && !hasAttachments) return;
 
-    let effectivePath = 'Global';
-    let effectiveContent = '';
+    const targetSessionId = currentSessionId;
+    const store = useCopilotStore.getState();
+    const currentTab = store.sessions[targetSessionId];
+    if (
+      (!currentTab || currentTab.title === "Nova conversa") &&
+      prompt.trim()
+    ) {
+      store.setSessionTitle(targetSessionId, prompt.trim().slice(0, 32));
+    }
+
+    let effectivePath = "Global";
+    let effectiveContent = "";
     let effectiveBadges = contextBadges || [];
 
     if (isGlobalScope || referencedDocs.length === 0) {
-      effectivePath = 'Global (Sem Documento)';
-      effectiveContent = '';
-      effectiveBadges = ['Modo Global'];
+      effectivePath = "O que vamos construir hoje?";
+      effectiveContent = "";
+      effectiveBadges = ["Modo Global"];
     } else {
       // 1 ou múltiplas referências (podendo ser arquivos ou pastas inteiras)
       const pathDescriptions: string[] = [];
@@ -473,7 +614,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         };
 
         const collect = (node: TreeNode): string[] => {
-          const isDir = node.type === 'dir' || node.type === 'directory' || node.is_directory;
+          const isDir =
+            node.type === "dir" ||
+            node.type === "directory" ||
+            node.is_directory;
           if (!isDir) return [node.path];
           let collected: string[] = [];
           if (Array.isArray(node.children)) {
@@ -491,8 +635,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
       for (const refPath of referencedDocs) {
         const files = collectFilesFromTree(refPath);
-        const isFolder = files.length > 1 || (files.length === 1 && files[0] !== refPath);
-        const folderName = refPath.split('/').pop() || refPath;
+        const isFolder =
+          files.length > 1 || (files.length === 1 && files[0] !== refPath);
+        const folderName = refPath.split("/").pop() || refPath;
 
         if (isFolder) {
           pathDescriptions.push(`${refPath}/ (${files.length} docs)`);
@@ -503,35 +648,45 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             if (processedFiles.has(f)) continue;
             processedFiles.add(f);
             if (f === activeFile) {
-              folderContents.push(`--- Arquivo: ${f} ---\n${useEditorStore.getState().fileContent}`);
+              folderContents.push(
+                `--- Arquivo: ${f} ---\n${useEditorStore.getState().fileContent}`,
+              );
             } else {
               try {
                 const docData = await API.getProjectFile(f);
                 if (docData && docData.content) {
-                  folderContents.push(`--- Arquivo: ${f} ---\n${docData.content}`);
+                  folderContents.push(
+                    `--- Arquivo: ${f} ---\n${docData.content}`,
+                  );
                 }
               } catch {}
             }
           }
           if (folderContents.length > 0) {
-            contentsList.push(`=== [PASTA NO CONTEXTO: ${refPath}/ (${files.length} arquivos)] ===\n${folderContents.join('\n\n')}`);
+            contentsList.push(
+              `=== [PASTA NO CONTEXTO: ${refPath}/ (${files.length} arquivos)] ===\n${folderContents.join("\n\n")}`,
+            );
           }
         } else {
           // Arquivo individual
           const f = files[0] || refPath;
-          const fileName = f.split('/').pop() || f;
+          const fileName = f.split("/").pop() || f;
           pathDescriptions.push(f);
           computedBadges.push(fileName);
 
           if (!processedFiles.has(f)) {
             processedFiles.add(f);
             if (f === activeFile) {
-              contentsList.push(`=== DOCUMENTO: ${f} ===\n${useEditorStore.getState().fileContent}`);
+              contentsList.push(
+                `=== DOCUMENTO: ${f} ===\n${useEditorStore.getState().fileContent}`,
+              );
             } else {
               try {
                 const docData = await API.getProjectFile(f);
                 if (docData && docData.content) {
-                  contentsList.push(`=== DOCUMENTO: ${f} ===\n${docData.content}`);
+                  contentsList.push(
+                    `=== DOCUMENTO: ${f} ===\n${docData.content}`,
+                  );
                 }
               } catch {}
             }
@@ -539,50 +694,82 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         }
       }
 
-      effectivePath = pathDescriptions.join(', ');
+      effectivePath = pathDescriptions.join(", ");
       effectiveBadges = computedBadges;
-      effectiveContent = contentsList.join('\n\n\n');
+      effectiveContent = contentsList.join("\n\n\n");
     }
 
     if (dynamicContext?.content) {
-      effectiveContent = `${effectiveContent ? effectiveContent + '\n\n' : ''}=== CONTEXTO DINÂMICO SELECIONADO ===\n${dynamicContext.content}`;
+      effectiveContent = `${effectiveContent ? effectiveContent + "\n\n" : ""}=== CONTEXTO DINÂMICO SELECIONADO ===\n${dynamicContext.content}`;
       if (dynamicContext.badge) effectiveBadges.push(dynamicContext.badge);
     }
 
     const userMessage: ChatMessage = {
-      id: generateUniqueMessageId('msg-user'),
-      sender: 'user',
-      content: prompt.trim() || (hasAttachments ? '📎 Mídia anexada' : ''),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      id: generateUniqueMessageId("msg-user"),
+      sender: "user",
+      content: prompt.trim() || (hasAttachments ? "📎 Mídia anexada" : ""),
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       attachments: hasAttachments ? attachments : undefined,
       contextBadges: effectiveBadges,
-      skill_id: isRawMode ? undefined : (activeSkillId || undefined),
+      skill_id: isRawMode ? undefined : activeSkillId || undefined,
     };
 
-    const store = useCopilotStore.getState();
-    store.addMessage(userMessage);
-    store.clearThinkingLogs();
-    store.setThinkingStep(activeProviderId === 'antigravity' ? 'Iniciando Antigravity Agent...' : 'Preparando requisição...');
-    setIsThinking(true);
+    const storeAtSend = useCopilotStore.getState();
+    storeAtSend.addMessageToSession(targetSessionId, userMessage);
+    storeAtSend.clearSessionThinkingLogs(targetSessionId);
+    storeAtSend.setSessionThinkingStep(
+      targetSessionId,
+      activeProviderId === "antigravity"
+        ? "Iniciando Antigravity Agent..."
+        : "Preparando requisição...",
+    );
+    storeAtSend.setSessionThinking(targetSessionId, true);
 
     const stepTimer1 = setTimeout(() => {
-      useCopilotStore.getState().setThinkingStep(activeProviderId === 'antigravity' ? 'Conectando ao Antigravity Agent local...' : 'Enviando prompt ao modelo...');
+      useCopilotStore
+        .getState()
+        .setSessionThinkingStep(
+          targetSessionId,
+          activeProviderId === "antigravity"
+            ? "Conectando ao Antigravity Agent local..."
+            : "Enviando prompt ao modelo...",
+        );
     }, 2000);
 
     const stepTimer2 = setTimeout(() => {
-      useCopilotStore.getState().setThinkingStep('Explorando workspace e lendo arquivos...');
+      useCopilotStore
+        .getState()
+        .setSessionThinkingStep(
+          targetSessionId,
+          "Explorando workspace e lendo arquivos...",
+        );
     }, 6000);
 
     const stepTimer3 = setTimeout(() => {
-      useCopilotStore.getState().setThinkingStep('Executando operações e estruturando dados...');
+      useCopilotStore
+        .getState()
+        .setSessionThinkingStep(
+          targetSessionId,
+          "Executando operações e estruturando dados...",
+        );
     }, 14000);
 
     const stepTimer4 = setTimeout(() => {
-      useCopilotStore.getState().setThinkingStep('Validando schema e finalizando resposta...');
+      useCopilotStore
+        .getState()
+        .setSessionThinkingStep(
+          targetSessionId,
+          "Validando schema e finalizando resposta...",
+        );
     }, 26000);
 
     try {
-      const historyPayload = useCopilotStore.getState().messages.map((m) => ({
+      const targetMessages =
+        useCopilotStore.getState().sessions[targetSessionId]?.messages || [];
+      const historyPayload = targetMessages.map((m) => ({
         sender: m.sender,
         text: m.content,
       }));
@@ -591,24 +778,36 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       const promptInstructions: string[] = [];
 
       if (isTemplatePromptEnabled && templatePrompt && templatePrompt.trim()) {
-        promptInstructions.push(`[Instruções do Template "${templateTitle || 'Template'}"]:\n${templatePrompt.trim()}`);
+        promptInstructions.push(
+          `[Instruções do Template "${templateTitle || "Template"}"]:\n${templatePrompt.trim()}`,
+        );
       }
       if (isDocPromptEnabled && docPrompt && docPrompt.trim()) {
-        promptInstructions.push(`[Instruções Específicas deste Documento]:\n${docPrompt.trim()}`);
+        promptInstructions.push(
+          `[Instruções Específicas deste Documento]:\n${docPrompt.trim()}`,
+        );
       }
 
       // Injeção de Fragmentos RAG Anexados pelo Usuário
       const activeRagRefs = useCopilotStore.getState().ragReferences;
       if (activeRagRefs.length > 0) {
         const ragBlock = activeRagRefs
-          .map((r) => `[FRAGMENTO REFERENCIADO: ${r.relativePath} (${r.sectionTitle})]\n${r.snippet}`)
-          .join('\n\n');
-        promptInstructions.push(`### FRAGMENTOS DO PROJETO ANEXADOS (RAG):\n${ragBlock}`);
+          .map(
+            (r) =>
+              `[FRAGMENTO REFERENCIADO: ${r.relativePath} (${r.sectionTitle})]\n${r.snippet}`,
+          )
+          .join("\n\n");
+        promptInstructions.push(
+          `### FRAGMENTOS DO PROJETO ANEXADOS (RAG):\n${ragBlock}`,
+        );
       }
 
-      const assistantPrompt = promptInstructions.length > 0 ? promptInstructions.join('\n\n---\n\n') : undefined;
+      const assistantPrompt =
+        promptInstructions.length > 0
+          ? promptInstructions.join("\n\n---\n\n")
+          : undefined;
       const turnStartTime = getNowTimestamp();
-      const currentHistoryLength = useCopilotStore.getState().messages.length;
+      const currentHistoryLength = targetMessages.length;
       const turnIndex = Math.floor(currentHistoryLength / 2) + 1;
       const turnId = generateTurnId();
 
@@ -621,13 +820,21 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         content: effectiveContent,
         path: effectivePath,
         history: historyPayload,
-        session_id: currentSessionId,
-        repo: activeRepo?.name || 'local',
+        session_id: targetSessionId,
+        repo: activeRepo?.name || "local",
         assistant_prompt: assistantPrompt,
         raw_mode: isRawMode,
         skill_id: isRawMode ? undefined : primarySkillId,
-        skill_ids: isRawMode ? undefined : (activeSkillsList.length > 0 ? activeSkillsList : (primarySkillId ? [primarySkillId] : undefined)),
-        provider_id: isRawMode ? 'direct-api' : (activeProviderId || 'direct-api'),
+        skill_ids: isRawMode
+          ? undefined
+          : activeSkillsList.length > 0
+            ? activeSkillsList
+            : primarySkillId
+              ? [primarySkillId]
+              : undefined,
+        provider_id: isRawMode
+          ? "direct-api"
+          : activeProviderId || "direct-api",
         auto_rag: isAutoRag,
         attachments: hasAttachments
           ? attachments!.map(({ id, name, mimeType, size, dataBase64 }) => ({
@@ -640,8 +847,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           : undefined,
       };
 
-      let accumulatedReply = '';
-      const assistantMsgId = generateUniqueMessageId('msg-ai');
+      let accumulatedReply = "";
+      const assistantMsgId = generateUniqueMessageId("msg-ai");
       let createdAssistantMsg = false;
       const streamEventsList: Array<Record<string, unknown>> = [];
       let receivedTelemetry: RawTurnTelemetry | null = null;
@@ -651,48 +858,77 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         await API.streamChatMessage(chatPayload, (event) => {
           streamEventsList.push(event);
 
-          if (event.type === 'token' && event.text) {
+          if (event.type === "token" && event.text) {
             accumulatedReply += event.text;
             if (!createdAssistantMsg) {
               createdAssistantMsg = true;
-              useCopilotStore.getState().addMessage({
+              useCopilotStore.getState().addMessageToSession(targetSessionId, {
                 id: assistantMsgId,
-                sender: 'assistant',
+                sender: "assistant",
                 content: accumulatedReply,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                timestamp: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
                 skill_id: isRawMode ? undefined : primarySkillId,
                 raw_turn_id: turnId,
                 turn_index: turnIndex,
               });
             } else {
-              useCopilotStore.getState().setMessages((prev) =>
-                prev.map((m) => (m.id === assistantMsgId ? { ...m, content: accumulatedReply } : m))
-              );
+              useCopilotStore
+                .getState()
+                .setSessionMessages(targetSessionId, (prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsgId
+                      ? { ...m, content: accumulatedReply }
+                      : m,
+                  ),
+                );
             }
-          } else if (event.type === 'tool_result' && event.toolName) {
+          } else if (event.type === "tool_result" && event.toolName) {
             receivedToolCalls.push({
               tool: event.toolName,
               args: event.toolArgs || {},
-              result: (event.data as ToolCallRecord['result']) || { success: true },
+              result: (event.data as ToolCallRecord["result"]) || {
+                success: true,
+              },
               timestamp: new Date().toISOString(),
             });
-          } else if (event.type === 'stream_telemetry' && (event.data as Record<string, unknown> | undefined)?.telemetry) {
-            receivedTelemetry = (event.data as Record<string, unknown>).telemetry as RawTurnTelemetry;
-          } else if (event.type === 'approval_request') {
-            useCopilotStore.getState().setPendingApproval({
-              prompt: typeof event.approvalPrompt === 'string' ? event.approvalPrompt : 'Aprovação necessária para prosseguir',
-              sessionId: typeof event.sessionId === 'string' ? event.sessionId : currentSessionId,
-              providerId: typeof event.provider === 'string' ? event.provider : undefined,
-            });
+          } else if (
+            event.type === "stream_telemetry" &&
+            (event.data as Record<string, unknown> | undefined)?.telemetry
+          ) {
+            receivedTelemetry = (event.data as Record<string, unknown>)
+              .telemetry as RawTurnTelemetry;
+          } else if (event.type === "approval_request") {
+            useCopilotStore
+              .getState()
+              .setSessionPendingApproval(targetSessionId, {
+                prompt:
+                  typeof event.approvalPrompt === "string"
+                    ? event.approvalPrompt
+                    : "Aprovação necessária para prosseguir",
+                sessionId:
+                  typeof event.sessionId === "string"
+                    ? event.sessionId
+                    : targetSessionId,
+                providerId:
+                  typeof event.provider === "string"
+                    ? event.provider
+                    : undefined,
+              });
           }
         });
 
         if (!createdAssistantMsg && accumulatedReply.trim()) {
-          useCopilotStore.getState().addMessage({
+          useCopilotStore.getState().addMessageToSession(targetSessionId, {
             id: assistantMsgId,
-            sender: 'assistant',
+            sender: "assistant",
             content: accumulatedReply,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
             skill_id: isRawMode ? undefined : primarySkillId,
             raw_turn_id: turnId,
             turn_index: turnIndex,
@@ -700,63 +936,84 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         }
 
         const durationMs = getNowTimestamp() - turnStartTime;
-        const activeModelName = aiSettings?.active_model || 'gemini-2.5-flash';
-        const historyText = historyPayload.map((h) => `${h.sender}: ${h.text}`).join('\n');
-        const calculatedPromptTokens = estimateTokens(prompt + (effectiveContent ? `\n${effectiveContent}` : '') + (assistantPrompt ? `\n${assistantPrompt}` : '') + (historyText ? `\n${historyText}` : ''));
-        const promptTokens = (receivedTelemetry as RawTurnTelemetry | null)?.metrics?.prompt_tokens || calculatedPromptTokens;
-        const completionTokens = (receivedTelemetry as RawTurnTelemetry | null)?.metrics?.completion_tokens || estimateTokens(accumulatedReply);
-        const costInfo = calculateTokenCost(activeModelName, promptTokens, completionTokens);
+        const activeModelName = aiSettings?.active_model || "gemini-2.5-flash";
+        const historyText = historyPayload
+          .map((h) => `${h.sender}: ${h.text}`)
+          .join("\n");
+        const calculatedPromptTokens = estimateTokens(
+          prompt +
+            (effectiveContent ? `\n${effectiveContent}` : "") +
+            (assistantPrompt ? `\n${assistantPrompt}` : "") +
+            (historyText ? `\n${historyText}` : ""),
+        );
+        const promptTokens =
+          (receivedTelemetry as RawTurnTelemetry | null)?.metrics
+            ?.prompt_tokens || calculatedPromptTokens;
+        const completionTokens =
+          (receivedTelemetry as RawTurnTelemetry | null)?.metrics
+            ?.completion_tokens || estimateTokens(accumulatedReply);
+        const costInfo = calculateTokenCost(
+          activeModelName,
+          promptTokens,
+          completionTokens,
+        );
 
         const turnTelemetry: RawTurnTelemetry = receivedTelemetry
           ? {
               ...(receivedTelemetry as RawTurnTelemetry),
               response: {
                 ...(receivedTelemetry as RawTurnTelemetry).response,
-                stream_events: (receivedTelemetry as RawTurnTelemetry).response?.stream_events?.length
-                  ? (receivedTelemetry as RawTurnTelemetry).response.stream_events
+                stream_events: (receivedTelemetry as RawTurnTelemetry).response
+                  ?.stream_events?.length
+                  ? (receivedTelemetry as RawTurnTelemetry).response
+                      .stream_events
                   : streamEventsList,
               },
             }
           : {
-          turn_id: turnId,
-          turn_index: turnIndex,
-          session_id: currentSessionId,
-          timestamp: new Date().toISOString(),
-          duration_ms: durationMs,
-          provider: isRawMode ? 'direct-api' : (activeProviderId || 'direct-api'),
-          model: activeModelName,
-          raw_mode: isRawMode,
-          skill_id: primarySkillId,
-          request: {
-            prompt,
-            system_prompt: assistantPrompt,
-            context_files: referencedDocs.map((p) => ({ path: p })),
-            dynamic_context: dynamicContext?.content,
-            history_messages: historyPayload,
-            tools_schema: [],
-            full_payload: chatPayload,
-          },
-          response: {
-            reply: accumulatedReply,
-            tool_calls: receivedToolCalls,
-            stream_events: streamEventsList,
-            finish_reason: 'stop',
-          },
-          metrics: {
-            prompt_tokens: promptTokens,
-            completion_tokens: completionTokens,
-            total_tokens: promptTokens + completionTokens,
-            is_estimated: true,
-            cost_usd: costInfo.costUsd,
-            pricing_formula: costInfo.formula,
-            duration_ms: durationMs,
-          },
-        };
+              turn_id: turnId,
+              turn_index: turnIndex,
+              session_id: targetSessionId,
+              timestamp: new Date().toISOString(),
+              duration_ms: durationMs,
+              provider: isRawMode
+                ? "direct-api"
+                : activeProviderId || "direct-api",
+              model: activeModelName,
+              raw_mode: isRawMode,
+              skill_id: primarySkillId,
+              request: {
+                prompt,
+                system_prompt: assistantPrompt,
+                context_files: referencedDocs.map((p) => ({ path: p })),
+                dynamic_context: dynamicContext?.content,
+                history_messages: historyPayload,
+                tools_schema: [],
+                full_payload: chatPayload,
+              },
+              response: {
+                reply: accumulatedReply,
+                tool_calls: receivedToolCalls,
+                stream_events: streamEventsList,
+                finish_reason: "stop",
+              },
+              metrics: {
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                total_tokens: promptTokens + completionTokens,
+                is_estimated: true,
+                cost_usd: costInfo.costUsd,
+                pricing_formula: costInfo.formula,
+                duration_ms: durationMs,
+              },
+            };
 
-        useCopilotStore.getState().addSessionTelemetryTurn(currentSessionId, turnTelemetry);
+        useCopilotStore
+          .getState()
+          .addSessionTelemetryTurn(targetSessionId, turnTelemetry);
 
         // Atualiza a mensagem da IA com as métricas do turno
-        useCopilotStore.getState().setMessages((prev) =>
+        useCopilotStore.getState().setSessionMessages(targetSessionId, (prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
@@ -765,43 +1022,65 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
                   raw_turn_id: turnTelemetry.turn_id,
                   turn_index: turnTelemetry.turn_index,
                 }
-              : m
-          )
+              : m,
+          ),
         );
       } catch {
         // Fallback síncrono em caso de indisponibilidade de streaming
         const res = await API.sendChatMessage(chatPayload);
 
         if (res.ok && res.data) {
-          let proposedDiff = res.data.diff as ChatMessage['diff'];
+          let proposedDiff = res.data.diff as ChatMessage["diff"];
           if (!proposedDiff && Array.isArray(res.data.tool_calls)) {
-            const diffTool = res.data.tool_calls.find((tc) => tc.tool === 'docs_propose_diff');
+            const diffTool = res.data.tool_calls.find(
+              (tc) => tc.tool === "docs_propose_diff",
+            );
             if (diffTool && diffTool.result?.data) {
               const diffData = diffTool.result.data as Record<string, unknown>;
               proposedDiff = {
-                path: String(diffData.file_path || ''),
-                old_content: String(diffData.original_content || ''),
-                new_content: String(diffData.proposed_content || ''),
-                rationale: typeof diffData.rationale === 'string' ? diffData.rationale : undefined,
+                path: String(diffData.file_path || ""),
+                old_content: String(diffData.original_content || ""),
+                new_content: String(diffData.proposed_content || ""),
+                rationale:
+                  typeof diffData.rationale === "string"
+                    ? diffData.rationale
+                    : undefined,
               };
             }
           }
 
           const durationMs = getNowTimestamp() - turnStartTime;
-          const activeModelName = res.data.model || aiSettings?.active_model || 'gemini-2.5-flash';
-          const historyText = historyPayload.map((h) => `${h.sender}: ${h.text}`).join('\n');
-          const calculatedPromptTokens = estimateTokens(prompt + (effectiveContent ? `\n${effectiveContent}` : '') + (assistantPrompt ? `\n${assistantPrompt}` : '') + (historyText ? `\n${historyText}` : ''));
-          const promptTokens = res.data.usage?.prompt_tokens || calculatedPromptTokens;
-          const completionTokens = res.data.usage?.completion_tokens || estimateTokens(res.data.reply || '');
-          const costInfo = calculateTokenCost(activeModelName, promptTokens, completionTokens);
+          const activeModelName =
+            res.data.model || aiSettings?.active_model || "gemini-2.5-flash";
+          const historyText = historyPayload
+            .map((h) => `${h.sender}: ${h.text}`)
+            .join("\n");
+          const calculatedPromptTokens = estimateTokens(
+            prompt +
+              (effectiveContent ? `\n${effectiveContent}` : "") +
+              (assistantPrompt ? `\n${assistantPrompt}` : "") +
+              (historyText ? `\n${historyText}` : ""),
+          );
+          const promptTokens =
+            res.data.usage?.prompt_tokens || calculatedPromptTokens;
+          const completionTokens =
+            res.data.usage?.completion_tokens ||
+            estimateTokens(res.data.reply || "");
+          const costInfo = calculateTokenCost(
+            activeModelName,
+            promptTokens,
+            completionTokens,
+          );
 
           const turnTelemetry: RawTurnTelemetry = res.data.telemetry_turn || {
             turn_id: turnId,
             turn_index: turnIndex,
-            session_id: currentSessionId,
+            session_id: targetSessionId,
             timestamp: new Date().toISOString(),
             duration_ms: durationMs,
-            provider: res.data.provider || (isRawMode ? 'direct-api' : (activeProviderId || 'direct-api')),
+            provider:
+              res.data.provider ||
+              (isRawMode ? "direct-api" : activeProviderId || "direct-api"),
             model: activeModelName,
             raw_mode: isRawMode,
             skill_id: primarySkillId,
@@ -815,9 +1094,9 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
               full_payload: chatPayload,
             },
             response: {
-              reply: res.data.reply || '',
+              reply: res.data.reply || "",
               tool_calls: res.data.tool_calls || [],
-              finish_reason: 'stop',
+              finish_reason: "stop",
               raw_response: res.data,
             },
             metrics: res.data.usage || {
@@ -831,13 +1110,18 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             },
           };
 
-          useCopilotStore.getState().addSessionTelemetryTurn(currentSessionId, turnTelemetry);
+          useCopilotStore
+            .getState()
+            .addSessionTelemetryTurn(targetSessionId, turnTelemetry);
 
           const assistantMessage: ChatMessage = {
-            id: generateUniqueMessageId('msg-ai'),
-            sender: 'assistant',
-            content: res.data.reply || 'Operação concluída com sucesso.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            id: generateUniqueMessageId("msg-ai"),
+            sender: "assistant",
+            content: res.data.reply || "Operação concluída com sucesso.",
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
             diff: proposedDiff,
             tool_calls: res.data.tool_calls,
             steps_count: res.data.steps_count,
@@ -846,32 +1130,45 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             turn_index: turnTelemetry.turn_index,
             metrics: turnTelemetry.metrics,
           };
-          useCopilotStore.getState().addMessage(assistantMessage);
+          useCopilotStore
+            .getState()
+            .addMessageToSession(targetSessionId, assistantMessage);
         } else {
           const errorMessage: ChatMessage = {
-            id: generateUniqueMessageId('msg-err'),
-            sender: 'system',
-            content: 'Desculpe, ocorreu um erro ao se comunicar com o modelo de IA. Verifique as configurações de provedor.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            id: generateUniqueMessageId("msg-err"),
+            sender: "system",
+            content:
+              "Desculpe, ocorreu um erro ao se comunicar com o modelo de IA. Verifique as configurações de provedor.",
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
           };
-          useCopilotStore.getState().addMessage(errorMessage);
+          useCopilotStore
+            .getState()
+            .addMessageToSession(targetSessionId, errorMessage);
         }
       }
     } catch (err) {
-      console.error('[AIContext] Erro no envio de mensagem para IA:', err);
+      console.error("[AIContext] Erro no envio de mensagem para IA:", err);
       const errorMessage: ChatMessage = {
-        id: generateUniqueMessageId('msg-err'),
-        sender: 'system',
-        content: 'Falha na conexão com o servidor de IA.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        id: generateUniqueMessageId("msg-err"),
+        sender: "system",
+        content: "Falha na conexão com o servidor de IA.",
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
       };
-      useCopilotStore.getState().addMessage(errorMessage);
+      useCopilotStore
+        .getState()
+        .addMessageToSession(targetSessionId, errorMessage);
     } finally {
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
       clearTimeout(stepTimer3);
       clearTimeout(stepTimer4);
-      setIsThinking(false);
+      useCopilotStore.getState().setSessionThinking(targetSessionId, false);
 
       // Atualiza automaticamente o documento, árvore e histórico de sessões
       try {
@@ -881,7 +1178,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         await refreshPendingChanges?.();
         await refreshGitStatus?.();
       } catch (refreshErr) {
-        console.warn('[AIContext] Erro ao sincronizar workspace após resposta do agente:', refreshErr);
+        console.warn(
+          "[AIContext] Erro ao sincronizar workspace após resposta do agente:",
+          refreshErr,
+        );
       }
     }
   };
@@ -896,7 +1196,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       await API.resetMemoryScope({ repo: activeRepo.name, scope });
       clearMessages();
     } catch (err) {
-      console.error('[AIContext] Erro ao resetar memória:', err);
+      console.error("[AIContext] Erro ao resetar memória:", err);
     }
   };
 
@@ -915,7 +1215,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       });
       setPendingApproval(null);
     } catch (err) {
-      console.error('[AIContext] Erro ao aprovar ação:', err);
+      console.error("[AIContext] Erro ao aprovar ação:", err);
     }
   };
 
@@ -928,29 +1228,50 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       });
       setPendingApproval(null);
     } catch (err) {
-      console.error('[AIContext] Erro ao rejeitar ação:', err);
+      console.error("[AIContext] Erro ao rejeitar ação:", err);
     }
   };
 
   const stopGeneration = async () => {
+    const targetSessionId = currentSessionId;
     try {
-      setIsThinking(false);
-      await API.stopSession({ session_id: currentSessionId, provider_id: activeProviderId });
+      useCopilotStore.getState().setSessionThinking(targetSessionId, false);
+      await API.stopSession({
+        session_id: targetSessionId,
+        provider_id: activeProviderId,
+      });
       const cancelMessage: ChatMessage = {
-        id: generateUniqueMessageId('msg-cancel'),
-        sender: 'system',
-        content: '⏹️ Execução interrompida pelo usuário.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        id: generateUniqueMessageId("msg-cancel"),
+        sender: "system",
+        content: "⏹️ Execução interrompida pelo usuário.",
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
       };
-      useCopilotStore.getState().addMessage(cancelMessage);
+      useCopilotStore
+        .getState()
+        .addMessageToSession(targetSessionId, cancelMessage);
     } catch (err) {
-      console.error('[AIContext] Erro ao parar geração:', err);
+      console.error("[AIContext] Erro ao parar geração:", err);
     }
   };
 
-  const saveSettings = async (payload: { active_provider: string; active_model: string; api_keys?: Record<string, string>; custom_endpoint?: string }) => {
-    const key = payload.api_keys ? payload.api_keys[payload.active_provider] : undefined;
-    return saveAISettings(payload.active_provider, payload.active_model, key, payload.custom_endpoint);
+  const saveSettings = async (payload: {
+    active_provider: string;
+    active_model: string;
+    api_keys?: Record<string, string>;
+    custom_endpoint?: string;
+  }) => {
+    const key = payload.api_keys
+      ? payload.api_keys[payload.active_provider]
+      : undefined;
+    return saveAISettings(
+      payload.active_provider,
+      payload.active_model,
+      key,
+      payload.custom_endpoint,
+    );
   };
 
   return (
@@ -983,7 +1304,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         approveAction,
         rejectAction,
 
+        sessions,
+        openTabIds,
         currentSessionId,
+        switchSessionTab,
+        closeSessionTab,
         referencedDocs,
         isGlobalScope,
         setReferencedDocs,
@@ -1024,7 +1349,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 export const useAI = () => {
   const context = useContext(AIContext);
   if (!context) {
-    throw new Error('useAI must be used within an AIProvider');
+    throw new Error("useAI must be used within an AIProvider");
   }
   return context;
 };
