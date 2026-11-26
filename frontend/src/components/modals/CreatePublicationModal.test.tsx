@@ -31,13 +31,13 @@ describe("CreatePublicationModal", () => {
     vi.mocked(API.compareBranches).mockResolvedValue({
       ok: true,
       data: { files: [] },
-    } as any);
+    } as never);
     vi.mocked(API.getWorkspaceChanges).mockResolvedValue({
       changes: [
         { path: "doc-visivel.md", type: "MODIFIED", additions: 2, deletions: 1 },
         { path: ".translations/en/inserção nomercado.md", type: "ADDED", additions: 3, deletions: 0 },
       ],
-    } as any);
+    } as never);
     vi.mocked(API.getGitStatus).mockResolvedValue({
       ok: true,
       data: {
@@ -51,7 +51,7 @@ describe("CreatePublicationModal", () => {
           { path: ".translations/en/inserção nomercado.md", status: "??", staged: false },
         ],
       },
-    } as any);
+    } as never);
 
     const nodes: VersionNode[] = [
       {
@@ -104,13 +104,13 @@ describe("CreatePublicationModal", () => {
           },
         ],
       },
-    } as any);
+    } as never);
     vi.mocked(API.getWorkspaceChanges).mockResolvedValue({
       changes: [
         { path: "guia.md", type: "MODIFIED", additions: 1, deletions: 0, old_content: "committed", new_content: "local" },
         { path: "novo-local.md", type: "ADDED", additions: 5, deletions: 0, old_content: "", new_content: "# Novo" },
       ],
-    } as any);
+    } as never);
     vi.mocked(API.getGitStatus).mockResolvedValue({
       ok: true,
       data: {
@@ -124,7 +124,7 @@ describe("CreatePublicationModal", () => {
           { path: "novo-local.md", status: "??", staged: false },
         ],
       },
-    } as any);
+    } as never);
 
     const nodes: VersionNode[] = [
       {
