@@ -187,6 +187,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
   const isFolderSelected = selectedFolder === node.path;
   const isDraggingThis = draggedItem?.path === node.path;
   const isDragOverThis = dragOverTarget === node.path;
+  const isRenamingThis = Boolean(inlineRenaming && inlineRenaming.path === node.path);
 
   if (isDir) {
     return (
@@ -198,8 +199,14 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
           className={`tree-folder ${isFolderSelected ? "selected" : ""} ${isDraggingThis ? "is-dragging" : ""} ${isDragOverThis ? "drag-over" : ""}`}
           style={depth !== undefined ? { paddingLeft: `${depth * 14 + 8}px` } : undefined}
           data-tree-path={node.path}
-          draggable
-          onDragStart={(e) => onDragStart(e, node, true, repoNameForNode)}
+          draggable={!isRenamingThis}
+          onDragStart={(e) => {
+            if (isRenamingThis) {
+              e.preventDefault();
+              return;
+            }
+            onDragStart(e, node, true, repoNameForNode);
+          }}
           onDragEnd={onDragEnd}
           onDragOver={(e) => onDragOverFolder(e, node.path)}
           onDragLeave={(e) => onDragLeaveFolder(e, node.path)}
@@ -224,7 +231,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
             ) : (
               <FolderOpen size={14} color="#2563eb" style={{ flexShrink: 0 }} />
             )}
-            {inlineRenaming && inlineRenaming.path === node.path ? (
+            {isRenamingThis ? (
               <input
                 ref={inlineRenameInputRef}
                 type="text"
@@ -244,6 +251,11 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
                 }}
                 onBlur={onConfirmInlineRename}
                 onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onDragStart={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
               />
             ) : (
               <span className="tree-folder-name">{node.name}</span>
@@ -401,8 +413,14 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
         className={`tree-file-item ${isFileActive ? "active" : ""} ${!isMarkdown ? "non-markdown" : ""} ${isDraggingThis ? "is-dragging" : ""} ${isDragOverThis ? "drag-over" : ""}`}
         style={depth !== undefined ? { paddingLeft: `${depth * 14 + 8}px` } : undefined}
         data-tree-path={node.path}
-        draggable
-        onDragStart={(e) => onDragStart(e, node, false, repoNameForNode)}
+        draggable={!isRenamingThis}
+        onDragStart={(e) => {
+          if (isRenamingThis) {
+            e.preventDefault();
+            return;
+          }
+          onDragStart(e, node, false, repoNameForNode);
+        }}
         onDragEnd={onDragEnd}
         onDragOver={(e) => onDragOverFile(e, node.path)}
         onDragLeave={(e) => onDragLeaveFile(e, node.path)}
@@ -439,7 +457,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
             <FileCode size={13} color="#89b4fa" style={{ flexShrink: 0 }} />
           )}
 
-          {inlineRenaming && inlineRenaming.path === node.path ? (
+          {isRenamingThis ? (
             <input
               ref={inlineRenameInputRef}
               type="text"
@@ -459,6 +477,11 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
               }}
               onBlur={onConfirmInlineRename}
               onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onDragStart={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
             />
           ) : (
             <span className="tree-file-name">{node.name}</span>

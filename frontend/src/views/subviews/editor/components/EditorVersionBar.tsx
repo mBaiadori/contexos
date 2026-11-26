@@ -619,7 +619,10 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
                 <Button
                   size="sm"
                   variant="primary"
-                  onClick={() => setIsPubModalOpen(true)}
+                  onClick={() => {
+                    refreshVersionGraph?.();
+                    setIsPubModalOpen(true);
+                  }}
                   disabled={!hasUpdatesToPublish}
                   title={
                     hasUpdatesToPublish
@@ -642,6 +645,7 @@ export const EditorVersionBar: React.FC<EditorVersionBarProps> = ({
                   openDraftPromptForIntent("publish");
                   return;
                 }
+                refreshVersionGraph?.();
                 setPendingPublishBranch(isOfficial ? defaultBranch : undefined);
                 setIsPubModalOpen(true);
               }}

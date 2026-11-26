@@ -680,6 +680,22 @@ export async function aiRoutes(fastify: FastifyInstance) {
     return reply.send(aiService.deleteSession(repoName, query.session_id));
   });
 
+  fastify.patch('/api/chat/memory/session', async (request, reply) => {
+    const body = (request.body || {}) as { repo?: string; session_id?: string; title?: string };
+    const query = request.query as { repo?: string; session_id?: string };
+    const cfg = loadConfig();
+    const repoName = body.repo || query.repo || cfg.active_repo?.name || 'local';
+    const sessionId = body.session_id || query.session_id;
+    if (!sessionId) {
+      return reply.status(400).send({ error: 'session_id é obrigatório' });
+    }
+    const result = aiService.renameSession(repoName, sessionId, typeof body.title === 'string' ? body.title : '');
+    if (!result.success) {
+      return reply.status(404).send(result);
+    }
+    return reply.send(result);
+  });
+
   fastify.get('/api/chat/memory/actor', async (_request, reply) => {
     const cfg = loadConfig();
     return reply.send({

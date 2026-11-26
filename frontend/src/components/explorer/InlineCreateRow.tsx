@@ -77,6 +77,11 @@ export const InlineCreateRow: React.FC<InlineCreateRowProps> = ({
               onConfirm();
             }
           }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onDragStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
         />
         {!isFolder && (
           <button

@@ -10,6 +10,7 @@ import {
 import { computeDiff } from "../../utils/diff.js";
 import { isGitRepo, executeGit, getGitStatus, isTransientGitPath } from "../../utils/git.js";
 import { assertGitPath } from "../../utils/git-validate.js";
+import { isPathHidden, loadHiddenFiles } from "../../utils/hidden-files.js";
 import {
   docsMetadataService,
   extractDocLinksFromMarkdown,
@@ -45,6 +46,7 @@ export class WorkspaceChangesService {
         : { name: repoName, full_name: repoName, is_local: true });
 
     const repoDir = getRepoDir(repoName);
+    const hiddenList = loadHiddenFiles(repoDir);
     const storedChanges =
       cfg.workspace_changes?.[repoName] || loadRepoWorkspaceChanges(repoName);
 
@@ -60,113 +62,94 @@ export class WorkspaceChangesService {
 
     for (const c of storedChanges) {
       if (c?.path) {
-        mergedMap.set(c.path.trim().replace(/^\/+/, ""), { ...c });
+        const cp = c.path.trim().replace(/^\/+/, "");
+        if (!isIgnoredChangePath(cp) && !isPathHidden(cp, hiddenList)) {
+          mergedMap.set(cp, { ...c, path: cp });
+        }
       }
     }
 
-    // Se o diretório for um repositório git, reconcilia com alterações externas/do agente
+    // Se o diretório for um repositório git, reconcilia com alterações reais do git status
     if (await isGitRepo(repoDir)) {
       try {
         const gitStatus = await getGitStatus(repoDir);
-        const allGitFiles = [
-          ...(gitStatus.files || []),
-          ...(gitStatus.systemFiles || []),
-        ];
+        if (gitStatus.isRepo) {
+          const allGitFiles = [
+            ...(gitStatus.files || []),
+            ...(gitStatus.systemFiles || []),
+          ];
 
-        const gitFilesMap = new Map<string, { path: string; status: string }>();
-        for (const gf of allGitFiles) {
-          const cp = gf.path.trim().replace(/^\/+/, "");
-          if (cp) gitFilesMap.set(cp, gf);
-        }
-
-        // Expurgar alterações fantasmas em mergedMap (ex: arquivos novos criados e depois apagados localmente)
-        for (const [key, item] of Array.from(mergedMap.entries())) {
-          const fullPath = path.join(repoDir, key);
-          const fileExistsOnDisk = fs.existsSync(fullPath);
-
-          if (item.type === "DELETED") {
-            const headCheck = await executeGit(
-              ["cat-file", "-e", `HEAD:${assertGitPath(key)}`],
-              repoDir,
-            );
-            if (!headCheck.success && !gitFilesMap.has(key)) {
-              mergedMap.delete(key);
-              removeWorkspaceChange(repoName, key);
-              continue;
-            }
-          } else if (item.type === "ADDED" && !fileExistsOnDisk && !gitFilesMap.has(key)) {
-            mergedMap.delete(key);
-            removeWorkspaceChange(repoName, key);
-            continue;
-          } else if (item.type === "MODIFIED" && !fileExistsOnDisk) {
-            const headCheck = await executeGit(
-              ["cat-file", "-e", `HEAD:${assertGitPath(key)}`],
-              repoDir,
-            );
-            if (!headCheck.success && !gitFilesMap.has(key)) {
-              mergedMap.delete(key);
-              removeWorkspaceChange(repoName, key);
-              continue;
-            }
+          const gitFilesMap = new Map<string, { path: string; status: string }>();
+          for (const gf of allGitFiles) {
+            const cp = gf.path.trim().replace(/^\/+/, "");
+            if (cp) gitFilesMap.set(cp, gf);
           }
-        }
 
-        for (const gf of allGitFiles) {
-          const cleanPath = gf.path.trim().replace(/^\/+/, "");
-          if (isIgnoredChangePath(cleanPath)) continue;
-
-          // Se já está no map de alterações da UI, mantém os dados originais preservados
-          if (mergedMap.has(cleanPath)) continue;
-
-          const fullPath = path.join(repoDir, cleanPath);
-          const isAdded = gf.status === "??" || gf.status === "A";
-          const isDeleted = gf.status === "D";
-
-          let oldContent = "";
-          let newContent = "";
-          const changeType: "ADDED" | "MODIFIED" | "DELETED" = isAdded
-            ? "ADDED"
-            : isDeleted
-              ? "DELETED"
-              : "MODIFIED";
-
-          if (isAdded) {
-            if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
-              try {
-                newContent = fs.readFileSync(fullPath, "utf-8");
-              } catch {}
-            }
-          } else if (isDeleted) {
-            const showRes = await executeGit(
-              ["show", `HEAD:${assertGitPath(cleanPath)}`],
-              repoDir,
-            );
-            if (showRes.success && showRes.stdout) {
-              oldContent = showRes.stdout;
-            }
-          } else {
-            // MODIFIED
-            const showRes = await executeGit(
-              ["show", `HEAD:${assertGitPath(cleanPath)}`],
-              repoDir,
-            );
-            if (showRes.success && showRes.stdout) {
-              oldContent = showRes.stdout;
-            }
-            if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
-              try {
-                newContent = fs.readFileSync(fullPath, "utf-8");
-              } catch {}
+          // Expurgar alterações que não estão mais sujas no working tree (já commitadas, revertidas ou fantasmas)
+          for (const [key] of Array.from(mergedMap.entries())) {
+            if (!gitFilesMap.has(key)) {
+              mergedMap.delete(key);
+              removeWorkspaceChange(repoName, key);
             }
           }
 
-          mergedMap.set(cleanPath, {
-            path: cleanPath,
-            type: changeType,
-            old_content: oldContent,
-            new_content: newContent,
-            timestamp: new Date().toISOString(),
-          });
+          for (const gf of allGitFiles) {
+            const cleanPath = gf.path.trim().replace(/^\/+/, "");
+            if (isIgnoredChangePath(cleanPath) || isPathHidden(cleanPath, hiddenList)) continue;
+
+            // Se já está no map de alterações da UI, mantém os dados originais preservados
+            if (mergedMap.has(cleanPath)) continue;
+
+            const fullPath = path.join(repoDir, cleanPath);
+            const isAdded = gf.status === "??" || gf.status === "A";
+            const isDeleted = gf.status === "D";
+
+            let oldContent = "";
+            let newContent = "";
+            const changeType: "ADDED" | "MODIFIED" | "DELETED" = isAdded
+              ? "ADDED"
+              : isDeleted
+                ? "DELETED"
+                : "MODIFIED";
+
+            if (isAdded) {
+              if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+                try {
+                  newContent = fs.readFileSync(fullPath, "utf-8");
+                } catch {}
+              }
+            } else if (isDeleted) {
+              const showRes = await executeGit(
+                ["show", `HEAD:${assertGitPath(cleanPath)}`],
+                repoDir,
+              );
+              if (showRes.success && showRes.stdout) {
+                oldContent = showRes.stdout;
+              }
+            } else {
+              // MODIFIED
+              const showRes = await executeGit(
+                ["show", `HEAD:${assertGitPath(cleanPath)}`],
+                repoDir,
+              );
+              if (showRes.success && showRes.stdout) {
+                oldContent = showRes.stdout;
+              }
+              if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+                try {
+                  newContent = fs.readFileSync(fullPath, "utf-8");
+                } catch {}
+              }
+            }
+
+            mergedMap.set(cleanPath, {
+              path: cleanPath,
+              type: changeType,
+              old_content: oldContent,
+              new_content: newContent,
+              timestamp: new Date().toISOString(),
+            });
+          }
         }
       } catch (err) {
         console.warn("[WorkspaceService] Erro ao reconciliar status git com workspace_changes:", err);
@@ -174,7 +157,9 @@ export class WorkspaceChangesService {
     }
 
     const allRaw = Array.from(mergedMap.values());
-    const rawDocChanges = allRaw.filter((c) => !isIgnoredChangePath(c.path || ""));
+    const rawDocChanges = allRaw.filter(
+      (c) => !isIgnoredChangePath(c.path || "") && !isPathHidden(c.path || "", hiddenList),
+    );
 
     const detailedChanges = [];
     let totalAdditions = 0;

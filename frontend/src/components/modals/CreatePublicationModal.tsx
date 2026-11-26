@@ -6,7 +6,18 @@ import { DiffViewer } from "../common";
 import { VisualMarkdownDiff } from "../editor/VisualMarkdownDiff";
 import { API } from "../../services/api";
 import { isPathHidden } from "../../utils/hidden-files";
-import type { VersionNode, WorkspaceChange } from "../../types";
+import type { GitFileStatus, GitStatus, VersionNode, WorkspaceChange } from "../../types";
+
+function getVisibleNodeUncommitted(node?: VersionNode): GitFileStatus[] {
+  if (!node?.uncommittedFiles) return [];
+  return node.uncommittedFiles
+    .map((u) =>
+      typeof u === "string"
+        ? ({ path: u, status: "M", staged: false } as GitFileStatus)
+        : u,
+    )
+    .filter((u): u is GitFileStatus => Boolean(u?.path) && !isPathHidden(u.path));
+}
 
 export interface CreatePublicationModalProps {
   isOpen: boolean;
@@ -34,31 +45,6 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   existingProposal,
   onCreated,
 }) => {
-  const candidateNodes = useMemo(
-    () =>
-      nodes.filter((n) => {
-        if (n.isDefault || n.name === defaultBranch || n.isMerged) return false;
-        if (n.publicationStatus === "open" || n.proposal?.status === "OPEN") return false;
-        const isRejected =
-          n.publicationStatus === "rejected" ||
-          n.proposal?.status === "CLOSED" ||
-          n.proposal?.status === "REJECTED";
-        const isRemoteOnly =
-          n.hasLocal === false || n.publicationStatus === "remote_only";
-        if ((isRejected || isRemoteOnly) && !n.isCurrent) return false;
-        return n.ahead > 0 || (n.uncommittedFiles && n.uncommittedFiles.length > 0);
-      }),
-    [nodes, defaultBranch],
-  );
-  const isLockedSource = Boolean(initialSourceBranch);
-  const defaultNode = useMemo(
-    () => nodes.find((n) => n.isDefault || n.name === defaultBranch),
-    [nodes, defaultBranch],
-  );
-  const defaultHasUncommitted = Boolean(
-    defaultNode?.isCurrent && (defaultNode?.uncommittedFiles?.length || 0) > 0,
-  );
-
   const [sourceBranch, setSourceBranch] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -77,21 +63,92 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
     }>
   >([]);
   const [workspaceChanges, setWorkspaceChanges] = useState<WorkspaceChange[]>([]);
+  const [liveGitStatus, setLiveGitStatus] = useState<GitStatus | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const wasOpenRef = useRef(false);
   const lastAutoTitleRef = useRef("");
 
+  const liveVisibleGitFiles = useMemo(
+    () =>
+      (liveGitStatus?.files || []).filter(
+        (f): f is GitFileStatus => Boolean(f?.path) && !isPathHidden(f.path),
+      ),
+    [liveGitStatus],
+  );
+
+  const liveCurrentBranch = useMemo(() => {
+    const graphCurrent = nodes.find((n) => n.isCurrent)?.name;
+    if (graphCurrent) return graphCurrent;
+    if (
+      nodes.length === 0 &&
+      liveGitStatus?.isRepo &&
+      liveGitStatus.branch &&
+      liveGitStatus.branch !== "none" &&
+      liveGitStatus.branch !== "HEAD"
+    ) {
+      return liveGitStatus.branch;
+    }
+    return undefined;
+  }, [nodes, liveGitStatus]);
+
+  const candidateNodes = useMemo(
+    () =>
+      nodes.filter((n) => {
+        if (n.isDefault || n.name === defaultBranch || n.isMerged) return false;
+        if (n.publicationStatus === "open" || n.proposal?.status === "OPEN") return false;
+        const isRejected =
+          n.publicationStatus === "rejected" ||
+          n.proposal?.status === "CLOSED" ||
+          n.proposal?.status === "REJECTED";
+        const isRemoteOnly =
+          n.hasLocal === false || n.publicationStatus === "remote_only";
+        if ((isRejected || isRemoteOnly) && !n.isCurrent) return false;
+        const visibleUncommitted =
+          n.isCurrent && liveGitStatus
+            ? liveVisibleGitFiles
+            : getVisibleNodeUncommitted(n);
+        const hasWs = Boolean(n.isCurrent && workspaceChanges.length > 0);
+        return n.ahead > 0 || visibleUncommitted.length > 0 || hasWs;
+      }),
+    [nodes, defaultBranch, liveGitStatus, liveVisibleGitFiles, workspaceChanges],
+  );
+  const isLockedSource = Boolean(initialSourceBranch);
+  const defaultNode = useMemo(
+    () => nodes.find((n) => n.isDefault || n.name === defaultBranch),
+    [nodes, defaultBranch],
+  );
+  const isDefaultCurrent = Boolean(
+    defaultNode?.isCurrent || (nodes.length === 0 && liveCurrentBranch === defaultBranch),
+  );
+  const defaultVisibleUncommitted = useMemo(() => {
+    if (!isDefaultCurrent) return [];
+    if (liveGitStatus) return liveVisibleGitFiles;
+    return getVisibleNodeUncommitted(defaultNode);
+  }, [isDefaultCurrent, liveGitStatus, liveVisibleGitFiles, defaultNode]);
+  const defaultUncommittedCount = useMemo(() => {
+    if (!isDefaultCurrent) return 0;
+    return new Set([
+      ...defaultVisibleUncommitted.map((f) => f.path),
+      ...workspaceChanges.map((c) => c.path),
+    ]).size;
+  }, [isDefaultCurrent, defaultVisibleUncommitted, workspaceChanges]);
+  const defaultHasUncommitted = defaultUncommittedCount > 0;
+
   useEffect(() => {
     const justOpened = isOpen && !wasOpenRef.current;
     wasOpenRef.current = isOpen;
     if (!isOpen) return;
-    if (justOpened || (isLockedSource && initialSourceBranch && sourceBranch !== initialSourceBranch)) {
-      const preferred = initialSourceBranch
-        ? initialSourceBranch
-        : defaultHasUncommitted
-          ? defaultBranch
-          : candidateNodes[0]?.name || "";
+    const preferred = initialSourceBranch
+      ? initialSourceBranch
+      : defaultHasUncommitted
+        ? defaultBranch
+        : candidateNodes[0]?.name || "";
+    const shouldSyncLocked = Boolean(
+      isLockedSource && initialSourceBranch && sourceBranch !== initialSourceBranch,
+    );
+    const shouldFillAsyncPreferred = Boolean(!isLockedSource && !sourceBranch && preferred);
+    if (justOpened || shouldSyncLocked || shouldFillAsyncPreferred) {
       setSourceBranch(preferred);
       const node = nodes.find((n) => n.name === preferred);
       const activeProp =
@@ -101,22 +158,39 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
         (node && !node.isDefault && node.displayName && node.displayName !== preferred
           ? node.displayName
           : "");
-      setTitle(autoTitle);
-      lastAutoTitleRef.current = autoTitle;
-      setDescription(activeProp?.description || "");
-      setErrorMsg(null);
-      setExpandedFile(null);
+      if (justOpened || shouldSyncLocked || !title.trim() || title === lastAutoTitleRef.current) {
+        setTitle(autoTitle);
+        lastAutoTitleRef.current = autoTitle;
+      }
+      if (justOpened || shouldSyncLocked) {
+        setDescription(activeProp?.description || "");
+        setErrorMsg(null);
+        setExpandedFile(null);
+      }
     }
-  }, [isOpen, isLockedSource, initialSourceBranch, defaultBranch, candidateNodes, defaultHasUncommitted, nodes, existingProposal, sourceBranch]);
+  }, [
+    isOpen,
+    isLockedSource,
+    initialSourceBranch,
+    defaultBranch,
+    candidateNodes,
+    defaultHasUncommitted,
+    nodes,
+    existingProposal,
+    sourceBranch,
+    title,
+  ]);
 
   useEffect(() => {
     if (!isOpen) {
       setDiffFiles([]);
       setWorkspaceChanges([]);
+      setLiveGitStatus(null);
       return;
     }
     let cancelled = false;
     setIsLoadingDiff(true);
+    setExpandedFile(null);
     const shouldCompare = Boolean(sourceBranch && sourceBranch !== defaultBranch);
     Promise.all([
       shouldCompare
@@ -136,8 +210,9 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
             },
           }),
       API.getWorkspaceChanges(repoName).catch(() => ({ changes: [] as WorkspaceChange[] })),
+      API.getGitStatus(repoName).catch(() => ({ ok: false, data: null as GitStatus | null })),
     ])
-      .then(([compareRes, wsRes]) => {
+      .then(([compareRes, wsRes, statusRes]) => {
         if (cancelled) return;
         if (compareRes.ok && compareRes.data?.files) {
           setDiffFiles(compareRes.data.files.filter((f) => f?.path && !isPathHidden(f.path)));
@@ -147,11 +222,13 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
         setWorkspaceChanges(
           (wsRes?.changes || []).filter((c) => c?.path && !isPathHidden(c.path)),
         );
+        setLiveGitStatus(statusRes?.ok && statusRes.data ? statusRes.data : null);
       })
       .catch(() => {
         if (!cancelled) {
           setDiffFiles([]);
           setWorkspaceChanges([]);
+          setLiveGitStatus(null);
         }
       })
       .finally(() => {
@@ -177,13 +254,17 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   const activeProposal =
     selectedNode?.proposal?.status === "OPEN" ? selectedNode.proposal : existingProposal;
   const isUpdateMode = Boolean(activeProposal);
-  const currentActiveBranch = nodes.find((n) => n.isCurrent)?.name;
-  const isViewingCurrentBranch =
-    !sourceBranch || !currentActiveBranch || sourceBranch === currentActiveBranch;
+  const isViewingCurrentBranch = Boolean(
+    liveCurrentBranch &&
+      (sourceBranch === liveCurrentBranch ||
+        (!sourceBranch && liveCurrentBranch === defaultBranch)),
+  );
   const activeWsChanges = isViewingCurrentBranch ? workspaceChanges : [];
-  const nodeUncommittedPaths = (selectedNode?.uncommittedFiles || [])
-    .map((u) => (typeof u === "string" ? u : u?.path))
-    .filter((p): p is string => Boolean(p) && !isPathHidden(p));
+  const uncommittedFilesForSelected =
+    isViewingCurrentBranch && liveGitStatus
+      ? liveVisibleGitFiles
+      : getVisibleNodeUncommitted(selectedNode);
+  const nodeUncommittedPaths = uncommittedFilesForSelected.map((u) => u.path);
   const wsUncommittedPaths = activeWsChanges.map((c) => c.path);
   const uncommittedOnly = Array.from(new Set([...nodeUncommittedPaths, ...wsUncommittedPaths])).filter(
     (p) => !diffFiles.some((f) => f.path === p),
@@ -402,12 +483,25 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                       Edições locais (sem commit)
                     </span>
                     <span style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>
-                      {defaultNode?.uncommittedFiles?.length || 0} arquivo{(defaultNode?.uncommittedFiles?.length || 0) === 1 ? "" : "s"}
+                      {defaultUncommittedCount} arquivo{defaultUncommittedCount === 1 ? "" : "s"}
                     </span>
                   </button>
                 )}
                 {candidateNodes.map((n) => {
                   const isSelected = sourceBranch === n.name;
+                  const nodePendingCount =
+                    n.isCurrent && liveGitStatus
+                      ? new Set([
+                          ...liveVisibleGitFiles.map((f) => f.path),
+                          ...workspaceChanges.map((c) => c.path),
+                        ]).size
+                      : getVisibleNodeUncommitted(n).length;
+                  const statusLabel =
+                    n.ahead > 0
+                      ? nodePendingCount > 0
+                        ? `${n.ahead} checkpoint${n.ahead === 1 ? "" : "s"} • ${nodePendingCount} pendente${nodePendingCount === 1 ? "" : "s"}`
+                        : `${n.ahead} checkpoint${n.ahead === 1 ? "" : "s"}`
+                      : `${nodePendingCount} arquivo${nodePendingCount === 1 ? "" : "s"} pendente${nodePendingCount === 1 ? "" : "s"}`;
                   return (
                     <button
                       key={n.name}
@@ -437,7 +531,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                         {n.displayName || n.name}
                       </span>
                       <span style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>
-                        {n.ahead} checkpoint{n.ahead === 1 ? "" : "s"}
+                        {statusLabel}
                       </span>
                     </button>
                   );
@@ -525,8 +619,9 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                   const effectiveOldContent = f.oldContent ?? wsMatch?.old_content;
                   const effectiveNewContent =
                     wsMatch?.new_content !== undefined ? wsMatch.new_content : f.newContent;
-                  const hasVisualContent =
-                    effectiveOldContent !== undefined || effectiveNewContent !== undefined;
+                  const hasVisualContent = Boolean(
+                    effectiveOldContent || effectiveNewContent,
+                  );
                   const normalizedStatus = (f.status || "MODIFIED").toUpperCase();
                   const statusMeta =
                     normalizedStatus === "ADDED"
@@ -629,16 +724,27 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
                 {uncommittedOnly.map((filePath) => {
                   const isExpanded = expandedFile === filePath;
                   const wsMatch = activeWsChanges.find((c) => c.path === filePath);
+                  const gitMatch = uncommittedFilesForSelected.find((u) => u.path === filePath);
                   const hasVisualContent =
                     wsMatch &&
                     (wsMatch.old_content !== undefined || wsMatch.new_content !== undefined);
-                  const rawType = (wsMatch?.type || "").toUpperCase();
+                  const rawType = (wsMatch?.type || gitMatch?.status || "").toUpperCase();
                   const statusMeta =
-                    rawType === "ADDED" || rawType === "UNTRACKED" || rawType === "CREATE" || (wsMatch && !wsMatch.old_content && wsMatch.new_content)
+                    rawType === "ADDED" ||
+                    rawType === "UNTRACKED" ||
+                    rawType === "CREATE" ||
+                    rawType === "??" ||
+                    rawType === "A" ||
+                    (wsMatch && !wsMatch.old_content && wsMatch.new_content)
                       ? { label: "Novo", color: "#15803d", bg: "rgba(22, 163, 74, 0.12)" }
-                      : rawType === "DELETED" || rawType === "DELETE" || (wsMatch && wsMatch.old_content && !wsMatch.new_content)
+                      : rawType === "DELETED" ||
+                          rawType === "DELETE" ||
+                          rawType === "D" ||
+                          (wsMatch && wsMatch.old_content && !wsMatch.new_content)
                         ? { label: "Excluído", color: "#b91c1c", bg: "rgba(220, 38, 38, 0.12)" }
-                        : { label: "Modificado", color: "#1d4ed8", bg: "rgba(37, 99, 235, 0.1)" };
+                        : rawType === "R" || rawType === "RENAMED"
+                          ? { label: "Renomeado", color: "#7c3aed", bg: "rgba(124, 58, 237, 0.12)" }
+                          : { label: "Modificado", color: "#1d4ed8", bg: "rgba(37, 99, 235, 0.1)" };
                   return (
                     <div
                       key={filePath}

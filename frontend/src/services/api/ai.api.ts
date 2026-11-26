@@ -179,6 +179,15 @@ export const aiApi = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async renameMemorySession(payload: { repo?: string; session_id: string; title: string }): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/chat/memory/session', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async getMemoryWiki(params: { repo?: string; category?: string; query?: string } = {}): Promise<ApiResponse<any>> {
     const query = new URLSearchParams();
     if (params.repo) query.set('repo', params.repo);

@@ -260,7 +260,7 @@ export async function executeGit(
   args: string[],
   cwd: string,
   explicitToken?: string,
-  options: { timeout?: number; maxBuffer?: number } = {},
+  options: { timeout?: number; maxBuffer?: number; trimStdout?: boolean } = {},
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
   if (gitExecutionHook) {
     try {
@@ -279,8 +279,9 @@ export async function executeGit(
       env,
     });
 
+    const redactedStdout = redactTokens(stdout, activeToken, base64Token);
     return {
-      stdout: redactTokens(stdout, activeToken, base64Token).trim(),
+      stdout: options.trimStdout === false ? redactedStdout : redactedStdout.trim(),
       stderr: redactTokens(stderr, activeToken, base64Token).trim(),
       success: true,
     };

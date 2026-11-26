@@ -10,6 +10,7 @@ import {
   getActiveBearerToken,
   getDefaultBranch,
   getGitStatus,
+  isTransientGitPath,
   rollbackToCommit,
 } from "../../utils/git.js";
 import {
@@ -20,7 +21,6 @@ import { computeDiff } from "../../utils/diff.js";
 import {
   isPathHidden,
   loadHiddenFiles,
-  isSystemPath,
 } from "../../utils/hidden-files.js";
 import {
   scanContentForSecrets,
@@ -137,16 +137,28 @@ export class PRsLifecycleService {
       ),
       ...(gitStatus.systemFiles || []),
     ];
-    const rawChanges = (cfg.workspace_changes?.[repoName] || []).filter(
-      (c) => !isPathHidden(c.path, hiddenList) || isSystemPath(c.path),
-    );
+    const gitDirtySet = new Set((gitStatus.files || []).map((f) => f.path.trim().replace(/^\/+/, "")));
+    const rawChanges = (cfg.workspace_changes?.[repoName] || []).filter((c) => {
+      const cp = (c?.path || "").trim().replace(/^\/+/, "");
+      if (!cp || isPathHidden(cp, hiddenList)) return false;
+      return !gitStatus.isRepo || gitDirtySet.has(cp);
+    });
 
     const allChangedPaths = Array.from(
       new Set([
-        ...rawChanges.map((c) => c.path),
-        ...gitFiles.map((f) => f.path),
+        ...rawChanges.map((c) => c.path.trim().replace(/^\/+/, "")),
+        ...gitFiles.map((f) => f.path.trim().replace(/^\/+/, "")),
       ]),
-    ).filter((p) => !p.includes(".git") && !p.includes(".prs.json") && !p.includes(".rag") && !p.includes(".workspace_changes.json") && !p.includes(".sessions"));
+    ).filter((p) => {
+      const clean = p.replace(/\\/g, "/");
+      return (
+        Boolean(clean) &&
+        !isTransientGitPath(clean) &&
+        clean !== ".git" &&
+        !clean.startsWith(".git/") &&
+        !clean.includes("/.git/")
+      );
+    });
 
     let commitsAheadCount = 0;
     if (isWorkingOnFeatureBranch) {

@@ -95,6 +95,7 @@ export class NotionEditorEngine {
   dictionaryTerms: DictionaryTerm[] = [];
   private dictHoverTimer: ReturnType<typeof setTimeout> | null = null;
   private dictCurrentHoverEl: HTMLElement | null = null;
+  private sideHandleHideTimer: ReturnType<typeof setTimeout> | null = null;
 
   undoStack: string[] = [];
   redoStack: string[] = [];
@@ -327,17 +328,15 @@ export class NotionEditorEngine {
     });
 
     this.sideHandle.addEventListener('mouseenter', () => {
+      if (this.sideHandleHideTimer) {
+        clearTimeout(this.sideHandleHideTimer);
+        this.sideHandleHideTimer = null;
+      }
       if (this.sideHandle) this.sideHandle.style.display = 'flex';
     });
 
     this.sideHandle.addEventListener('mouseleave', () => {
-      setTimeout(() => {
-        const isOverCanvas = this.canvas && this.canvas.matches(':hover');
-        const isOverMenu = this.blockMenu && this.blockMenu.matches(':hover');
-        if (!isOverCanvas && !isOverMenu && this.sideHandle) {
-          this.sideHandle.style.display = 'none';
-        }
-      }, 60);
+      this.scheduleHideSideHandle();
     });
 
     // Ações do Menu de Bloco
@@ -531,13 +530,30 @@ export class NotionEditorEngine {
     }
 
     // 1. Side Handles
-    const block = this.findTopLevelBlock(e.target as Node);
+    if (this.sideHandleHideTimer) {
+      clearTimeout(this.sideHandleHideTimer);
+      this.sideHandleHideTimer = null;
+    }
+
+    let block = this.findTopLevelBlock(e.target as Node);
+    if ((!block || block === this.canvas) && this.canvas.children.length > 0) {
+      for (let i = 0; i < this.canvas.children.length; i++) {
+        const child = this.canvas.children[i] as HTMLElement;
+        const r = child.getBoundingClientRect();
+        if (e.clientY >= r.top - 6 && e.clientY <= r.bottom + 6) {
+          block = child;
+          break;
+        }
+      }
+    }
+
     if (block && block !== this.canvas && this.sideHandle) {
       this.hoveredBlock = block;
       const rect = block.getBoundingClientRect();
       this.sideHandle.style.display = 'flex';
-      this.sideHandle.style.left = `${rect.left - 54}px`;
-      this.sideHandle.style.top = `${rect.top + 2}px`;
+      this.sideHandle.style.left = `${Math.max(4, rect.left - 48)}px`;
+      const blockTopOffset = Math.max(0, Math.min(6, (rect.height - 24) / 2));
+      this.sideHandle.style.top = `${rect.top + blockTopOffset}px`;
     }
 
     // 2. Dictionary Term Hover Popover
@@ -574,6 +590,19 @@ export class NotionEditorEngine {
     }
   }
 
+  scheduleHideSideHandle() {
+    if (this.sideHandleHideTimer) clearTimeout(this.sideHandleHideTimer);
+    this.sideHandleHideTimer = setTimeout(() => {
+      const isOverCanvas = this.canvas && this.canvas.matches(':hover');
+      const isOverHandle = this.sideHandle && this.sideHandle.matches(':hover');
+      const isOverMenu = this.blockMenu && this.blockMenu.matches(':hover');
+      const isMenuOpen = this.blockMenu && this.blockMenu.style.display !== 'none';
+      if (!isOverCanvas && !isOverHandle && !isOverMenu && !isMenuOpen && this.sideHandle) {
+        this.sideHandle.style.display = 'none';
+      }
+    }, 320);
+  }
+
   handleMouseLeave(_e: MouseEvent) {
     if (this.dictHoverTimer) {
       clearTimeout(this.dictHoverTimer);
@@ -581,13 +610,7 @@ export class NotionEditorEngine {
     }
     this.dictCurrentHoverEl = null;
 
-    setTimeout(() => {
-      const isOverHandle = this.sideHandle && this.sideHandle.matches(':hover');
-      const isOverMenu = this.blockMenu && this.blockMenu.matches(':hover');
-      if (!isOverHandle && !isOverMenu && this.sideHandle) {
-        this.sideHandle.style.display = 'none';
-      }
-    }, 60);
+    this.scheduleHideSideHandle();
   }
 
   handleDragOver(e: DragEvent) {
@@ -1854,6 +1877,7 @@ export class NotionEditorEngine {
     this.canvas.removeEventListener('drop', this.boundOnDrop);
     document.removeEventListener('click', this.boundDocClick);
 
+    if (this.sideHandleHideTimer) clearTimeout(this.sideHandleHideTimer);
     if (this.slashMenu) this.slashMenu.destroy();
     if (this.bubbleMenu) this.bubbleMenu.destroy();
     if (this.sideHandle) this.sideHandle.remove();

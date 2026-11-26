@@ -8,6 +8,18 @@ import { Badge, Button, IconButton, SearchInput } from "../ui";
 interface HistorySessionItem {
   id?: string;
   session_id?: string;
+  title?: string;
+  repo?: string;
+  path?: string;
+  model?: string;
+  preview?: string;
+  event_count?: number;
+  author?: { name?: string; [key: string]: unknown };
+  metrics?: {
+    rounds?: number;
+    total_tokens?: number;
+    total_cost_usd?: number;
+  };
   timestamp?: number;
   updated_at?: string;
   created_at?: string;
@@ -52,6 +64,55 @@ function formatRelativeTime(dateStr?: string | number): string {
   return `${date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} às ${timeStr}`;
 }
 
+function formatCompactTime(dateStr?: string | number): string {
+  if (!dateStr) return "";
+  const date = typeof dateStr === "number" ? new Date(dateStr) : new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "agora";
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d`;
+
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
+}
+
+function getDateGroupLabel(dateStr?: string | number): string {
+  if (!dateStr) return "Anteriores";
+  const date = typeof dateStr === "number" ? new Date(dateStr) : new Date(dateStr);
+  if (isNaN(date.getTime())) return "Anteriores";
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diffDays = Math.round((startOfToday - startOfDate) / 86400000);
+
+  if (diffDays <= 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+  if (diffDays <= 7) return "Últimos 7 dias";
+  return "Anteriores";
+}
+
+function getSessionDisplayTitle(s: HistorySessionItem): string {
+  if (typeof s.title === "string" && s.title.trim()) {
+    return s.title.trim();
+  }
+  if (typeof s.preview === "string" && s.preview.trim()) {
+    return s.preview.trim().replace(/\s+/g, " ");
+  }
+  return "Nova Conversa";
+}
+
+function formatTokenCount(tokens?: number): string {
+  if (!tokens || tokens <= 0) return "";
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
+  return String(tokens);
+}
+
 export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   isOpen,
   onClose,
@@ -73,6 +134,12 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   const [isHandoffExpanded, setIsHandoffExpanded] = useState<boolean>(false);
   const [wikiCategory, setWikiCategory] = useState<"handoffs" | "decisions" | "architecture">("handoffs");
   const [isTransferring, setIsTransferring] = useState<boolean>(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string>("");
+  const [hoveredSession, setHoveredSession] = useState<HistorySessionItem | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  const renameCancelledRef = useRef<boolean>(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const effectiveRepo =
@@ -83,8 +150,52 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   useEffect(() => {
     if (isOpen) {
       loadHistory();
+    } else {
+      clearHoverPopover();
+      setEditingSessionId(null);
     }
   }, [isOpen, effectiveRepo, docPath, historyVersion]);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
+    };
+  }, []);
+
+  const clearHoverPopover = () => {
+    if (hoverTimerRef.current) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setHoveredSession(null);
+    setPopoverPos(null);
+  };
+
+  const handleRowMouseEnter = (session: HistorySessionItem, el: HTMLDivElement) => {
+    if (editingSessionId === session.session_id) return;
+    if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
+
+    const rect = el.getBoundingClientRect();
+    hoverTimerRef.current = window.setTimeout(() => {
+      const popoverWidth = 280;
+      const estimatedHeight = 165;
+      const gap = 10;
+      const fitsRight = rect.right + gap + popoverWidth <= window.innerWidth - 12;
+      const left = fitsRight
+        ? rect.right + gap
+        : Math.max(12, rect.left - popoverWidth - gap);
+      const top = Math.min(
+        Math.max(12, rect.top),
+        Math.max(12, window.innerHeight - estimatedHeight - 12),
+      );
+      setPopoverPos({ top, left });
+      setHoveredSession(session);
+    }, 260);
+  };
+
+  const handleRowMouseLeave = () => {
+    clearHoverPopover();
+  };
 
   const loadHistory = async () => {
     setIsLoading(true);
@@ -140,11 +251,63 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     }
   };
 
+  const handleStartRename = (
+    session: HistorySessionItem,
+    e?: React.MouseEvent,
+  ) => {
+    if (e) e.stopPropagation();
+    if (!session.session_id) return;
+    clearHoverPopover();
+    renameCancelledRef.current = false;
+    setEditingSessionId(session.session_id);
+    setEditingTitle(getSessionDisplayTitle(session));
+  };
+
+  const handleCancelRename = () => {
+    renameCancelledRef.current = true;
+    setEditingSessionId(null);
+    setEditingTitle("");
+  };
+
+  const handleCommitRename = async (sessionId: string) => {
+    if (renameCancelledRef.current) {
+      renameCancelledRef.current = false;
+      return;
+    }
+    const nextTitle = editingTitle.trim();
+    setEditingSessionId(null);
+    if (!sessionId) return;
+
+    try {
+      const res = await API.renameMemorySession({
+        repo: effectiveRepo,
+        session_id: sessionId,
+        title: nextTitle,
+      });
+      if (res.ok) {
+        setSessions((prev) =>
+          prev.map((item) =>
+            item.session_id === sessionId
+              ? { ...item, title: res.data?.title || undefined }
+              : item,
+          ),
+        );
+        setFeedback("Título atualizado!");
+        setTimeout(() => setFeedback(null), 1500);
+      }
+    } catch (err) {
+      console.error("[HistorySidebar] Erro ao renomear sessão:", err);
+      setFeedback("Erro ao renomear sessão.");
+      setTimeout(() => setFeedback(null), 2000);
+    }
+  };
+
   const handleRestoreToChat = async (
     sessionId: string,
     e?: React.MouseEvent,
   ) => {
     if (e) e.stopPropagation();
+    clearHoverPopover();
     const success = await restoreSession(sessionId);
     if (success) {
       setFeedback("Conversa aberta em aba! ✨");
@@ -305,12 +468,14 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     if (!searchTerm.trim()) return sessions;
     const term = searchTerm.toLowerCase();
     return sessions.filter((s) => {
+      const title = (s.title || "").toLowerCase();
       const preview = (s.preview || "").toLowerCase();
       const path = (s.path || "").toLowerCase();
       const model = (s.model || "").toLowerCase();
       const author = (s.author?.name || "").toLowerCase();
       const id = (s.session_id || "").toLowerCase();
       return (
+        title.includes(term) ||
         preview.includes(term) ||
         path.includes(term) ||
         model.includes(term) ||
@@ -319,6 +484,21 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       );
     });
   }, [sessions, searchTerm]);
+
+  const groupedSessions = useMemo(() => {
+    const groups: Array<{ label: string; items: HistorySessionItem[] }> = [];
+    const map = new Map<string, HistorySessionItem[]>();
+    for (const s of filteredSessions) {
+      const label = getDateGroupLabel(s.timestamp || s.updated_at || s.created_at);
+      if (!map.has(label)) {
+        const arr: HistorySessionItem[] = [];
+        map.set(label, arr);
+        groups.push({ label, items: arr });
+      }
+      map.get(label)!.push(s);
+    }
+    return groups;
+  }, [filteredSessions]);
 
   const projectColor =
     projectConfig?.primary_color || "var(--color-primary, #2563eb)";
@@ -957,170 +1137,121 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                   </span>
                 </div>
 
-                {filteredSessions.map((s, idx) => {
-                  const isActive = s.session_id === currentSessionId;
-                  const formattedTime = formatRelativeTime(
-                    s.timestamp || s.updated_at || s.created_at,
-                  );
+                {groupedSessions.map((group) => (
+                  <React.Fragment key={group.label}>
+                    <div className="ai-history-group-label">{group.label}</div>
+                    {group.items.map((s, idx) => {
+                      const sessionId = s.session_id || `session-${idx}`;
+                      const isActive = sessionId === currentSessionId;
+                      const isEditing = editingSessionId === sessionId;
+                      const displayTitle = getSessionDisplayTitle(s);
+                      const compactTime = formatCompactTime(
+                        s.timestamp || s.updated_at || s.created_at,
+                      );
 
-                  return (
-                    <div
-                      key={s.session_id || idx}
-                      className={`ui-sidebar-item ${isActive ? "ui-sidebar-item--active" : ""}`}
-                      onClick={() => handleSelectSession(s.session_id)}
-                      style={{
-                        flexDirection: "column",
-                        alignItems: "stretch",
-                        gap: "5px",
-                      }}
-                    >
-                      {/* Topo do Card: Autor, Badge Ativa e Data */}
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
+                      return (
                         <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "5px",
-                            minWidth: 0,
+                          key={sessionId}
+                          className={`ai-history-row ${isActive ? "ai-history-row--active" : ""}`}
+                          onClick={() => {
+                            if (!isEditing && s.session_id) {
+                              handleRestoreToChat(s.session_id);
+                            }
                           }}
+                          onMouseEnter={(e) => handleRowMouseEnter(s, e.currentTarget)}
+                          onMouseLeave={handleRowMouseLeave}
                         >
-                          <strong
-                            style={{
-                              fontSize: "11.5px",
-                              color: "var(--color-text-primary, #0f172a)",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              maxWidth: "140px",
-                            }}
-                          >
-                            {s.author?.name || "Developer"}
-                          </strong>
-                          {isActive && (
-                            <Badge variant="primary" size="sm">
-                              Ativa
-                            </Badge>
+                          <div className="ai-history-row__left">
+                            {isActive && <span className="ai-history-row__dot" />}
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                className="ai-history-rename-input"
+                                value={editingTitle}
+                                autoFocus
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => setEditingTitle(e.target.value)}
+                                onBlur={() => handleCommitRename(sessionId)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleCommitRename(sessionId);
+                                  } else if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    handleCancelRename();
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <span className="ai-history-row__title">
+                                {displayTitle}
+                              </span>
+                            )}
+                          </div>
+
+                          {!isEditing && (
+                            <div className="ai-history-row__right">
+                              <span className="ai-history-row__time">
+                                {compactTime}
+                              </span>
+                              <div className="ai-history-row__actions">
+                                <IconButton
+                                  size="xs"
+                                  variant="ghost"
+                                  onClick={(e) => handleStartRename(s, e)}
+                                  title="Renomear conversa"
+                                  icon={
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: "14px" }}
+                                    >
+                                      edit
+                                    </span>
+                                  }
+                                />
+                                <IconButton
+                                  size="xs"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    clearHoverPopover();
+                                    handleConsolidateMemory(sessionId);
+                                  }}
+                                  title="Documentar na Wiki"
+                                  icon={
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: "14px" }}
+                                    >
+                                      post_add
+                                    </span>
+                                  }
+                                />
+                                <IconButton
+                                  size="xs"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    clearHoverPopover();
+                                    handleDeleteSession(sessionId, e);
+                                  }}
+                                  title="Excluir sessão"
+                                  icon={
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: "14px" }}
+                                    >
+                                      delete
+                                    </span>
+                                  }
+                                />
+                              </div>
+                            </div>
                           )}
                         </div>
-
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          <span
-                            className="ui-text-muted"
-                            style={{ fontSize: "10px" }}
-                            title={
-                              s.updated_at
-                                ? new Date(s.updated_at).toLocaleString("pt-BR")
-                                : ""
-                            }
-                          >
-                            {formattedTime}
-                          </span>
-                          <IconButton
-                            size="xs"
-                            variant="ghost"
-                            onClick={(e) =>
-                              handleDeleteSession(s.session_id, e)
-                            }
-                            title="Excluir sessão"
-                            icon={
-                              <span
-                                className="material-symbols-outlined"
-                                style={{ fontSize: "14px" }}
-                              >
-                                close
-                              </span>
-                            }
-                          />
-                        </div>
-                      </div>
-
-                      {/* Preview da Mensagem */}
-                      {s.preview && (
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: "11px",
-                            color: "var(--color-text-secondary, #334155)",
-                            lineHeight: 1.35,
-                            overflow: "hidden",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                          }}
-                        >
-                          "{s.preview}"
-                        </p>
-                      )}
-
-                      {/* Rodapé do Card */}
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          fontSize: "10px",
-                          color: "var(--color-text-muted, #64748b)",
-                          marginTop: "2px",
-                          paddingTop: "4px",
-                          borderTop:
-                            "1px dashed var(--color-border-subtle, #f1f5f9)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <span
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              maxWidth: "120px",
-                            }}
-                          >
-                            📄 {s.path || "Global"}
-                          </span>
-                          <span>
-                            💬 {s.event_count || s.metrics?.rounds || 1} msg
-                          </span>
-                        </div>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => handleRestoreToChat(s.session_id, e)}
-                          title="Restaurar esta conversa no Nexos"
-                          icon={
-                            <span
-                              className="material-symbols-outlined"
-                              style={{ fontSize: "12px" }}
-                            >
-                              restore
-                            </span>
-                          }
-                        >
-                          Restaurar
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
               </div>
             ) : (
               /* Estado Vazio */
@@ -1197,6 +1328,75 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
           </>
         )}
       </div>
+
+      {hoveredSession && popoverPos && (
+        <div
+          className="ai-history-popover"
+          style={{ top: popoverPos.top, left: popoverPos.left }}
+        >
+          <div className="ai-history-popover__title">
+            {getSessionDisplayTitle(hoveredSession)}
+          </div>
+
+          {hoveredSession.preview &&
+            hoveredSession.title &&
+            hoveredSession.preview.trim() !== hoveredSession.title.trim() && (
+              <p className="ai-history-popover__preview">
+                {hoveredSession.preview}
+              </p>
+            )}
+
+          <div className="ai-history-popover__meta">
+            <div className="ai-history-popover__meta-row">
+              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                folder
+              </span>
+              <span>
+                {hoveredSession.repo || effectiveRepo}
+                {hoveredSession.path && hoveredSession.path !== "Global"
+                  ? ` · ${hoveredSession.path}`
+                  : ""}
+              </span>
+            </div>
+
+            <div className="ai-history-popover__meta-row">
+              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                smart_toy
+              </span>
+              <span>{hoveredSession.model || "AI Assistant"}</span>
+            </div>
+
+            <div className="ai-history-popover__meta-row">
+              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                chat_bubble_outline
+              </span>
+              <span>
+                {hoveredSession.event_count || hoveredSession.metrics?.rounds || 1} msgs
+                {hoveredSession.metrics?.total_tokens
+                  ? ` · ${formatTokenCount(hoveredSession.metrics.total_tokens)} tokens`
+                  : ""}
+                {hoveredSession.metrics?.total_cost_usd && hoveredSession.metrics.total_cost_usd > 0
+                  ? ` · $${hoveredSession.metrics.total_cost_usd.toFixed(4)}`
+                  : ""}
+              </span>
+            </div>
+
+            <div className="ai-history-popover__meta-row">
+              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                schedule
+              </span>
+              <span>
+                {formatRelativeTime(
+                  hoveredSession.timestamp ||
+                    hoveredSession.updated_at ||
+                    hoveredSession.created_at,
+                )}
+                {hoveredSession.author?.name ? ` · ${hoveredSession.author.name}` : ""}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };

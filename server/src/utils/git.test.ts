@@ -9,6 +9,7 @@ import {
   ensureGitIgnore,
   commitChanges,
   getGitStatus,
+  compareGitBranches,
   createAndCheckoutBranch,
   getGitBranches,
   getGitLog,
@@ -18,6 +19,7 @@ import {
   rollbackToCommit,
   executeGit,
 } from "./git.js";
+import { isPathHidden } from "./hidden-files.js";
 
 test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async (t) => {
   // 1. parseGitProgress (sem depender de repositório em disco)
@@ -193,6 +195,40 @@ test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async
       // Com force: true deve realizar o rollback com sucesso
       const forceRes = await rollbackToCommit(repoDir, firstCommitHash, "Rollback forçado", { force: true });
       assert.strictEqual(forceRes.success, true);
+    });
+
+    // 13. getGitStatus e compareGitBranches com espaços, acentos, aspas e .translations
+    await t.test("getGitStatus e compareGitBranches devem retornar caminhos sem aspas C-style e sem fantasmas de rename", async () => {
+      await executeGit(["checkout", "-b", "gov/paths-especiais"], repoDir);
+      fs.mkdirSync(path.join(repoDir, ".translations/en"), { recursive: true });
+      const hiddenTranslation = ".translations/en/inserção nomercado.md";
+      const specialDoc = 'docs/inserção "especial" nomercado.md';
+      fs.mkdirSync(path.join(repoDir, "docs"), { recursive: true });
+      fs.writeFileSync(path.join(repoDir, hiddenTranslation), "# EN\n", "utf-8");
+      fs.writeFileSync(path.join(repoDir, specialDoc), "# Especial\n", "utf-8");
+
+      const status = await getGitStatus(repoDir);
+      const paths = status.files.map((f) => f.path);
+      assert.ok(paths.includes(hiddenTranslation), `Esperava caminho sem aspas, veio: ${JSON.stringify(paths)}`);
+      assert.ok(paths.includes(specialDoc), `Esperava caminho especial sem aspas, veio: ${JSON.stringify(paths)}`);
+      assert.strictEqual(isPathHidden(hiddenTranslation), true);
+
+      const commitRes = await commitChanges(repoDir, "Adiciona doc especial", [specialDoc]);
+      assert.strictEqual(commitRes.success, true);
+
+      // Renomeia specialDoc para testar diff --numstat -z / --name-status -z
+      const renamedDoc = "docs/inserção renomeada.md";
+      await executeGit(["mv", specialDoc, renamedDoc], repoDir);
+      await executeGit(["commit", "-m", "Renomeia doc"], repoDir);
+
+      const comparison = await compareGitBranches(repoDir, "main", "gov/paths-especiais");
+      const comparedPaths = comparison.files.map((f) => f.path);
+      assert.ok(comparedPaths.includes(renamedDoc));
+      assert.strictEqual(comparedPaths.some((p) => p.includes("=>")), false);
+
+      // Limpa arquivo untracked oculto e volta para main
+      fs.rmSync(path.join(repoDir, ".translations"), { recursive: true, force: true });
+      await executeGit(["checkout", "main"], repoDir);
     });
   } finally {
     try {

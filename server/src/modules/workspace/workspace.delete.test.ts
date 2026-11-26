@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveRepoDir } from "../../config/constants.js";
 import { workspaceService } from "./workspace.service.js";
+import { gitService } from "../git/git.service.js";
 import { recordChange, loadRepoWorkspaceChanges } from "../../config/storage.js";
 import { executeGit } from "../../utils/git.js";
 
@@ -87,6 +88,34 @@ test("WorkspaceService - Deleção e ciclo de vida de arquivos locais", async (t
       // Verifica se foi removido de workspace_changes.json em disco
       changes = loadRepoWorkspaceChanges(repo);
       assert.strictEqual(changes.some((c) => c.path === "fantasma-antigo.md"), false, "Fantasma deve ter sido removido do arquivo em disco");
+    },
+  );
+
+  await t.test(
+    "getWorkspaceChanges deve ignorar .translations e expurgar alterações já commitadas via checkpoint",
+    async () => {
+      await executeGit(["checkout", "-b", "rascunho-teste"], repoDir);
+      fs.mkdirSync(path.join(repoDir, ".translations/en"), { recursive: true });
+      fs.writeFileSync(path.join(repoDir, ".translations/en/inserção nomercado.md"), "# Trad\n", "utf-8");
+
+      await workspaceService.createFile("novo-doc.md", "# Novo Doc\n", false, {}, repo);
+      let wsChanges = await workspaceService.getWorkspaceChanges(repo);
+      assert.ok(wsChanges.changes.some((c: any) => c.path === "novo-doc.md"));
+      assert.strictEqual(
+        wsChanges.changes.some((c: any) => c.path.includes(".translations")),
+        false,
+        ".translations não deve aparecer em getWorkspaceChanges",
+      );
+
+      const commitRes = await gitService.commit("Salva checkpoint", undefined, undefined, repo);
+      assert.strictEqual(commitRes.success, true);
+
+      wsChanges = await workspaceService.getWorkspaceChanges(repo);
+      assert.strictEqual(
+        wsChanges.changes.some((c: any) => c.path === "novo-doc.md"),
+        false,
+        "Arquivo commitado no checkpoint não deve permanecer pendente em getWorkspaceChanges",
+      );
     },
   );
 

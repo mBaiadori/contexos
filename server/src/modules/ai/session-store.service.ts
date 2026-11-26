@@ -24,6 +24,7 @@ export interface ImportSummary {
 
 export interface SessionListItem {
   session_id: string;
+  title?: string;
   repo: string;
   path: string;
   event_count: number;
@@ -47,6 +48,7 @@ export interface SessionListItem {
 
 interface SessionRow {
   session_id: string;
+  title?: string | null;
   repo: string;
   path: string;
   created_at: string;
@@ -222,6 +224,7 @@ export class SessionStoreService {
 
       CREATE TABLE IF NOT EXISTS chat_sessions (
         session_id TEXT PRIMARY KEY,
+        title TEXT,
         repo TEXT NOT NULL,
         path TEXT NOT NULL DEFAULT 'Global',
         created_at TEXT NOT NULL,
@@ -262,6 +265,11 @@ export class SessionStoreService {
       CREATE INDEX IF NOT EXISTS idx_telemetry_session
         ON chat_telemetry(session_id, timestamp ASC);
     `);
+
+    const cols = queryAll<{ name: string }>(db, 'PRAGMA table_info(chat_sessions)');
+    if (!cols.some((c) => c.name === 'title')) {
+      db.run('ALTER TABLE chat_sessions ADD COLUMN title TEXT');
+    }
   }
 
   close(): void {
@@ -507,6 +515,7 @@ export class SessionStoreService {
       if (detail) {
         const listItem: SessionListItem = {
           session_id: detail.session_id,
+          title: detail.title,
           repo: resolvedRepo,
           path: detail.path,
           event_count: detail.events.length,
@@ -528,6 +537,7 @@ export class SessionStoreService {
       db,
       `SELECT
         s.session_id,
+        s.title,
         s.repo,
         s.path,
         s.created_at,
@@ -555,6 +565,7 @@ export class SessionStoreService {
 
       return {
         session_id: row.session_id,
+        title: row.title || undefined,
         repo: row.repo,
         path: row.path || 'Global',
         event_count: Number(row.event_count ?? metrics.event_count ?? 0),
@@ -611,6 +622,7 @@ export class SessionStoreService {
 
     return {
       session_id: row.session_id,
+      title: row.title || undefined,
       path: row.path,
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -637,6 +649,24 @@ export class SessionStoreService {
       return { success: true, message: 'Sessão removida com sucesso.' };
     }
     return { success: false, error: 'Sessão não encontrada.' };
+  }
+
+  renameSession(
+    repoName: string,
+    sessionId: string,
+    title: string
+  ): { success: boolean; session_id: string; title: string | null; error?: string } {
+    const resolvedRepo = this.resolveEffectiveRepo(repoName);
+    this.migrateLegacyRepoSessions(resolvedRepo);
+
+    const db = this.getDb();
+    const cleanTitle = title.trim().slice(0, 140) || null;
+    const changes = runStmt(db, 'UPDATE chat_sessions SET title = ? WHERE session_id = ?', [cleanTitle, sessionId]);
+    if (changes > 0) {
+      this.persistToDisk();
+      return { success: true, session_id: sessionId, title: cleanTitle };
+    }
+    return { success: false, session_id: sessionId, title: cleanTitle, error: 'Sessão não encontrada.' };
   }
 
   resetRepo(repoName: string): { success: boolean; message: string } {
@@ -755,10 +785,11 @@ export class SessionStoreService {
             runStmt(
               db,
               `INSERT INTO chat_sessions (
-                session_id, repo, path, created_at, updated_at, author_json, model, metrics_json, preview
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                session_id, title, repo, path, created_at, updated_at, author_json, model, metrics_json, preview
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 imp.session_id,
+                imp.title ?? null,
                 targetRepo,
                 imp.path || 'Global',
                 imp.created_at,

@@ -89,6 +89,7 @@ export interface SessionEventRecord {
 
 export interface SessionDataRecord {
   session_id: string;
+  title?: string;
   path: string;
   created_at: string;
   updated_at: string;
@@ -771,6 +772,10 @@ export class AIService {
 
   deleteSession(repoName: string, sessionId: string) {
     return sessionStoreService.deleteSession(repoName, sessionId);
+  }
+
+  renameSession(repoName: string, sessionId: string, title: string) {
+    return sessionStoreService.renameSession(repoName, sessionId, title);
   }
 
   async finalizeSession(

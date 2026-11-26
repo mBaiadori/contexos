@@ -100,19 +100,24 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
     ? remoteRes.stdout.replace(/x-access-token:[^@]+@/, "")
     : undefined;
 
-  // Status porcelain with all untracked files expanded individually
+  // Status porcelain with -z so paths are never C-quoted or octal-escaped, and all untracked files expanded individually
   const statusRes = await executeGit(
-    ["-c", "core.quotepath=false", "status", "--porcelain=v1", "-b", "-uall"],
+    ["-c", "core.quotepath=false", "status", "--porcelain=v1", "-z", "-b", "-uall"],
     repoDir,
+    undefined,
+    { trimStdout: false },
   );
-  const lines = statusRes.stdout.split("\n").filter(Boolean);
+  const entries = (statusRes.stdout || "").split("\0");
 
   let ahead = 0;
   let behind = 0;
   let tracking: string | undefined;
   const files: GitFileStatus[] = [];
 
-  for (const line of lines) {
+  for (let i = 0; i < entries.length; i++) {
+    const line = entries[i];
+    if (!line) continue;
+
     if (line.startsWith("## ")) {
       const branchInfo = line.substring(3);
       if (branchInfo.includes("...")) {
@@ -127,9 +132,17 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
       continue;
     }
 
+    if (line.length < 4) continue;
     const indexCode = line[0];
     const workCode = line[1];
-    const filePath = line.substring(3).trim();
+    const filePath = line.substring(3);
+
+    // In -z mode, renames and copies emit an extra NUL-terminated original path right after the new path
+    if (indexCode === "R" || indexCode === "C" || workCode === "R" || workCode === "C") {
+      i++;
+    }
+
+    if (!filePath) continue;
 
     const isStaged = indexCode !== " " && indexCode !== "?";
     let statusCode: GitFileStatus["status"] = "M";
@@ -142,6 +155,8 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
       statusCode = "D";
     } else if (indexCode === "R" || workCode === "R") {
       statusCode = "R";
+    } else if (indexCode === "C" || workCode === "C") {
+      statusCode = "C";
     } else {
       statusCode = "M";
     }
@@ -356,12 +371,28 @@ export async function getGitDiff(
   } else {
     // When no specific file requested, append any untracked files to the overall diff
     try {
-      const statusRes = await executeGit(["-c", "core.quotepath=false", "status", "--porcelain=v1", "-uall"], repoDir);
+      const statusRes = await executeGit(
+        ["-c", "core.quotepath=false", "status", "--porcelain=v1", "-z", "-uall"],
+        repoDir,
+        undefined,
+        { trimStdout: false },
+      );
       if (statusRes.success && statusRes.stdout) {
-        const untracked = statusRes.stdout
-          .split("\n")
-          .filter((l) => l.startsWith("?? "))
-          .map((l) => l.substring(3).trim());
+        const entries = statusRes.stdout.split("\0");
+        const untracked: string[] = [];
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          if (!entry || entry.length < 4) continue;
+          const idx = entry[0];
+          const wrk = entry[1];
+          if (idx === "R" || idx === "C" || wrk === "R" || wrk === "C") {
+            i++;
+            continue;
+          }
+          if (entry.startsWith("?? ")) {
+            untracked.push(entry.substring(3));
+          }
+        }
 
         let extraDiff = "";
         for (const uPath of untracked) {
@@ -612,8 +643,18 @@ export async function compareGitBranches(
       ["log", `${safeBase}..${safeHead}`, "-n", "100", "--format=%H|%h|%an|%cI|%s"],
       repoDir,
     ),
-    executeGit(["-c", "core.quotepath=false", "diff", "--numstat", range], repoDir),
-    executeGit(["-c", "core.quotepath=false", "diff", "--name-status", range], repoDir),
+    executeGit(
+      ["-c", "core.quotepath=false", "diff", "--numstat", "-z", range],
+      repoDir,
+      undefined,
+      { trimStdout: false },
+    ),
+    executeGit(
+      ["-c", "core.quotepath=false", "diff", "--name-status", "-z", range],
+      repoDir,
+      undefined,
+      { trimStdout: false },
+    ),
     executeGit(["merge-base", safeBase, safeHead], repoDir),
   ]);
   const baseRef =
@@ -642,20 +683,34 @@ export async function compareGitBranches(
   }
 
   const statusMap = new Map<string, string>();
-  if (nameStatusRes.success && nameStatusRes.stdout.trim()) {
-    for (const line of nameStatusRes.stdout.trim().split("\n").filter(Boolean)) {
-      const parts = line.split("\t");
-      const st = parts[0]?.trim() || "M";
-      const filePath = (parts[parts.length - 1] || "").trim();
-      if (filePath) statusMap.set(filePath, st);
+  if (nameStatusRes.success && nameStatusRes.stdout) {
+    const tokens = nameStatusRes.stdout.split("\0");
+    for (let i = 0; i < tokens.length; i++) {
+      const st = tokens[i];
+      if (!st) continue;
+      if (st.startsWith("R") || st.startsWith("C")) {
+        i++; // skip old path
+        const newPath = tokens[++i];
+        if (newPath) statusMap.set(newPath, st);
+      } else {
+        const filePath = tokens[++i];
+        if (filePath) statusMap.set(filePath, st);
+      }
     }
   }
 
   const statsMap = new Map<string, { additions: number; deletions: number }>();
-  if (numstatRes.success && numstatRes.stdout.trim()) {
-    for (const line of numstatRes.stdout.trim().split("\n").filter(Boolean)) {
-      const [addStr, delStr, ...pathParts] = line.split("\t");
-      const filePath = pathParts.join("\t").trim();
+  if (numstatRes.success && numstatRes.stdout) {
+    const tokens = numstatRes.stdout.split("\0");
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (!token) continue;
+      const [addStr, delStr, ...pathParts] = token.split("\t");
+      let filePath = pathParts.join("\t");
+      if (filePath === "") {
+        i++; // skip old path in -z rename/copy record
+        filePath = tokens[++i] || "";
+      }
       if (!filePath) continue;
       statsMap.set(filePath, {
         additions: parseInt(addStr, 10) || 0,
@@ -664,7 +719,10 @@ export async function compareGitBranches(
     }
   }
 
-  const allPaths = Array.from(new Set([...statusMap.keys(), ...statsMap.keys()]));
+  const allPaths = Array.from(new Set([...statusMap.keys(), ...statsMap.keys()])).filter((p) => {
+    const clean = p.replace(/\\/g, "/");
+    return !isTransientGitPath(clean) && !clean.endsWith("/.DS_Store") && clean !== ".DS_Store";
+  });
   const files = await Promise.all(
     allPaths.map(async (filePath) => {
       const st = statusMap.get(filePath) || "M";

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { resolveRepoDir } from "../../config/constants.js";
-import { clearWorkspaceChanges, loadConfig } from "../../config/storage.js";
+import { clearWorkspaceChanges, loadConfig, removeWorkspaceChange } from "../../config/storage.js";
 import { assertBranchName, assertCommitish } from "../../utils/git-validate.js";
 import {
   checkRemoteGitUpdates,
@@ -383,6 +383,17 @@ export class GitService {
     }
 
     const res = await commitChanges(repoDir, message, files);
+    if (res.success) {
+      try {
+        if (Array.isArray(files) && files.length > 0) {
+          for (const f of files) {
+            removeWorkspaceChange(repoName, f, ownerParam);
+          }
+        } else {
+          clearWorkspaceChanges(repoName, ownerParam);
+        }
+      } catch {}
+    }
     workspaceService.invalidateTreeCache(repoName);
     return res;
   }
