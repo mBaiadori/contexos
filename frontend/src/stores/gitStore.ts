@@ -142,9 +142,12 @@ export const useGitStore = create<GitState>((set, get) => ({
     await API.discardWorkspaceChanges(cleanPath, repoName);
 
     const activeFile = useEditorStore.getState().activeFile;
+    const currentBranch = get().gitStatus?.branch || get().versionGraph?.currentBranch || "default";
     if (cleanPath) {
+      DraftStore.clearDocDraft(repoName, cleanPath, currentBranch);
       DraftStore.clearDocDraft(repoName, cleanPath);
     } else if (activeFile) {
+      DraftStore.clearDocDraft(repoName, activeFile, currentBranch);
       DraftStore.clearDocDraft(repoName, activeFile);
     }
 
@@ -288,11 +291,15 @@ export const useGitStore = create<GitState>((set, get) => ({
     const res = await API.safeSwitch({ ...payload, repo: repoName, owner: repoOwner });
     if (res.ok && res.data) {
       if (payload.action && payload.action !== 'check' && res.data.success) {
+        useEditorStore.getState().clearFileCache(true);
         await get().refreshGitStatus();
         await get().refreshPendingChanges();
         await get().refreshGitLog(15);
         await get().refreshVersionGraph();
         if (repo) await useRepoStore.getState().loadTree(repo.name);
+        if (useEditorStore.getState().activeFile) {
+          await useEditorStore.getState().reloadActiveFile(payload.action === 'discard');
+        }
       }
       return res.data;
     }

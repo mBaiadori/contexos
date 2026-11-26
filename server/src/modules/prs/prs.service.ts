@@ -132,6 +132,7 @@ export class PRsService {
       filePath: string;
       content: string;
       base_sha?: string;
+      expectedBaseSha?: string;
       commitMessage?: string;
       author?: string;
       repo?: string;

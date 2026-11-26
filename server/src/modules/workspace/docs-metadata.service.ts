@@ -109,6 +109,10 @@ export class DocsMetadataService {
     docsMetadataCrudService.scheduleBackgroundReconciliation(repoName);
   }
 
+  async waitForReconciliation(repoName?: string): Promise<void> {
+    await docsMetadataCrudService.waitForReconciliation(repoName);
+  }
+
   saveDocsMetadata(repoName: string, metaList: DocumentMetadataItem[]): void {
     docsMetadataCrudService.saveDocsMetadata(repoName, metaList);
   }

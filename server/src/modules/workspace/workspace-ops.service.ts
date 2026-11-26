@@ -19,6 +19,32 @@ import { isPathInside, resolveSafeRepoPath } from "../../utils/repo-ref.js";
 import { getRepoDir, workspaceTreeService } from "./workspace-tree.service.js";
 import type { TreeNode } from "./workspace-types.js";
 
+const BINARY_EXTENSIONS = new Set([
+  "pdf",
+  "xlsx",
+  "xls",
+  "docx",
+  "doc",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "ico",
+  "zip",
+  "gz",
+  "tar",
+  "exe",
+  "bin",
+  "mp4",
+  "mp3",
+]);
+
+export function isBinaryFilePath(filePath: string): boolean {
+  const ext = path.extname(filePath || "").replace(".", "").toLowerCase();
+  return BINARY_EXTENSIONS.has(ext);
+}
+
 export class WorkspaceOpsService {
   getFile(filePath: string, targetRepoName?: string) {
     const cfg = loadConfig();
@@ -31,28 +57,10 @@ export class WorkspaceOpsService {
       throw new Error(`Arquivo '${cleanPath}' não encontrado no repositório '${repoName}'.`);
     }
 
+    this.verifyUserClearance(repoName, cleanPath);
+
     const stat = fs.statSync(fullPath);
-    const ext = path.extname(cleanPath).replace(".", "").toLowerCase();
-    const isBinary = [
-      "pdf",
-      "xlsx",
-      "xls",
-      "docx",
-      "doc",
-      "png",
-      "jpg",
-      "jpeg",
-      "gif",
-      "webp",
-      "ico",
-      "zip",
-      "gz",
-      "tar",
-      "exe",
-      "bin",
-      "mp4",
-      "mp3",
-    ].includes(ext);
+    const isBinary = isBinaryFilePath(cleanPath);
 
     let content = "";
     if (!isBinary) {
@@ -85,6 +93,8 @@ export class WorkspaceOpsService {
     if (!fs.existsSync(fullPath)) {
       throw new Error(`Arquivo '${cleanPath}' não encontrado no repositório '${repoName}'.`);
     }
+
+    this.verifyUserClearance(repoName, cleanPath);
 
     const ext = path.extname(cleanPath).replace(".", "").toLowerCase();
     const mimeTypes: Record<string, string> = {
@@ -321,6 +331,11 @@ export class WorkspaceOpsService {
     }> = [];
     const errors: string[] = [];
 
+    const targetBaseDir = cleanTarget ? path.resolve(repoDir, cleanTarget) : repoDir;
+    if (cleanTarget && !isPathInside(repoDir, targetBaseDir)) {
+      throw new Error(`Pasta de destino inválida: ${cleanTarget}`);
+    }
+
     for (const item of filesToImport) {
       try {
         const itemRel = (item.relativePath || item.name || "")
@@ -331,8 +346,8 @@ export class WorkspaceOpsService {
         const fullRelPath = cleanTarget ? `${cleanTarget}/${itemRel}` : itemRel;
         const fullDiskPath = path.resolve(repoDir, fullRelPath);
 
-        // Checagem robusta de segurança contra directory traversal
-        if (!isPathInside(repoDir, fullDiskPath)) {
+        // Checagem robusta de segurança contra directory traversal (nem fora do repo nem escapando da pasta destino)
+        if (!isPathInside(repoDir, fullDiskPath) || !isPathInside(targetBaseDir, fullDiskPath)) {
           errors.push(`Caminho inválido: ${fullRelPath}`);
           continue;
         }
@@ -451,7 +466,7 @@ export class WorkspaceOpsService {
 
     let oldContent = "";
     if (!isDir) {
-      if (fs.existsSync(fullNew)) {
+      if (fs.existsSync(fullNew) && !isBinaryFilePath(cleanNew)) {
         oldContent = fs.readFileSync(fullNew, "utf-8");
       }
       recordChange(repoName, cleanOld, "DELETED", oldContent, "");
@@ -605,7 +620,9 @@ export class WorkspaceOpsService {
       if (fs.statSync(fullPath).isDirectory()) {
         fs.rmSync(fullPath, { recursive: true, force: true });
       } else {
-        oldContent = fs.readFileSync(fullPath, "utf-8");
+        if (!isBinaryFilePath(cleanPath)) {
+          oldContent = fs.readFileSync(fullPath, "utf-8");
+        }
         fs.unlinkSync(fullPath);
       }
     }
@@ -672,9 +689,11 @@ export class WorkspaceOpsService {
     fs.copyFileSync(fullPath, fullCopyPath);
 
     let content = "";
-    try {
-      content = fs.readFileSync(fullCopyPath, "utf-8");
-    } catch {}
+    if (!isBinaryFilePath(copyRelPath)) {
+      try {
+        content = fs.readFileSync(fullCopyPath, "utf-8");
+      } catch {}
+    }
 
     recordChange(repoName, copyRelPath, "ADDED", "", content);
 

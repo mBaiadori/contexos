@@ -39,6 +39,7 @@ interface EditorState {
 
   loadFile: (rawFilePath: string, targetRepo?: string) => Promise<void>;
   reloadActiveFile: (forceDisk?: boolean) => Promise<void>;
+  clearFileCache: (cancelPendingAutoSave?: boolean) => void;
   updateFileMetadata: (partialMeta: Partial<DocumentMetadataItem>) => Promise<void>;
   updateDocumentTitle: (newTitle: string) => Promise<void>;
   saveCurrentFile: (meta?: Record<string, any>, content?: string) => Promise<{ success: boolean; error?: string }>;
@@ -50,6 +51,17 @@ let inFlightFile: string | null = null;
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let statusTimer: ReturnType<typeof setTimeout> | null = null;
 let gitRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+const getCurrentBranchKey = (): string => {
+  const gitState = useGitStore.getState();
+  const branch = gitState.gitStatus?.branch || gitState.versionGraph?.currentBranch || "default";
+  return branch.trim() || "default";
+};
+
+const makeCacheKey = (repoName: string, filePath: string, branch?: string): string => {
+  const b = (branch || getCurrentBranchKey()).trim() || "default";
+  return `${repoName}@${b}:${filePath}`;
+};
 
 const scheduleGitRefresh = (immediate = false) => {
   if (gitRefreshTimer) {
@@ -77,6 +89,7 @@ const performDiskSave = async (
   if (!file) return { success: false, error: "Nenhum arquivo ativo para salvar" };
   const repoName = targetRepo || useRepoStore.getState().activeRepo?.name;
   if (!repoName) return { success: false, error: "Nenhum repositório selecionado" };
+  const branchAtSave = getCurrentBranchKey();
 
   useEditorStore.setState({ isSaving: true, saveStatus: "Salvando..." });
 
@@ -84,7 +97,11 @@ const performDiskSave = async (
     const res = await API.saveWorkspaceFile({ path: file, content, meta, repo: repoName });
     if (res.ok) {
       const current = useEditorStore.getState();
-      if (file === current.activeFile && (!targetRepo || targetRepo === current.activeDocRepo)) {
+      if (
+        file === current.activeFile &&
+        (!targetRepo || targetRepo === current.activeDocRepo) &&
+        getCurrentBranchKey() === branchAtSave
+      ) {
         useEditorStore.setState({
           originalContent: content,
           fileContent: content,
@@ -92,8 +109,8 @@ const performDiskSave = async (
           fileMetadata: res.data?.meta || meta,
         });
       }
-      DraftStore.clearDocDraft(repoName, file);
-      fileCache.set(`${repoName}:${file}`, {
+      DraftStore.clearDocDraft(repoName, file, branchAtSave);
+      fileCache.set(makeCacheKey(repoName, file, branchAtSave), {
         content,
         originalContent: content,
         meta: res.data?.meta || meta,
@@ -152,12 +169,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ fileContent: content, hasUnsavedChanges });
 
     if (currentRepo && activeFile) {
-      DraftStore.saveDocDraft(currentRepo.name, activeFile, {
-        body: content,
-        rawContent: content,
-      });
+      const activeBranch = getCurrentBranchKey();
+      DraftStore.saveDocDraft(
+        currentRepo.name,
+        activeFile,
+        {
+          body: content,
+          rawContent: content,
+        },
+        500,
+        activeBranch,
+      );
 
-      const cacheKey = `${currentRepo.name}:${activeFile}`;
+      const cacheKey = makeCacheKey(currentRepo.name, activeFile, activeBranch);
       const existing = fileCache.get(cacheKey);
       fileCache.set(cacheKey, {
         content,
@@ -167,8 +191,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
       if (hasUnsavedChanges) {
         if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        const scheduledRepo = currentRepo.name;
+        const scheduledBranch = activeBranch;
+        const scheduledFile = activeFile;
         autoSaveTimer = setTimeout(() => {
-          performDiskSave(activeFile, content, fileMetadata, undefined, false);
+          autoSaveTimer = null;
+          // Aborta autosave se o usuário trocou de branch ou repositório durante o debounce
+          if (
+            getCurrentBranchKey() !== scheduledBranch ||
+            useRepoStore.getState().activeRepo?.name !== scheduledRepo
+          ) {
+            return;
+          }
+          performDiskSave(scheduledFile, content, fileMetadata, scheduledRepo, false);
         }, 750);
       }
     }
@@ -179,6 +214,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setSaveStatus: (saveStatus) => set({ saveStatus }),
   setIsSaving: (isSaving) => set({ isSaving }),
   setIsLoadingFile: (isLoadingFile) => set({ isLoadingFile }),
+
+  clearFileCache: (cancelPendingAutoSave = true) => {
+    if (cancelPendingAutoSave && autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+    fileCache.clear();
+  },
 
   flushPendingSave: async () => {
     if (autoSaveTimer) {
@@ -244,14 +287,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return;
     }
 
-    const cacheKey = `${currentRepoName}:${cleanPath}`;
+    const activeBranch = getCurrentBranchKey();
+    const cacheKey = makeCacheKey(currentRepoName, cleanPath, activeBranch);
     if (inFlightFile === cacheKey) return;
     inFlightFile = cacheKey;
 
     await get().flushPendingSave();
 
     const cached = fileCache.get(cacheKey);
-    const draft = DraftStore.getDocDraft(currentRepoName, cleanPath);
+    const draft = DraftStore.getDocDraft(currentRepoName, cleanPath, activeBranch);
 
     set({ isLoadingFile: true });
 
@@ -275,7 +319,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         if (!data || (data as { error?: string }).error) {
           throw new Error((data as { error?: string }).error || "Arquivo não encontrado");
         }
-        const activeDraft = DraftStore.getDocDraft(currentRepoName, cleanPath);
+        const activeDraft = DraftStore.getDocDraft(currentRepoName, cleanPath, activeBranch);
         content = activeDraft ? activeDraft.rawContent : data.content || "";
         original = data.content || "";
         meta = data.meta || {};
@@ -300,9 +344,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (draft || cached) {
         API.getProjectFile(cleanPath, currentRepoName)
           .then((data) => {
-            if (data && !(data as { error?: string }).error && get().activeFile === cleanPath) {
+            if (
+              data &&
+              !(data as { error?: string }).error &&
+              get().activeFile === cleanPath &&
+              getCurrentBranchKey() === activeBranch
+            ) {
               const freshOriginal = data.content || "";
-              const hasActiveDraft = !!DraftStore.getDocDraft(currentRepoName, cleanPath);
+              const hasActiveDraft = !!DraftStore.getDocDraft(
+                currentRepoName,
+                cleanPath,
+                activeBranch,
+              );
               const nextContent = hasActiveDraft ? get().fileContent : freshOriginal;
               set({
                 originalContent: freshOriginal,
@@ -351,13 +404,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!activeFile || !currentRepo) return;
 
     try {
+      const activeBranch = getCurrentBranchKey();
       if (forceDisk) {
+        DraftStore.clearDocDraft(currentRepo.name, activeFile, activeBranch);
         DraftStore.clearDocDraft(currentRepo.name, activeFile);
       }
       const data = await API.getProjectFile(activeFile, currentRepo.name);
       if (data && !(data as { error?: string }).error) {
         const content = data.content || "";
         const meta = data.meta || {};
+        fileCache.set(makeCacheKey(currentRepo.name, activeFile, activeBranch), {
+          content,
+          originalContent: content,
+          meta,
+        });
         set({
           fileContent: content,
           originalContent: content,

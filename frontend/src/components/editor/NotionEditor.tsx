@@ -511,6 +511,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           id: prId,
           filePath: filePath || "",
           content: fullContent,
+          base_sha: prHeadSha,
           expectedBaseSha: prHeadSha,
           author: user?.login,
           repo: activeRepo?.name,
@@ -522,21 +523,26 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               text: "Conflito detectado com a versão remota da proposta.",
               type: "warning",
             });
-            // Fetch 3-way conflict bundle
-            const confRes = await API.getPRConflict({
-              pr_id: prId,
-              path: filePath,
-              repo: activeRepo?.name,
-            });
-            if (confRes.ok && confRes.data?.merged) {
-              setConflictBundleText(confRes.data.merged);
+            const inlineMerged = res.data.merged || res.data.mergedContent;
+            if (inlineMerged) {
+              setConflictBundleText(inlineMerged);
             } else {
-              setConflictBundleText(fullContent);
+              // Fallback: buscar bundle 3-vias se o backend não devolveu merged inline
+              const confRes = await API.getPRConflict({
+                pr_id: prId,
+                path: filePath,
+                repo: activeRepo?.name,
+              });
+              const remoteMerged =
+                confRes.data?.merged ||
+                (confRes.data as { mergedContent?: string } | undefined)?.mergedContent;
+              setConflictBundleText(confRes.ok && remoteMerged ? remoteMerged : fullContent);
             }
             setIsConflictModalOpen(true);
           } else {
-            if (res.data.head_sha) {
-              setPrHeadSha(res.data.head_sha);
+            const nextSha = res.data.head_sha || res.data.new_commit_hash || res.data.pr?.head_sha;
+            if (nextSha) {
+              setPrHeadSha(nextSha);
             }
             if (engineRef.current) {
               engineRef.current.applyDictionaryHighlights();

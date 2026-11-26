@@ -133,9 +133,10 @@ export class DraftsTrashService {
       return { success: false, message: "Rascunho não contém patch válido para restauração." };
     }
 
-    // Tentar aplicar patch via git apply
+    // Tentar aplicar patch via git apply (garante trailing newline exigido pelo git apply)
     const tempPatchPath = path.join(trashDir, `temp-${Date.now()}.patch`);
-    fs.writeFileSync(tempPatchPath, item.patch, "utf-8");
+    const normalizedPatch = item.patch.endsWith("\n") ? item.patch : `${item.patch}\n`;
+    fs.writeFileSync(tempPatchPath, normalizedPatch, "utf-8");
 
     try {
       const applyRes = await executeGit(["apply", "--whitespace=nowarn", tempPatchPath], repoDir);

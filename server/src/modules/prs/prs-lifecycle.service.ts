@@ -858,6 +858,7 @@ export class PRsLifecycleService {
       filePath: string;
       content: string;
       base_sha?: string;
+      expectedBaseSha?: string;
       commitMessage?: string;
       author?: string;
       repo?: string;
@@ -909,10 +910,11 @@ export class PRsLifecycleService {
     const currentHeadSha = (headRes.stdout || "").trim();
 
     // 3. Optimistic concurrency & 3-way merge check
+    const expectedBaseSha = payload.base_sha || payload.expectedBaseSha;
     let finalPlainContent = payload.content;
-    if (payload.base_sha && payload.base_sha !== currentHeadSha) {
+    if (expectedBaseSha && expectedBaseSha !== currentHeadSha) {
       const baseText = await prSecurityService
-        .readPlainAtRef(repoName, payload.base_sha, payload.filePath, login)
+        .readPlainAtRef(repoName, expectedBaseSha, payload.filePath, login)
         .catch(() => "");
       const theirsText = await prSecurityService
         .readPlainAtRef(repoName, currentHeadSha, payload.filePath, login)
@@ -931,10 +933,12 @@ export class PRsLifecycleService {
       if (mergeResult.hasConflicts) {
         return {
           conflict: true,
+          head_sha: currentHeadSha,
           base: baseText,
           ours: payload.content,
           theirs: theirsText,
           merged: mergeResult.mergedContent,
+          mergedContent: mergeResult.mergedContent,
           conflictCount: mergeResult.conflictCount,
           message:
             "Detectamos alterações concorrentes nesta versão. Resolva os conflitos antes de salvar.",
@@ -1008,6 +1012,7 @@ export class PRsLifecycleService {
       conflict: false,
       reset_approvals: prevApprovalsCount > 0,
       new_commit_hash: commitHash,
+      head_sha: commitHash,
       pr: target,
       message: `Documento "${payload.filePath}" atualizado com sucesso na branch '${target.branch}'! ${
         prevApprovalsCount > 0
@@ -1148,15 +1153,18 @@ export class PRsLifecycleService {
       throw new Error(result.message);
     }
 
-    const { activeToken: rollbackToken, isRemoteGitHub: rollbackRemote } =
+    const { repoObj: rollbackRepoObj, activeToken: rollbackToken, isRemoteGitHub: rollbackRemote } =
       this.resolveRemoteTarget(cfg, repoName);
     if (rollbackRemote && rollbackToken) {
-      try {
-        await executeGit(["push", "origin", "main"], repoDir, rollbackToken);
-      } catch (pushErr) {
-        console.warn(
-          "[PRsService] Aviso ao sincronizar rollback com o GitHub remoto:",
-          pushErr,
+      const targetBranch = rollbackRepoObj?.default_branch || (await getDefaultBranch(repoDir));
+      const pushRes = await executeGit(
+        ["push", "origin", assertBranchName(targetBranch)],
+        repoDir,
+        rollbackToken,
+      );
+      if (!pushRes.success) {
+        throw new Error(
+          `Reversão aplicada localmente (${result.newCommitHash || ""}), mas falhou ao enviar para o GitHub: ${pushRes.stderr || pushRes.stdout}`,
         );
       }
     }
@@ -1285,15 +1293,17 @@ export class PRsLifecycleService {
           },
         );
         if (ghMergeRes.statusCode >= 200 && ghMergeRes.statusCode < 300) {
-          await executeGit(
+          const fetchRes = await executeGit(
             ["fetch", "origin", targetBranch],
             repoDir,
             activeToken,
-          ).catch(() => {});
-          await executeGit(
-            ["reset", "--hard", `origin/${targetBranch}`],
-            repoDir,
-          ).catch(() => {});
+          );
+          if (fetchRes.success) {
+            await executeGit(
+              ["reset", "--hard", `origin/${targetBranch}`],
+              repoDir,
+            ).catch(() => {});
+          }
           workspaceService.invalidateTreeCache(repoName);
           clearWorkspaceChanges(repoName);
           const headRes = await executeGit(["rev-parse", "HEAD"], repoDir);
@@ -1360,7 +1370,15 @@ export class PRsLifecycleService {
     } finally {
       if (didStash) {
         try {
-          await executeGit(["stash", "pop"], repoDir);
+          const popRes = await executeGit(["stash", "pop"], repoDir);
+          if (!popRes.success) {
+            // Se o stash pop conflitar com o que acabou de ser mesclado, limpa o working tree
+            // preservando o stash intacto no git stash list (sem perda de dados e sem deixar marcadores quebrados).
+            await executeGit(["reset", "--hard", "HEAD"], repoDir).catch(() => {});
+            console.warn(
+              "[PRsService] Conflito ao restaurar stash pós-merge; alterações locais preservadas no git stash.",
+            );
+          }
         } catch {}
       }
     }

@@ -89,14 +89,19 @@ export const prsApi = {
     filePath: string;
     content: string;
     commitMessage?: string;
+    base_sha?: string;
     expectedBaseSha?: string;
     author?: string;
     repo?: string;
   }): Promise<ApiResponse<any>> {
+    const body = {
+      ...payload,
+      base_sha: payload.base_sha || payload.expectedBaseSha,
+    };
     const res = await fetch('/api/prs/edit-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(body)
     });
     return { ok: res.ok, data: await res.json() };
   },

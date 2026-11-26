@@ -418,7 +418,8 @@ export class GitService {
         "main";
     }
 
-    const result = await syncGit(repoDir, "origin", targetBranch);
+    const activeToken = getActiveBearerToken(cfg.token);
+    const result = await syncGit(repoDir, "origin", targetBranch, activeToken || undefined);
     workspaceService.invalidateTreeCache(repoName);
 
     try {
@@ -1060,7 +1061,9 @@ export class GitService {
     if (action === "discard") {
       // Salvar na lixeira permanente antes de descartar
       try {
-        const diffRes = await executeGit(["diff", "HEAD"], repoDir);
+        const diffRes = await executeGit(["diff", "--binary", "HEAD"], repoDir, undefined, {
+          trimStdout: false,
+        });
         let patch = diffRes.stdout || "";
         for (const uf of userFiles.filter(
           (f) => f.status === "A" || f.status === "U" || f.status === "??",
@@ -1097,7 +1100,25 @@ export class GitService {
       }
 
       await executeGit(["reset", "--hard", "HEAD"], repoDir);
-      await executeGit(["clean", "-fd"], repoDir);
+      await executeGit(
+        [
+          "clean",
+          "-fd",
+          "-e",
+          ".drafts-trash/",
+          "-e",
+          ".worktrees/",
+          "-e",
+          ".prs.json",
+          "-e",
+          ".workspace_changes.json",
+          "-e",
+          ".rag/",
+          "-e",
+          ".sessions/",
+        ],
+        repoDir,
+      );
       try {
         clearWorkspaceChanges(repoName);
       } catch {}
@@ -1149,11 +1170,39 @@ export class GitService {
       throw new Error(`Repositório ${repoName} não está clonado localmente.`);
     }
 
+    const preStatus = await getGitStatus(repoDir);
+    const wasCleanBeforePop = preStatus.isClean;
+
     const args = ["stash", "pop"];
     if (stashId) {
       args.push(stashId);
     }
     const res = await executeGit(args, repoDir);
+    if (!res.success) {
+      const unmergedRes = await executeGit(
+        ["diff", "--name-only", "--diff-filter=U"],
+        repoDir,
+      );
+      const conflictFiles =
+        unmergedRes.success && unmergedRes.stdout.trim()
+          ? unmergedRes.stdout
+              .trim()
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+      if (conflictFiles.length > 0 && wasCleanBeforePop) {
+        // Desfaz o estado meio-mesclado para não travar o repo; o stash continua intacto no git stash list
+        await executeGit(["reset", "--hard", "HEAD"], repoDir).catch(() => {});
+        workspaceService.invalidateTreeCache(repoName);
+        return {
+          success: false,
+          hasConflicts: true,
+          conflictFiles,
+          message: `Conflito ao restaurar rascunhos em: ${conflictFiles.join(", ")}. O stash foi preservado com segurança.`,
+        };
+      }
+    }
     workspaceService.invalidateTreeCache(repoName);
     return {
       success: res.success,

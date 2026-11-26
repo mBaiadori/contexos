@@ -60,6 +60,7 @@ export class DocsMetadataCrudService {
   private headHashCache = new Map<string, string>();
   private reconciliationInProgress = new Set<string>();
   private reconciliationQueued = new Set<string>();
+  private reconciliationPromises = new Map<string, Promise<void>>();
 
   setFileStat(
     repoName: string,
@@ -399,6 +400,19 @@ export class DocsMetadataCrudService {
     return metaList;
   }
 
+  async waitForReconciliation(repoName?: string): Promise<void> {
+    if (repoName) {
+      const cleanRepo = repoName || "local";
+      while (this.reconciliationPromises.has(cleanRepo)) {
+        await this.reconciliationPromises.get(cleanRepo);
+      }
+      return;
+    }
+    while (this.reconciliationPromises.size > 0) {
+      await Promise.all(Array.from(this.reconciliationPromises.values()));
+    }
+  }
+
   scheduleBackgroundReconciliation(repoName: string): void {
     const cleanRepo = repoName || "local";
     if (this.reconciliationInProgress.has(cleanRepo)) {
@@ -407,7 +421,25 @@ export class DocsMetadataCrudService {
     }
 
     this.reconciliationInProgress.add(cleanRepo);
-    setImmediate(async () => {
+    const taskPromise = new Promise<void>((resolve) => {
+      setImmediate(async () => {
+        try {
+          await this.runReconciliationPass(cleanRepo);
+        } finally {
+          this.reconciliationInProgress.delete(cleanRepo);
+          this.reconciliationPromises.delete(cleanRepo);
+          if (this.reconciliationQueued.has(cleanRepo)) {
+            this.reconciliationQueued.delete(cleanRepo);
+            this.scheduleBackgroundReconciliation(cleanRepo);
+          }
+          resolve();
+        }
+      });
+    });
+    this.reconciliationPromises.set(cleanRepo, taskPromise);
+  }
+
+  private async runReconciliationPass(cleanRepo: string): Promise<void> {
       try {
         const repoDir = docsMetadataConfigService.getRepoDir(cleanRepo);
         if (!fs.existsSync(repoDir)) return;
@@ -681,14 +713,7 @@ export class DocsMetadataCrudService {
           `[DocsMetadataService] Erro na reconciliação de segundo plano em ${cleanRepo}:`,
           err,
         );
-      } finally {
-        this.reconciliationInProgress.delete(cleanRepo);
-        if (this.reconciliationQueued.has(cleanRepo)) {
-          this.reconciliationQueued.delete(cleanRepo);
-          this.scheduleBackgroundReconciliation(cleanRepo);
-        }
       }
-    });
   }
 
   saveDocsMetadata(

@@ -18,6 +18,7 @@ import {
 } from "./docs-metadata.service.js";
 import { draftsTrashService } from "../git/drafts-trash.service.js";
 import { getRepoDir, workspaceTreeService } from "./workspace-tree.service.js";
+import { isBinaryFilePath } from "./workspace-ops.service.js";
 
 function isIgnoredChangePath(rawPath: string): boolean {
   const clean = (rawPath || "").trim().replace(/^\/+/, "").replace(/\\/g, "/");
@@ -230,11 +231,13 @@ export class WorkspaceChangesService {
           fromBranch = curBranchRes.stdout.trim();
         }
 
-        const diffArgs = ["diff", "HEAD"];
+        const diffArgs = ["diff", "--binary", "HEAD"];
         if (cleanPaths && cleanPaths.length > 0) {
           diffArgs.push("--", ...cleanPaths.map((p) => assertGitPath(p)));
         }
-        const diffRes = await executeGit(diffArgs, repoDir);
+        const diffRes = await executeGit(diffArgs, repoDir, undefined, {
+          trimStdout: false,
+        });
         patch = diffRes.stdout || "";
 
         const statusRes = await getGitStatus(repoDir);
@@ -244,16 +247,26 @@ export class WorkspaceChangesService {
 
         for (const uf of candidateFiles) {
           filesToArchive.push({ path: uf.path, status: uf.status });
-          if (uf.status === "A" || uf.status === "U" || uf.status === "??") {
+          if (
+            (uf.status === "A" || uf.status === "U" || uf.status === "??") &&
+            !isBinaryFilePath(uf.path)
+          ) {
             const filePath = path.join(repoDir, uf.path);
             if (fs.existsSync(filePath) && !fs.statSync(filePath).isDirectory()) {
               const content = fs.readFileSync(filePath, "utf-8");
-              patch +=
-                `\n--- /dev/null\n+++ b/${uf.path}\n@@ -0,0 +1,${content.split("\n").length} @@\n` +
-                content
-                  .split("\n")
-                  .map((l) => `+${l}`)
-                  .join("\n");
+              const normalized = content.replace(/\r?\n$/, "");
+              const lines = normalized.length > 0 ? normalized.split(/\r?\n/) : [];
+              if (lines.length > 0) {
+                patch +=
+                  `${patch && !patch.endsWith("\n") ? "\n" : ""}` +
+                  `diff --git a/${uf.path} b/${uf.path}\n` +
+                  `new file mode 100644\n` +
+                  `--- /dev/null\n` +
+                  `+++ b/${uf.path}\n` +
+                  `@@ -0,0 +1,${lines.length} @@\n` +
+                  lines.map((l) => `+${l}`).join("\n") +
+                  "\n";
+              }
             }
           }
         }
@@ -261,14 +274,20 @@ export class WorkspaceChangesService {
 
       for (const ch of rawChanges) {
         const cp = ch.path.trim().replace(/^\/+/, "");
+        if (isBinaryFilePath(cp)) continue;
         if (!targetSet || targetSet.has(cp)) {
           if (!filesToArchive.some((f) => f.path === cp)) {
             filesToArchive.push({ path: cp, status: ch.type });
           }
           if (!patch.includes(cp) && (ch.old_content !== undefined || ch.new_content !== undefined)) {
-            const oldLines = (ch.old_content || "").split("\n");
-            const newLines = (ch.new_content || "").split("\n");
-            patch += `\n--- a/${cp}\n+++ b/${cp}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n`;
+            const oldNorm = (ch.old_content || "").replace(/\r?\n$/, "");
+            const newNorm = (ch.new_content || "").replace(/\r?\n$/, "");
+            const oldLines = oldNorm ? oldNorm.split(/\r?\n/) : [];
+            const newLines = newNorm ? newNorm.split(/\r?\n/) : [];
+            patch +=
+              `${patch && !patch.endsWith("\n") ? "\n" : ""}` +
+              `diff --git a/${cp} b/${cp}\n` +
+              `--- a/${cp}\n+++ b/${cp}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n`;
             for (const l of oldLines) patch += `-${l}\n`;
             for (const l of newLines) patch += `+${l}\n`;
           }
@@ -309,7 +328,7 @@ export class WorkspaceChangesService {
               }
             }
           } else if (change.type === "MODIFIED" || change.type === "DELETED") {
-            if (change.old_content !== undefined) {
+            if (change.old_content !== undefined && !isBinaryFilePath(cleanChangePath)) {
               fs.mkdirSync(path.dirname(fullPath), { recursive: true });
               fs.writeFileSync(fullPath, change.old_content, "utf-8");
             }
@@ -335,7 +354,25 @@ export class WorkspaceChangesService {
         } else {
           await executeGit(["restore", "--staged", "--worktree", "."], repoDir);
           await executeGit(["checkout", "HEAD", "--", "."], repoDir);
-          await executeGit(["clean", "-fd"], repoDir);
+          await executeGit(
+            [
+              "clean",
+              "-fd",
+              "-e",
+              ".drafts-trash/",
+              "-e",
+              ".worktrees/",
+              "-e",
+              ".prs.json",
+              "-e",
+              ".workspace_changes.json",
+              "-e",
+              ".rag/",
+              "-e",
+              ".sessions/",
+            ],
+            repoDir,
+          );
         }
       } catch (e) {
         console.warn(

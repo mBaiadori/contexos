@@ -245,7 +245,7 @@ Corpo`;
     fs.writeFileSync(f2, "---\ntitle: \"Doc 2\"\nstatus: \"review\"\n---\nCorpo 2", "utf-8");
 
     docsMetadataService.scheduleBackgroundReconciliation(testRepo);
-    await new Promise((r) => setTimeout(r, 100));
+    await docsMetadataService.waitForReconciliation(testRepo);
 
     const metaList = docsMetadataService.loadDocsMetadata(testRepo);
     assert.strictEqual(metaList.length, 2);
@@ -257,7 +257,7 @@ Corpo`;
     // Altera doc2 no disco
     fs.writeFileSync(f2, "---\ntitle: \"Doc 2 Atualizado\"\nstatus: \"approved\"\n---\nCorpo 2 alterado", "utf-8");
     docsMetadataService.scheduleBackgroundReconciliation(testRepo);
-    await new Promise((r) => setTimeout(r, 100));
+    await docsMetadataService.waitForReconciliation(testRepo);
 
     const updatedList = docsMetadataService.loadDocsMetadata(testRepo);
     const updatedItem2 = updatedList.find((d) => d.path === "docs/doc2.md");
@@ -295,7 +295,7 @@ Corpo`;
       assert.strictEqual(fs.existsSync(path.join(repoDir, ".docs.metadata.json")), false);
 
       docsMetadataService.scheduleBackgroundReconciliation(testRepo);
-      await new Promise((r) => setTimeout(r, 120));
+      await docsMetadataService.waitForReconciliation(testRepo);
 
       assert.strictEqual(fs.existsSync(cachePath), true);
       assert.strictEqual(fs.existsSync(path.join(repoDir, ".docs.metadata.json")), false);
@@ -336,7 +336,7 @@ Corpo`;
       await executeGit(["commit", "-m", "init"], repoDir);
 
       docsMetadataService.scheduleBackgroundReconciliation(testRepo);
-      await new Promise((r) => setTimeout(r, 150));
+      await docsMetadataService.waitForReconciliation(testRepo);
 
       let list = docsMetadataService.loadDocsMetadata(testRepo);
       assert.strictEqual(list.length, 1);
@@ -351,7 +351,7 @@ Corpo`;
       // Simula cold start e reconciliação via HEAD diff
       docsMetadataService.clearCache(testRepo);
       docsMetadataService.loadDocsMetadata(testRepo, true);
-      await new Promise((r) => setTimeout(r, 180));
+      await docsMetadataService.waitForReconciliation(testRepo);
 
       list = docsMetadataService.loadDocsMetadata(testRepo);
       assert.strictEqual(list.length, 2);
@@ -360,7 +360,7 @@ Corpo`;
       // Edição não commitada (working tree dirty)
       fs.writeFileSync(f1, '---\ntitle: "Doc A Editado"\nstatus: "approved"\n---\nTexto A2', "utf-8");
       docsMetadataService.scheduleBackgroundReconciliation(testRepo);
-      await new Promise((r) => setTimeout(r, 150));
+      await docsMetadataService.waitForReconciliation(testRepo);
 
       list = docsMetadataService.loadDocsMetadata(testRepo);
       assert.strictEqual(list.find((d) => d.path === "docs/a.md")?.status, "approved");

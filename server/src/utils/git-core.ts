@@ -465,6 +465,8 @@ export const TRANSIENT_INDEX_PATHS = [
   ".rag",
   ".workspace_changes.json",
   ".sessions",
+  ".drafts-trash",
+  ".worktrees",
 ];
 
 export function isTransientGitPath(filePath: string): boolean {
@@ -487,6 +489,8 @@ export function ensureGitIgnore(repoDir: string): void {
     ".rag/",
     ".workspace_changes.json",
     ".sessions/",
+    ".drafts-trash/",
+    ".worktrees/",
   ];
 
   const systemPatternsToUnignore = [

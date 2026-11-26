@@ -16,14 +16,23 @@ export interface DocDraft {
 class DraftStoreService {
   private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
-  private _makeKey(prefix: string, repo: string, filePath: string): string {
+  private _makeKey(prefix: string, repo: string, filePath: string, branch?: string): string {
     const cleanRepo = (repo || 'default').trim();
     const cleanPath = (filePath || 'index.md').trim();
-    return `${prefix}${cleanRepo}:${cleanPath}`;
+    const cleanBranch = (branch || '').trim();
+    return cleanBranch
+      ? `${prefix}${cleanRepo}@${cleanBranch}:${cleanPath}`
+      : `${prefix}${cleanRepo}:${cleanPath}`;
   }
 
-  saveDocDraft(repo: string, filePath: string, draftData: { body: string; metadata?: Record<string, unknown>; rawContent?: string }, debounceMs = 500) {
-    const key = this._makeKey(DRAFT_PREFIX, repo, filePath);
+  saveDocDraft(
+    repo: string,
+    filePath: string,
+    draftData: { body: string; metadata?: Record<string, unknown>; rawContent?: string },
+    debounceMs = 500,
+    branch?: string,
+  ) {
+    const key = this._makeKey(DRAFT_PREFIX, repo, filePath, branch);
 
     const existing = this.debounceTimers.get(key);
     if (existing) {
@@ -51,9 +60,9 @@ class DraftStoreService {
     this.debounceTimers.set(key, timer);
   }
 
-  getDocDraft(repo: string, filePath: string): DocDraft | null {
+  getDocDraft(repo: string, filePath: string, branch?: string): DocDraft | null {
     try {
-      const key = this._makeKey(DRAFT_PREFIX, repo, filePath);
+      const key = this._makeKey(DRAFT_PREFIX, repo, filePath, branch);
       const raw = localStorage.getItem(key);
       if (!raw) return null;
       return JSON.parse(raw);
@@ -63,13 +72,13 @@ class DraftStoreService {
     }
   }
 
-  hasDocDraft(repo: string, filePath: string): boolean {
-    const key = this._makeKey(DRAFT_PREFIX, repo, filePath);
+  hasDocDraft(repo: string, filePath: string, branch?: string): boolean {
+    const key = this._makeKey(DRAFT_PREFIX, repo, filePath, branch);
     return localStorage.getItem(key) !== null;
   }
 
-  clearDocDraft(repo: string, filePath: string) {
-    const key = this._makeKey(DRAFT_PREFIX, repo, filePath);
+  clearDocDraft(repo: string, filePath: string, branch?: string) {
+    const key = this._makeKey(DRAFT_PREFIX, repo, filePath, branch);
     const existing = this.debounceTimers.get(key);
     if (existing) {
       clearTimeout(existing);

@@ -217,7 +217,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
           isOpen={true}
           onClose={() => prsData.setActiveConflictPR(null)}
           filePath={prsData.activeConflictPR.filePath}
-          content={prsData.activeConflictPR.bundle.merged || ""}
+          content={
+            prsData.activeConflictPR.bundle.merged ||
+            (prsData.activeConflictPR.bundle.mergedContent as string | undefined) ||
+            ""
+          }
           onSaveResolved={prsData.handleSaveConflictResolution}
         />
       )}

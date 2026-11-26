@@ -2,15 +2,34 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
-import { executeGit } from '../../utils/git.js';
+import { executeGit, getActiveBearerToken } from '../../utils/git.js';
 import { assertBranchName } from '../../utils/git-validate.js';
 import { resolveSafeRepoPath } from '../../utils/repo-ref.js';
 
 export class PRWorktreeService {
+  private resolveRemoteTarget(repoName: string) {
+    const cfg = loadConfig();
+    const repoObj =
+      cfg.repos?.find((r) => r?.name === repoName) ||
+      (cfg.active_repo?.name === repoName ? cfg.active_repo : undefined);
+    const activeToken = getActiveBearerToken(cfg.token);
+    const isRemoteGitHub = Boolean(
+      cfg.authenticated &&
+        activeToken &&
+        repoObj?.full_name &&
+        !repoObj?.is_local,
+    );
+    return { cfg, repoObj, activeToken, isRemoteGitHub };
+  }
+
   private getRepoDir(repoName?: string): string {
     const cfg = loadConfig();
     const activeRepoName = repoName || cfg.active_repo?.name || 'local';
-    const effectiveOwner = cfg.active_repo?.name === activeRepoName ? cfg.active_repo?.owner : undefined;
+    const matchedRepo = cfg.repos?.find((r) => r?.name === activeRepoName);
+    const effectiveOwner =
+      cfg.active_repo?.name === activeRepoName
+        ? cfg.active_repo?.owner
+        : matchedRepo?.owner;
     return resolveRepoDir(activeRepoName, effectiveOwner);
   }
 
@@ -27,10 +46,14 @@ export class PRWorktreeService {
     const branch = assertBranchName(pr.branch, `Branch do PR #${pr.id}`);
 
     // Try to fetch latest branch from origin remote if available
-    const cfg = loadConfig();
-    if (cfg.authenticated && cfg.token && cfg.active_repo?.full_name && !cfg.active_repo?.is_local) {
+    const { activeToken, isRemoteGitHub } = this.resolveRemoteTarget(repoName);
+    if (isRemoteGitHub && activeToken) {
       try {
-        await executeGit(['fetch', 'origin', `${branch}:refs/remotes/origin/${branch}`], repoDir);
+        await executeGit(
+          ['fetch', 'origin', `${branch}:refs/remotes/origin/${branch}`],
+          repoDir,
+          activeToken,
+        );
       } catch {}
     }
 
@@ -114,13 +137,18 @@ export class PRWorktreeService {
     const hashRes = await executeGit(['-C', wtDir, 'rev-parse', 'HEAD'], repoDir);
     const commitHash = (hashRes.stdout || '').trim();
 
-    // Push to origin if authenticated remote
-    const cfg = loadConfig();
-    if (cfg.authenticated && cfg.token && cfg.active_repo?.full_name && !cfg.active_repo?.is_local) {
-      try {
-        await executeGit(['-C', wtDir, 'push', 'origin', branch], repoDir);
-      } catch (pushErr) {
-        console.warn(`[PRWorktree] Aviso ao sincronizar branch '${branch}' com o GitHub remoto:`, pushErr);
+    // Push to origin if authenticated remote (falha explícita para não mascarar dessincronização)
+    const { activeToken, isRemoteGitHub } = this.resolveRemoteTarget(repoName);
+    if (isRemoteGitHub && activeToken) {
+      const pushRes = await executeGit(
+        ['-C', wtDir, 'push', 'origin', branch],
+        repoDir,
+        activeToken,
+      );
+      if (!pushRes.success) {
+        throw new Error(
+          `Commit salvo localmente (${commitHash.slice(0, 7)}), mas não foi possível enviar a branch '${branch}' para o GitHub: ${pushRes.stderr || pushRes.stdout}`,
+        );
       }
     }
 

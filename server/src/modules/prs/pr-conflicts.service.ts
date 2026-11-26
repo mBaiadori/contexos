@@ -1,7 +1,7 @@
 import path from "node:path";
 import { resolveRepoDir } from "../../config/constants.js";
 import { loadConfig } from "../../config/storage.js";
-import { executeGit } from "../../utils/git.js";
+import { executeGit, getActiveBearerToken } from "../../utils/git.js";
 import { assertBranchName } from "../../utils/git-validate.js";
 import { prWorktreeService } from "./pr-worktree.service.js";
 import { prSecurityService } from "./pr-security.service.js";
@@ -17,14 +17,77 @@ export interface PRConflictStatus {
   }>;
 }
 
+/**
+ * Interpreta a saída do `git merge-tree --write-tree --name-only` em múltiplos cenários
+ * (content, add/add, modify/delete, rename/delete, binários).
+ */
+export function parseMergeTreeConflictPaths(stdout: string, stderr: string): string[] {
+  const paths = new Set<string>();
+  const stdoutLines = (stdout || "").split(/\r?\n/);
+
+  // Com `--write-tree --name-only`, a linha 0 é o OID da árvore resultante e as linhas
+  // subsequentes até a primeira linha em branco são os caminhos exatos em conflito.
+  if (stdoutLines.length > 1 && /^[0-9a-f]{40}$/i.test(stdoutLines[0].trim())) {
+    for (let i = 1; i < stdoutLines.length; i++) {
+      const line = stdoutLines[i].trim();
+      if (!line) break;
+      if (!line.startsWith("CONFLICT ") && !line.startsWith("Auto-merging ")) {
+        paths.add(line);
+      }
+    }
+  }
+
+  // Fallback/complemento via linhas CONFLICT (...) em stdout/stderr
+  const combined = `${stdout || ""}\n${stderr || ""}`.split(/\r?\n/);
+  for (const rawLine of combined) {
+    const line = rawLine.trim();
+    if (!line.startsWith("CONFLICT")) continue;
+
+    const mergeIn = line.match(/Merge conflict in (.+)$/);
+    if (mergeIn?.[1]) {
+      paths.add(mergeIn[1].trim());
+      continue;
+    }
+
+    const modDel = line.match(/^CONFLICT \([^)]+\):\s+(.+?)\s+(?:deleted in|modified in|added in|renamed)/);
+    if (modDel?.[1]) {
+      paths.add(modDel[1].trim());
+      continue;
+    }
+
+    const genericIn = line.match(/in (.+)$/);
+    if (genericIn?.[1]) {
+      paths.add(genericIn[1].trim());
+    }
+  }
+
+  return Array.from(paths);
+}
+
 export class PRConflictsService {
+  private resolveRemoteTarget(repoName: string) {
+    const cfg = loadConfig();
+    const repoObj =
+      cfg.repos?.find((r) => r?.name === repoName) ||
+      (cfg.active_repo?.name === repoName ? cfg.active_repo : undefined);
+    const activeToken = getActiveBearerToken(cfg.token);
+    const isRemoteGitHub = Boolean(
+      cfg.authenticated &&
+        activeToken &&
+        repoObj?.full_name &&
+        !repoObj?.is_local,
+    );
+    return { cfg, repoObj, activeToken, isRemoteGitHub };
+  }
+
   private getRepoDir(repoName?: string): string {
     const cfg = loadConfig();
     const activeRepoName = repoName || cfg.active_repo?.name || "local";
+    const matchedRepo = cfg.repos?.find((r) => r?.name === activeRepoName);
     const effectiveOwner =
       cfg.active_repo?.name === activeRepoName
         ? cfg.active_repo?.owner
-        : undefined;
+        : matchedRepo?.owner;
     return resolveRepoDir(activeRepoName, effectiveOwner);
   }
 
@@ -73,22 +136,10 @@ export class PRConflictsService {
       mergeTreeRes.stderr.includes("CONFLICT") ||
       mergeTreeRes.stdout.includes("CONFLICT")
     ) {
-      const output = `${mergeTreeRes.stdout}\n${mergeTreeRes.stderr}`;
-      const conflictLines = output
-        .split("\n")
-        .filter(
-          (l) =>
-            l.includes("CONFLICT") ||
-            l.startsWith("Auto-merging") ||
-            l.includes("file"),
-        )
-        .map((l) => {
-          const match = l.match(/in (.*)$/) || l.match(/Auto-merging (.*)$/);
-          return match ? match[1].trim() : null;
-        })
-        .filter(Boolean) as string[];
-
-      const uniqueConflictPaths = Array.from(new Set(conflictLines));
+      const uniqueConflictPaths = parseMergeTreeConflictPaths(
+        mergeTreeRes.stdout,
+        mergeTreeRes.stderr,
+      );
       for (const p of uniqueConflictPaths) {
         conflicts.push({
           path: p,
@@ -98,7 +149,7 @@ export class PRConflictsService {
     }
 
     return {
-      mergeable: conflicts.length === 0,
+      mergeable: mergeTreeRes.success && conflicts.length === 0,
       behind_by,
       ahead_by,
       conflicts,
@@ -174,11 +225,17 @@ export class PRConflictsService {
     return {
       filePath,
       hasConflict: mergeResult.hasConflicts,
+      hasConflicts: mergeResult.hasConflicts,
       mergedContent: mergeResult.mergedContent,
+      merged: mergeResult.mergedContent,
       oursContent: oursText,
+      ours: oursText,
       theirsContent: theirsText,
+      theirs: theirsText,
       baseContent: baseText,
+      base: baseText,
       conflictMarkersCount: mergeResult.conflictCount,
+      conflictCount: mergeResult.conflictCount,
     };
   }
 
@@ -235,8 +292,8 @@ export class PRConflictsService {
     pr: { id: number | string; branch: string; target_branch?: string },
     userLogin?: string,
   ): Promise<{ success: boolean; message: string; newCommitHash?: string }> {
-    const cfg = loadConfig();
-    const login = userLogin || cfg.user?.login || 'local_user';
+    const { cfg, activeToken, isRemoteGitHub } = this.resolveRemoteTarget(repoName);
+    const _login = userLogin || cfg.user?.login || 'local_user';
     const repoDir = this.getRepoDir(repoName);
     const branch = assertBranchName(pr.branch);
     const targetBranch = pr.target_branch
@@ -245,21 +302,27 @@ export class PRConflictsService {
 
     const wtDir = await prWorktreeService.ensurePRWorktree(repoName, pr);
 
-    // Fetch target branch
-    if (
-      cfg.authenticated &&
-      cfg.token &&
-      cfg.active_repo?.full_name &&
-      !cfg.active_repo?.is_local
-    ) {
-      await executeGit(
+    // Fetch target branch e utiliza origin/<targetBranch> quando disponível no remoto
+    let mergeSourceRef = targetBranch;
+    if (isRemoteGitHub && activeToken) {
+      const fetchRes = await executeGit(
         [
           "fetch",
           "origin",
           `${targetBranch}:refs/remotes/origin/${targetBranch}`,
         ],
         repoDir,
-      ).catch(() => {});
+        activeToken,
+      );
+      if (fetchRes.success) {
+        const remoteRefCheck = await executeGit(
+          ["rev-parse", "--verify", `refs/remotes/origin/${targetBranch}`],
+          repoDir,
+        );
+        if (remoteRefCheck.success) {
+          mergeSourceRef = `origin/${targetBranch}`;
+        }
+      }
     }
 
     const mergeRes = await executeGit(
@@ -267,24 +330,27 @@ export class PRConflictsService {
         "-C",
         wtDir,
         "merge",
-        targetBranch,
+        mergeSourceRef,
         "-m",
         `chore(sync): atualizar branch do PR #${pr.id} com a versão oficial (${targetBranch})`,
       ],
       repoDir,
     );
 
-    if (
-      !mergeRes.success &&
-      (mergeRes.stderr.includes("CONFLICT") ||
-        mergeRes.stdout.includes("CONFLICT"))
-    ) {
-      // Abort merge in worktree
+    if (!mergeRes.success) {
+      const isConflict =
+        mergeRes.stderr.includes("CONFLICT") ||
+        mergeRes.stdout.includes("CONFLICT");
       await executeGit(["-C", wtDir, "merge", "--abort"], repoDir).catch(
         () => {},
       );
+      if (isConflict) {
+        throw new Error(
+          `Existem conflitos entre a branch do PR e a branch '${targetBranch}'. Utilize a resolução de conflitos.`,
+        );
+      }
       throw new Error(
-        `Existem conflitos entre a branch do PR e a branch '${targetBranch}'. Utilize a resolução de conflitos.`,
+        `Falha ao sincronizar branch do PR #${pr.id} com '${targetBranch}': ${mergeRes.stderr || mergeRes.stdout}`,
       );
     }
 
@@ -294,16 +360,18 @@ export class PRConflictsService {
     );
     const newCommitHash = (hashRes.stdout || "").trim();
 
-    // Push updated branch
-    if (
-      cfg.authenticated &&
-      cfg.token &&
-      cfg.active_repo?.full_name &&
-      !cfg.active_repo?.is_local
-    ) {
-      await executeGit(["-C", wtDir, "push", "origin", branch], repoDir).catch(
-        () => {},
+    // Push updated branch (falha explícita se não sincronizar com o GitHub)
+    if (isRemoteGitHub && activeToken) {
+      const pushRes = await executeGit(
+        ["-C", wtDir, "push", "origin", branch],
+        repoDir,
+        activeToken,
       );
+      if (!pushRes.success) {
+        throw new Error(
+          `Branch sincronizada localmente (${newCommitHash.slice(0, 7)}), mas falhou ao enviar para o GitHub: ${pushRes.stderr || pushRes.stdout}`,
+        );
+      }
     }
 
     return {
