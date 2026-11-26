@@ -27,7 +27,7 @@ interface GitState {
   refreshGitLog: (limit?: number, targetRepoName?: string) => Promise<void>;
   refreshPendingChanges: (targetRepoName?: string) => Promise<void>;
   discardChanges: (path?: string, targetRepo?: string) => Promise<void>;
-  checkRemoteUpdates: (targetRepoName?: string) => Promise<boolean>;
+  checkRemoteUpdates: (targetRepoName?: string, force?: boolean) => Promise<boolean>;
   commitGit: (message: string, files?: string[]) => Promise<{ success: boolean; message: string; commitHash?: string }>;
   syncGit: (branch?: string) => Promise<{ success: boolean; message: string }>;
   createOrSwitchBranch: (
@@ -160,7 +160,7 @@ export const useGitStore = create<GitState>((set, get) => ({
     }
   },
 
-  checkRemoteUpdates: async (targetRepoName?: string): Promise<boolean> => {
+  checkRemoteUpdates: async (targetRepoName?: string, force = false): Promise<boolean> => {
     const repoName = targetRepoName || useRepoStore.getState().activeRepo?.name;
     if (!repoName || repoName === "local" || repoName === "default" || repoName === "_default") {
       if (repoName) remoteUpdatesByRepo[repoName] = false;
@@ -172,8 +172,15 @@ export const useGitStore = create<GitState>((set, get) => ({
 
     const now = Date.now();
     const lastCheck = lastRemoteCheckTime[repoName] || 0;
-    if (now - lastCheck < 60_000 && remoteUpdatesByRepo[repoName] !== undefined) {
-      return Boolean(remoteUpdatesByRepo[repoName]);
+    if (!force && now - lastCheck < 60_000 && remoteUpdatesByRepo[repoName] !== undefined) {
+      const cachedHasUp = Boolean(remoteUpdatesByRepo[repoName]);
+      if (!targetRepoName || useRepoStore.getState().activeRepo?.name === repoName) {
+        set({
+          hasRemoteUpdates: cachedHasUp,
+          remoteUpdateInfo: cachedHasUp ? get().remoteUpdateInfo : null,
+        });
+      }
+      return cachedHasUp;
     }
     lastRemoteCheckTime[repoName] = now;
 
@@ -216,11 +223,16 @@ export const useGitStore = create<GitState>((set, get) => ({
   syncGit: async (branch?: string) => {
     const repo = useRepoStore.getState().activeRepo;
     const res = await API.syncGit(branch, repo?.name);
-    if (res.ok) {
+    if (res.ok && res.data?.success) {
+      if (repo?.name) {
+        remoteUpdatesByRepo[repo.name] = false;
+        lastRemoteCheckTime[repo.name] = Date.now();
+      }
       set({ hasRemoteUpdates: false, remoteUpdateInfo: null });
       await get().refreshPendingChanges();
       await get().refreshGitStatus();
       await get().refreshGitLog(15);
+      await get().refreshVersionGraph();
       if (repo) await useRepoStore.getState().loadTree(repo.name);
     }
     return res.data;

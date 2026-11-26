@@ -11,6 +11,7 @@ import {
   Loader2,
   LogOut,
   Mail,
+  RefreshCw,
 } from "lucide-react";
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 import { InvitationsModal } from "../modals/InvitationsModal";
@@ -37,6 +38,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
       isLoadingPermission,
       hasRemoteUpdates,
       syncGit,
+      checkRemoteUpdates,
       pendingInvitations,
       isLoadingInvitations,
       acceptInvitation,
@@ -48,6 +50,31 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
     const [isInvitationsOpen, setIsInvitationsOpen] = React.useState(false);
 
     const [avatarError, setAvatarError] = React.useState(false);
+    const [isSyncingRemote, setIsSyncingRemote] = React.useState(false);
+    const [syncError, setSyncError] = React.useState<string | null>(null);
+    const [isCheckingUpdates, setIsCheckingUpdates] = React.useState(false);
+
+    React.useEffect(() => {
+      const repoName = activeRepo?.name;
+      if (!repoName || repoName === "local" || repoName === "default" || repoName === "_default") {
+        return;
+      }
+      const interval = setInterval(() => {
+        checkRemoteUpdates(repoName, true);
+      }, 3_600_000);
+      return () => clearInterval(interval);
+    }, [activeRepo?.name, checkRemoteUpdates]);
+
+    const handleManualCheckUpdates = React.useCallback(async () => {
+      if (!activeRepo?.name || isCheckingUpdates) return;
+      setIsCheckingUpdates(true);
+      try {
+        await checkRemoteUpdates(activeRepo.name, true);
+      } finally {
+        setIsCheckingUpdates(false);
+      }
+    }, [activeRepo?.name, checkRemoteUpdates, isCheckingUpdates]);
+    const [isHoveringUpdateBadge, setIsHoveringUpdateBadge] = React.useState(false);
     const updateInfo = useUpdaterStore((s) => s.updateInfo);
     const applyUpdate = useUpdaterStore((s) => s.applyUpdate);
     const initUpdater = useUpdaterStore((s) => s.init);
@@ -211,12 +238,71 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
 
           <HeaderVersionPill onClick={onOpenVersionGraph} />
 
+          {activeRepo?.name &&
+            activeRepo.name !== "local" &&
+            activeRepo.name !== "default" &&
+            activeRepo.name !== "_default" && (
+              <button
+                id="dash-repo-check-updates-btn"
+                type="button"
+                onClick={handleManualCheckUpdates}
+                disabled={isCheckingUpdates}
+                title="Verificar atualizações remotas"
+                aria-label="Verificar atualizações remotas"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "24px",
+                  height: "24px",
+                  padding: 0,
+                  borderRadius: "6px",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--text-secondary, #64748b)",
+                  opacity: isCheckingUpdates ? 0.8 : 0.55,
+                  cursor: isCheckingUpdates ? "default" : "pointer",
+                  transition: "opacity 0.15s ease, background-color 0.15s ease",
+                }}
+              >
+                <RefreshCw
+                  size={13}
+                  style={
+                    isCheckingUpdates
+                      ? { animation: "spin 0.9s linear infinite" }
+                      : undefined
+                  }
+                />
+              </button>
+            )}
+
           {hasRemoteUpdates && (
             <button
               id="dash-repo-remote-update-badge"
               type="button"
-              onClick={() => syncGit()}
-              title="Existem atualizações na nuvem. Clique para atualizar."
+              disabled={isSyncingRemote}
+              onClick={async () => {
+                if (isSyncingRemote) return;
+                setIsSyncingRemote(true);
+                setSyncError(null);
+                try {
+                  const res = await syncGit();
+                  if (res && !res.success) {
+                    setSyncError(res.message || "Falha ao atualizar repositório.");
+                  }
+                } catch (err) {
+                  setSyncError((err as Error)?.message || "Erro ao sincronizar.");
+                } finally {
+                  setIsSyncingRemote(false);
+                }
+              }}
+              onMouseEnter={() => setIsHoveringUpdateBadge(true)}
+              onMouseLeave={() => setIsHoveringUpdateBadge(false)}
+              title={
+                syncError
+                  ? `Erro na última tentativa: ${syncError}`
+                  : "Existem atualizações na nuvem. Clique para atualizar."
+              }
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -225,16 +311,48 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
                 fontWeight: 600,
                 padding: "3px 10px",
                 borderRadius: "10px",
-                backgroundColor: "rgba(37, 99, 235, 0.12)",
-                color: "var(--color-primary, #2563eb)",
-                border: "1px solid rgba(37, 99, 235, 0.3)",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
+                backgroundColor: syncError
+                  ? "rgba(220, 38, 38, 0.12)"
+                  : isHoveringUpdateBadge && !isSyncingRemote
+                    ? "rgba(37, 99, 235, 0.22)"
+                    : "rgba(37, 99, 235, 0.12)",
+                color: syncError
+                  ? "#dc2626"
+                  : "var(--color-primary, #2563eb)",
+                border: `1px solid ${
+                  syncError
+                    ? "rgba(220, 38, 38, 0.35)"
+                    : isHoveringUpdateBadge && !isSyncingRemote
+                      ? "rgba(37, 99, 235, 0.5)"
+                      : "rgba(37, 99, 235, 0.3)"
+                }`,
+                cursor: isSyncingRemote ? "wait" : "pointer",
+                opacity: isSyncingRemote ? 0.85 : 1,
+                transform:
+                  isHoveringUpdateBadge && !isSyncingRemote
+                    ? "translateY(-1px)"
+                    : "translateY(0)",
+                boxShadow:
+                  isHoveringUpdateBadge && !isSyncingRemote
+                    ? "0 2px 8px rgba(37, 99, 235, 0.18)"
+                    : "none",
+                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 whiteSpace: "nowrap",
               }}
             >
-              <CloudDownload size={13} />
-              Atualização disponível
+              {isSyncingRemote ? (
+                <Loader2
+                  size={13}
+                  style={{ animation: "spin 0.9s linear infinite" }}
+                />
+              ) : (
+                <CloudDownload size={13} />
+              )}
+              {isSyncingRemote
+                ? "Atualizando..."
+                : syncError
+                  ? "Erro ao atualizar (tentar de novo)"
+                  : "Atualização disponível"}
             </button>
           )}
         </div>

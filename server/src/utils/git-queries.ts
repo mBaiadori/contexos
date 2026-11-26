@@ -595,7 +595,37 @@ export async function checkRemoteGitUpdates(
     return { hasUpdates: false, localHash, branch };
   }
 
-  const hasUpdates = remoteHash.toLowerCase() !== localHash.toLowerCase();
+  if (remoteHash.toLowerCase() === localHash.toLowerCase()) {
+    return {
+      hasUpdates: false,
+      localHash,
+      remoteHash,
+      branch,
+    };
+  }
+
+  // If the remote commit is already an ancestor of HEAD, local is simply ahead (unpushed commits).
+  const ancestorRes = await executeGit(
+    ["merge-base", "--is-ancestor", remoteHash, "HEAD"],
+    repoDir,
+  );
+  if (ancestorRes.success) {
+    return {
+      hasUpdates: false,
+      localHash,
+      remoteHash,
+      branch,
+    };
+  }
+
+  // Fetch the remote branch to accurately count commits behind.
+  await executeGit(["fetch", "origin", branch], repoDir);
+  const behindRes = await executeGit(
+    ["rev-list", "--count", "HEAD..FETCH_HEAD"],
+    repoDir,
+  );
+  const behindCount = Number.parseInt(behindRes.stdout.trim(), 10);
+  const hasUpdates = Number.isFinite(behindCount) ? behindCount > 0 : false;
 
   return {
     hasUpdates,

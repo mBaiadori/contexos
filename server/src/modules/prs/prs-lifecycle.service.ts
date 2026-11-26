@@ -37,6 +37,93 @@ import { prsStorageService } from "./prs-storage.service.js";
 import type { PRApprovalAudit, PRRecord } from "./prs-types.js";
 
 export class PRsLifecycleService {
+  private resolveRemoteTarget(
+    cfg: ReturnType<typeof loadConfig>,
+    repoName: string,
+  ) {
+    const repoObj =
+      cfg.repos?.find((r) => r?.name === repoName) ||
+      (cfg.active_repo?.name === repoName ? cfg.active_repo : undefined);
+    const activeToken = getActiveBearerToken(cfg.token);
+    const isRemoteGitHub = Boolean(
+      cfg.authenticated &&
+        activeToken &&
+        repoObj?.full_name &&
+        !repoObj?.is_local,
+    );
+    return { repoObj, activeToken, isRemoteGitHub };
+  }
+
+  private async ensureRemotePullRequest(
+    repoDir: string,
+    repoFullName: string,
+    activeToken: string,
+    params: {
+      title: string;
+      description?: string;
+      branch: string;
+      baseBranch: string;
+    },
+  ): Promise<{ id?: number; number?: number; html_url?: string }> {
+    const safeBranch = assertBranchName(params.branch);
+    const pushRes = await executeGit(
+      ["push", "-u", "origin", safeBranch],
+      repoDir,
+      activeToken,
+    );
+    if (!pushRes.success) {
+      throw new Error(
+        `Não foi possível enviar a versão '${params.branch}' para a nuvem: ${pushRes.stderr || pushRes.stdout}`,
+      );
+    }
+
+    const ghRes = await callGitHubAPI(
+      `/repos/${repoFullName}/pulls`,
+      activeToken,
+      "POST",
+      {
+        title: params.title,
+        body: params.description || "Pedido de publicação criado no Contexos",
+        head: params.branch,
+        base: params.baseBranch,
+      },
+    );
+
+    if (ghRes.statusCode === 201 && ghRes.data) {
+      return ghRes.data;
+    }
+
+    const ghMsg =
+      ghRes.data?.errors?.[0]?.message ||
+      ghRes.data?.message ||
+      `Status ${ghRes.statusCode}`;
+    if (
+      ghRes.statusCode === 422 &&
+      ghMsg.toLowerCase().includes("already exists")
+    ) {
+      const ownerPrefix = repoFullName.split("/")[0];
+      const listRes = await callGitHubAPI(
+        `/repos/${repoFullName}/pulls?state=open&head=${encodeURIComponent(`${ownerPrefix}:${params.branch}`)}`,
+        activeToken,
+        "GET",
+      );
+      if (
+        listRes.statusCode === 200 &&
+        Array.isArray(listRes.data) &&
+        listRes.data.length > 0
+      ) {
+        return listRes.data[0];
+      }
+      throw new Error(
+        "Já existe uma publicação aberta para esta versão. Atualize-a em vez de criar uma nova.",
+      );
+    }
+
+    throw new Error(
+      `Não foi possível criar o Pedido de Publicação no GitHub: ${ghMsg}`,
+    );
+  }
+
   afterPRHeadChanged(
     repoName: string,
     pr: PRRecord,
@@ -271,7 +358,7 @@ export class PRsLifecycleService {
         );
       }
 
-      const activeToken = getActiveBearerToken(cfg.token);
+      const { activeToken, isRemoteGitHub } = this.resolveRemoteTarget(cfg, repoName);
       await healRepositoryState(repoDir, { token: activeToken });
       if (gitStatus.branch !== existingPR.branch) {
         const coRes = await executeGit(["checkout", assertBranchName(existingPR.branch)], repoDir);
@@ -294,12 +381,7 @@ export class PRsLifecycleService {
         ? (headHashRes.stdout || "").trim()
         : "";
 
-      if (
-        cfg.authenticated &&
-        activeToken &&
-        activeRepo?.full_name &&
-        !activeRepo?.is_local
-      ) {
+      if (isRemoteGitHub && activeToken) {
         const pushRes = await executeGit(
           ["push", "-u", "origin", assertBranchName(existingPR.branch)],
           repoDir,
@@ -356,14 +438,15 @@ export class PRsLifecycleService {
       : payload.branch || `rascunho-${newId}-${cleanSlug}`;
 
     // 1. Posiciona na branch de trabalho (ou cria a partir da oficial se estiver na main)
+    const { repoObj: remoteRepoObj, activeToken, isRemoteGitHub } =
+      this.resolveRemoteTarget(cfg, repoName);
     let headSha = "";
     let githubPRData: { id?: number; number?: number; html_url?: string } | null = null;
-    let prHtmlUrl = activeRepo?.html_url
-      ? `${activeRepo.html_url}/pull/${newId}`
+    let prHtmlUrl = remoteRepoObj?.html_url
+      ? `${remoteRepoObj.html_url}/pull/${newId}`
       : "";
 
     try {
-      const activeToken = getActiveBearerToken(cfg.token);
       await healRepositoryState(repoDir, { token: activeToken });
 
       if (isWorkingOnFeatureBranch) {
@@ -440,65 +523,19 @@ export class PRsLifecycleService {
       headSha = headHashRes.success ? (headHashRes.stdout || "").trim() : "";
 
       // 3. GitHub Remote PR (if authenticated and remote repo) - erro explícito se falhar
-      if (
-        cfg.authenticated &&
-        activeToken &&
-        activeRepo?.full_name &&
-        !activeRepo?.is_local
-      ) {
-        const pushRes = await executeGit(
-          ["push", "-u", "origin", assertBranchName(branchName)],
+      if (isRemoteGitHub && activeToken && remoteRepoObj?.full_name) {
+        githubPRData = await this.ensureRemotePullRequest(
           repoDir,
+          remoteRepoObj.full_name,
           activeToken,
-        );
-        if (!pushRes.success) {
-          throw new Error(
-            `Não foi possível enviar a versão '${branchName}' para a nuvem: ${pushRes.stderr || pushRes.stdout}`,
-          );
-        }
-
-        const ghRes = await callGitHubAPI(
-          `/repos/${activeRepo.full_name}/pulls`,
-          activeToken,
-          "POST",
           {
             title: payload.title,
-            body:
-              payload.description || `Pedido de publicação criado no Contexos`,
-            head: branchName,
-            base: defaultBranch,
+            description: payload.description,
+            branch: branchName,
+            baseBranch: defaultBranch,
           },
         );
-
-        if (ghRes.statusCode === 201 && ghRes.data) {
-          githubPRData = ghRes.data;
-          prHtmlUrl = ghRes.data.html_url || prHtmlUrl;
-        } else {
-          const ghMsg =
-            ghRes.data?.errors?.[0]?.message ||
-            ghRes.data?.message ||
-            `Status ${ghRes.statusCode}`;
-          if (ghRes.statusCode === 422 && ghMsg.toLowerCase().includes("already exists")) {
-            const ownerPrefix = activeRepo.full_name.split("/")[0];
-            const listRes = await callGitHubAPI(
-              `/repos/${activeRepo.full_name}/pulls?state=open&head=${encodeURIComponent(`${ownerPrefix}:${branchName}`)}`,
-              activeToken,
-              "GET",
-            );
-            if (listRes.statusCode === 200 && Array.isArray(listRes.data) && listRes.data.length > 0) {
-              githubPRData = listRes.data[0];
-              prHtmlUrl = githubPRData?.html_url || prHtmlUrl;
-            } else {
-              throw new Error(
-                `Já existe uma publicação aberta para esta versão. Atualize-a em vez de criar uma nova.`,
-              );
-            }
-          } else {
-            throw new Error(
-              `Não foi possível criar o Pedido de Publicação no GitHub: ${ghMsg}`,
-            );
-          }
-        }
+        prHtmlUrl = githubPRData.html_url || prHtmlUrl;
       }
     } finally {
       // Volta para a Versão Oficial apenas se o usuário estava na Versão Oficial antes;
@@ -511,7 +548,7 @@ export class PRsLifecycleService {
       }
     }
 
-    // Detailed changes: se veio de branch já commitada, extrai comparação base..head
+    // Detailed changes: compara base..head para incluir todos os arquivos (checkpoints anteriores + alterações recém-commitadas)
     let detailedChanges: Array<{
       path: string;
       type: string;
@@ -520,7 +557,16 @@ export class PRsLifecycleService {
       restricted: boolean;
     }> = [];
 
-    if (allChangedPaths.length > 0) {
+    const comparison = await compareGitBranches(repoDir, defaultBranch, branchName);
+    if (comparison.files.length > 0) {
+      detailedChanges = comparison.files.map((f) => ({
+        path: f.path,
+        type: f.status,
+        additions: f.additions,
+        deletions: f.deletions,
+        restricted: false,
+      }));
+    } else if (allChangedPaths.length > 0) {
       detailedChanges = allChangedPaths.map((p) => {
         const wsChange = rawChanges.find((c) => c.path === p);
         let additions = 1;
@@ -548,15 +594,6 @@ export class PRsLifecycleService {
           restricted: false,
         };
       });
-    } else {
-      const comparison = await compareGitBranches(repoDir, defaultBranch, branchName);
-      detailedChanges = comparison.files.map((f) => ({
-        path: f.path,
-        type: f.status,
-        additions: f.additions,
-        deletions: f.deletions,
-        restricted: false,
-      }));
     }
 
     const newPR: PRRecord = {
@@ -752,17 +789,18 @@ export class PRsLifecycleService {
     target.status = "OPEN";
 
     // Synchronize review officially with GitHub API if authenticated
-    const activeRepo = cfg.active_repo;
+    const { repoObj: approveRepoObj, activeToken: approveToken, isRemoteGitHub: approveRemote } =
+      this.resolveRemoteTarget(cfg, repoName);
     if (
-      cfg.authenticated &&
-      cfg.token &&
-      activeRepo?.full_name &&
+      approveRemote &&
+      approveToken &&
+      approveRepoObj?.full_name &&
       target.github_number
     ) {
       try {
         await callGitHubAPI(
-          `/repos/${activeRepo.full_name}/pulls/${target.github_number}/reviews`,
-          cfg.token,
+          `/repos/${approveRepoObj.full_name}/pulls/${target.github_number}/reviews`,
+          approveToken,
           "POST",
           {
             event: "APPROVE",
@@ -1045,16 +1083,18 @@ export class PRsLifecycleService {
 
     await prWorktreeService.removePRWorktree(repoName, target.id);
 
+    const { repoObj: rejectRepoObj, activeToken: rejectToken, isRemoteGitHub: rejectRemote } =
+      this.resolveRemoteTarget(cfg, repoName);
     if (
-      cfg.authenticated &&
-      cfg.token &&
-      cfg.active_repo?.full_name &&
+      rejectRemote &&
+      rejectToken &&
+      rejectRepoObj?.full_name &&
       target.github_number
     ) {
       try {
         await callGitHubAPI(
-          `/repos/${cfg.active_repo.full_name}/pulls/${target.github_number}`,
-          cfg.token,
+          `/repos/${rejectRepoObj.full_name}/pulls/${target.github_number}`,
+          rejectToken,
           "PATCH",
           { state: "closed" },
         );
@@ -1108,15 +1148,11 @@ export class PRsLifecycleService {
       throw new Error(result.message);
     }
 
-    if (
-      cfg.authenticated &&
-      cfg.token &&
-      activeRepo?.full_name &&
-      !activeRepo?.is_local &&
-      activeRepo?.name === repoName
-    ) {
+    const { activeToken: rollbackToken, isRemoteGitHub: rollbackRemote } =
+      this.resolveRemoteTarget(cfg, repoName);
+    if (rollbackRemote && rollbackToken) {
       try {
-        await executeGit(["push", "origin", "main"], repoDir);
+        await executeGit(["push", "origin", "main"], repoDir, rollbackToken);
       } catch (pushErr) {
         console.warn(
           "[PRsService] Aviso ao sincronizar rollback com o GitHub remoto:",
@@ -1171,7 +1207,8 @@ export class PRsLifecycleService {
 
     // 1. Limpa arquivo transitório de mudanças e executa auto-cura do repositório
     clearWorkspaceChanges(repoName);
-    const activeToken = getActiveBearerToken(cfg.token);
+    const { repoObj: mergeRepoObj, activeToken, isRemoteGitHub } =
+      this.resolveRemoteTarget(cfg, repoName);
     await healRepositoryState(repoDir, {
       token: activeToken,
       unshallowIfNeeded: true,
@@ -1210,16 +1247,35 @@ export class PRsLifecycleService {
         );
       }
 
-      // 4. Se conectado ao GitHub com PR remoto, publica primeiro via API do GitHub (respeitando squash/merge)
-      if (
-        cfg.authenticated &&
-        activeToken &&
-        activeRepo?.full_name &&
-        !activeRepo?.is_local &&
-        targetPR.github_number
-      ) {
+      // 4. Se conectado ao GitHub, garante que exista PR remoto e publica via API do GitHub (squash)
+      if (isRemoteGitHub && activeToken && mergeRepoObj?.full_name) {
+        if (!targetPR.github_number && targetPR.branch) {
+          const createdPR = await this.ensureRemotePullRequest(
+            repoDir,
+            mergeRepoObj.full_name,
+            activeToken,
+            {
+              title: targetPR.title,
+              description: targetPR.description,
+              branch: targetPR.branch,
+              baseBranch: targetBranch,
+            },
+          );
+          if (createdPR.number) {
+            targetPR.github_number = createdPR.number;
+            targetPR.github_id = createdPR.id;
+            if (createdPR.html_url) targetPR.html_url = createdPR.html_url;
+          }
+        }
+
+        if (!targetPR.github_number) {
+          throw new Error(
+            "Não foi possível publicar: Pull Request não encontrado no GitHub.",
+          );
+        }
+
         const ghMergeRes = await callGitHubAPI(
-          `/repos/${activeRepo.full_name}/pulls/${targetPR.github_number}/merge`,
+          `/repos/${mergeRepoObj.full_name}/pulls/${targetPR.github_number}/merge`,
           activeToken,
           "PUT",
           {
@@ -1289,12 +1345,7 @@ export class PRsLifecycleService {
         }
       }
 
-      if (
-        cfg.authenticated &&
-        activeToken &&
-        activeRepo?.full_name &&
-        !activeRepo?.is_local
-      ) {
+      if (isRemoteGitHub && activeToken) {
         await executeGit(
           ["push", "origin", targetBranch],
           repoDir,

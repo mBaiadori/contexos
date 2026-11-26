@@ -51,7 +51,7 @@ export interface WorkspaceContextType {
   gitLog: GitCommitInfo[];
   hasRemoteUpdates: boolean;
   remoteUpdateInfo: { localHash: string; remoteHash?: string; branch?: string } | null;
-  checkRemoteUpdates: (targetRepoName?: string) => Promise<boolean>;
+  checkRemoteUpdates: (targetRepoName?: string, force?: boolean) => Promise<boolean>;
   loadRepos: (targetOrg?: string) => Promise<void>;
   selectRepo: (
     repo: Repo,

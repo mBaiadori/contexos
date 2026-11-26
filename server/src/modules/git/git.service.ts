@@ -409,7 +409,14 @@ export class GitService {
     const repoObj =
       cfg.repos?.find((r) => r.name === repoName) ||
       (cfg.active_repo?.name === repoName ? cfg.active_repo : undefined);
-    const targetBranch = branch || repoObj?.default_branch || "main";
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const status = await getGitStatus(repoDir);
+      targetBranch =
+        (status.branch && status.branch !== "HEAD" ? status.branch : "") ||
+        repoObj?.default_branch ||
+        "main";
+    }
 
     const result = await syncGit(repoDir, "origin", targetBranch);
     workspaceService.invalidateTreeCache(repoName);
