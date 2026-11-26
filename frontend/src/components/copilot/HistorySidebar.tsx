@@ -248,22 +248,6 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     }
   };
 
-  const handleSelectSession = async (sessionId: string) => {
-    try {
-      const res = await API.getMemorySession({
-        repo: effectiveRepo,
-        session_id: sessionId,
-      });
-      if (res.ok && res.data?.session) {
-        setSelectedSession(res.data.session);
-      } else if (res.ok && res.data?.events) {
-        setSelectedSession(res.data);
-      }
-    } catch (e) {
-      console.warn("Erro ao carregar detalhes da sessão:", e);
-    }
-  };
-
   const handleStartRename = (
     session: HistorySessionItem,
     e?: React.MouseEvent,
