@@ -1,4 +1,5 @@
 import React from "react";
+import { Drawer } from "../../../../components/ui";
 import type { SkillItem } from "../../../../types";
 
 interface SkillDetailDrawerProps {
@@ -13,64 +14,23 @@ export const SkillDetailDrawer: React.FC<SkillDetailDrawerProps> = ({
   if (!selectedSkill) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        backdropFilter: "blur(4px)",
-        zIndex: 1000,
-        display: "flex",
-        justifyContent: "flex-end",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "580px",
-          height: "100%",
-          background: "var(--color-surface, #ffffff)",
-          color: "var(--color-on-surface, #202124)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
+    <Drawer
+      isOpen={Boolean(selectedSkill)}
+      onClose={onClose}
+      title={selectedSkill.title || selectedSkill.name}
+      subtitle={
+        <span
           style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            fontSize: "11px",
+            color: "var(--text-muted)",
+            fontFamily: "monospace",
           }}
         >
-          <div>
-            <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
-              {selectedSkill.title || selectedSkill.name}
-            </h3>
-            <span
-              style={{
-                fontSize: "11px",
-                color: "var(--text-muted)",
-                fontFamily: "monospace",
-              }}
-            >
-              id: {selectedSkill.id} • v{selectedSkill.version}
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={onClose}
-            style={{ padding: "4px" }}
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+          id: {selectedSkill.id} • v{selectedSkill.version}
+        </span>
+      }
+    >
+      <div>
           <h4
             style={{
               fontSize: "12px",
@@ -122,8 +82,7 @@ export const SkillDetailDrawer: React.FC<SkillDetailDrawerProps> = ({
               </pre>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </Drawer>
   );
 };

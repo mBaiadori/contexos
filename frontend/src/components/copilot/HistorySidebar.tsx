@@ -139,6 +139,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   const [hoveredSession, setHoveredSession] = useState<HistorySessionItem | null>(null);
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
+  const feedbackTimerRef = useRef<number | null>(null);
   const renameCancelledRef = useRef<boolean>(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -159,8 +160,20 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   useEffect(() => {
     return () => {
       if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
+      if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
     };
   }, []);
+
+  const showTransientFeedback = (message: string, durationMs = 1200) => {
+    if (feedbackTimerRef.current) {
+      window.clearTimeout(feedbackTimerRef.current);
+    }
+    setFeedback(message);
+    feedbackTimerRef.current = window.setTimeout(() => {
+      setFeedback(null);
+      feedbackTimerRef.current = null;
+    }, durationMs);
+  };
 
   const clearHoverPopover = () => {
     if (hoverTimerRef.current) {
@@ -310,24 +323,15 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     clearHoverPopover();
     const success = await restoreSession(sessionId);
     if (success) {
-      setFeedback("Conversa aberta em aba! ✨");
-      setTimeout(() => {
-        setFeedback(null);
-        onClose();
-      }, 900);
+      showTransientFeedback("Conversa aberta em aba! ✨", 1200);
     } else {
-      setFeedback("Erro ao restaurar sessão.");
-      setTimeout(() => setFeedback(null), 2500);
+      showTransientFeedback("Erro ao restaurar sessão.", 2500);
     }
   };
 
   const handleNewChat = () => {
     newChatSession();
-    setFeedback("Nova conversa iniciada! 🚀");
-    setTimeout(() => {
-      setFeedback(null);
-      onClose();
-    }, 700);
+    showTransientFeedback("Nova conversa iniciada! 🚀", 1200);
   };
 
   const handleDeleteSession = async (

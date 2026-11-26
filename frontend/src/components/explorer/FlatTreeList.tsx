@@ -5,7 +5,7 @@ import { flattenTree, type FlatTreeItem } from "./utils/flatTreeUtils";
 import { FileTreeNode } from "./FileTreeNode";
 import { InlineCreateRow } from "./InlineCreateRow";
 
-const ITEM_HEIGHT = 28;
+const ITEM_HEIGHT = 30;
 const OVERSCAN = 12;
 const VIRTUALIZATION_THRESHOLD = 80;
 

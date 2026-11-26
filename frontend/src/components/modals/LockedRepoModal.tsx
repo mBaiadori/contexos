@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, X, Copy, Check, Users, AlertTriangle } from 'lucide-react';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton, useBackdropClose } from '../ui';
 import type { Repo } from '../../types';
 
 interface LockedRepoModalProps {
@@ -17,6 +17,7 @@ export const LockedRepoModal: React.FC<LockedRepoModalProps> = ({
   repo,
   orgName,
 }) => {
+  const backdropHandlers = useBackdropClose(onClose);
   const [copied, setCopied] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
 
@@ -51,7 +52,7 @@ export const LockedRepoModal: React.FC<LockedRepoModalProps> = ({
         padding: '20px',
         boxSizing: 'border-box',
       }}
-      onClick={onClose}
+      {...backdropHandlers}
     >
       <div
         style={{

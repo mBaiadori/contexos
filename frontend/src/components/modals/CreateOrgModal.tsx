@@ -1,6 +1,6 @@
 import React from "react";
 import { Building2, X, ExternalLink, ArrowRight, ShieldCheck, CheckCircle2 } from "lucide-react";
-import { Button, IconButton } from "../ui";
+import { Button, IconButton, useBackdropClose } from "../ui";
 
 interface CreateOrgModalProps {
   isOpen: boolean;
@@ -13,6 +13,8 @@ export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
   onClose,
   onOpenLinkModal,
 }) => {
+  const backdropHandlers = useBackdropClose(onClose);
+
   if (!isOpen) return null;
 
   return (
@@ -29,7 +31,7 @@ export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
         padding: "24px",
         boxSizing: "border-box",
       }}
-      onClick={onClose}
+      {...backdropHandlers}
     >
       <div
         style={{

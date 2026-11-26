@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { TreeNode } from '../../types';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useCopilotStore } from '../../stores/copilotStore';
+import { useBackdropClose } from '../ui';
 
 interface ContextSelectorModalProps {
   isOpen: boolean;
@@ -126,6 +127,7 @@ const IndeterminateCheckbox: React.FC<{
 };
 
 export const ContextSelectorModal: React.FC<ContextSelectorModalProps> = ({ isOpen, onClose }) => {
+  const backdropHandlers = useBackdropClose(onClose);
   const { tree, activeFile } = useWorkspace();
   const { referencedDocs, setReferencedDocs, setIsGlobalScope } = useCopilotStore();
 
@@ -451,7 +453,7 @@ export const ContextSelectorModal: React.FC<ContextSelectorModalProps> = ({ isOp
         padding: '16px',
         animation: 'fadeIn 0.15s ease-out',
       }}
-      onClick={onClose}
+      {...backdropHandlers}
     >
       <div
         style={{

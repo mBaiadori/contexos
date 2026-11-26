@@ -2,6 +2,7 @@ import React, { useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { IconButton } from "./IconButton";
 import { X } from "lucide-react";
+import { useBackdropClose } from "./useBackdropClose";
 
 export type ModalSize = "sm" | "md" | "lg" | "xl" | "full";
 
@@ -32,6 +33,8 @@ export const Modal: React.FC<ModalProps> = ({
   closeOnEscape = true,
   className = "",
 }) => {
+  const backdropHandlers = useBackdropClose(onClose, closeOnBackdrop);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (closeOnEscape && e.key === "Escape") {
@@ -57,11 +60,7 @@ export const Modal: React.FC<ModalProps> = ({
   return createPortal(
     <div
       className="ui-modal__backdrop"
-      onClick={(e) => {
-        if (closeOnBackdrop && e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
+      {...backdropHandlers}
     >
       <div className={`ui-modal ui-modal--${size} ${className}`.trim()} role="dialog" aria-modal="true">
         {(title || subtitle || icon) && (

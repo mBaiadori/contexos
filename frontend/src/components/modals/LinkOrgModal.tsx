@@ -7,7 +7,7 @@ import {
   AlertCircle,
   Plus,
 } from "lucide-react";
-import { Button, IconButton, Input, Spinner } from "../ui";
+import { Button, IconButton, Input, Spinner, useBackdropClose } from "../ui";
 import { API } from "../../services/api";
 import { useWorkspace } from "../../context/WorkspaceContext";
 
@@ -24,6 +24,7 @@ export const LinkOrgModal: React.FC<LinkOrgModalProps> = ({
   onLinked,
   onOpenCreate,
 }) => {
+  const backdropHandlers = useBackdropClose(onClose);
   const { orgs: contextOrgs, loadOrgs } = useWorkspace();
   const [orgHandle, setOrgHandle] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -121,7 +122,7 @@ export const LinkOrgModal: React.FC<LinkOrgModalProps> = ({
         padding: "24px",
         boxSizing: "border-box",
       }}
-      onClick={onClose}
+      {...backdropHandlers}
     >
       <div
         style={{

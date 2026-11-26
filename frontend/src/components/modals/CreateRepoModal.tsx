@@ -10,7 +10,7 @@ import {
   Users,
   ExternalLink,
 } from "lucide-react";
-import { Button, IconButton, FormField, Input, Switch, Spinner } from "../ui";
+import { Button, IconButton, FormField, Input, Switch, Spinner, useBackdropClose } from "../ui";
 import { API } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
@@ -34,6 +34,7 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
   onCreated,
   defaultOwner,
 }) => {
+  const backdropHandlers = useBackdropClose(onClose);
   const { user } = useAuth();
   const { orgs: contextOrgs, repos } = useWorkspace();
 
@@ -223,7 +224,7 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
         padding: "24px",
         boxSizing: "border-box",
       }}
-      onClick={onClose}
+      {...backdropHandlers}
     >
       <div
         style={{

@@ -9,7 +9,7 @@ import {
   Loader2,
   Clock,
 } from "lucide-react";
-import { Button, IconButton, Badge, AlertBanner } from "../ui";
+import { Button, IconButton, Badge, AlertBanner, useBackdropClose } from "../ui";
 import type { PendingInvitationsResult, RepoInvitation, OrgInvitation } from "../../types";
 
 interface InvitationsModalProps {
@@ -31,6 +31,7 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
   onDecline,
   onRefresh,
 }) => {
+  const backdropHandlers = useBackdropClose(onClose);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -93,7 +94,7 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
         padding: "16px",
         boxSizing: "border-box",
       }}
-      onClick={onClose}
+      {...backdropHandlers}
     >
       <div
         id="modal-invitations-card"

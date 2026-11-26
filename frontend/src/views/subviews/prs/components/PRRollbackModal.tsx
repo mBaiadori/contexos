@@ -1,5 +1,5 @@
 import React from "react";
-import { Button } from "../../../../components/ui";
+import { Button, useBackdropClose } from "../../../../components/ui";
 import type { PR } from "../../../../types";
 import type { ActionLoadingState } from "../types";
 
@@ -16,6 +16,8 @@ export const PRRollbackModal: React.FC<PRRollbackModalProps> = ({
   handleRollback,
   actionLoading,
 }) => {
+  const backdropHandlers = useBackdropClose(onClose, !actionLoading);
+
   if (!rollbackTarget) return null;
 
   return (
@@ -34,7 +36,7 @@ export const PRRollbackModal: React.FC<PRRollbackModalProps> = ({
         justifyContent: "center",
         zIndex: 9999,
       }}
-      onClick={() => !actionLoading && onClose()}
+      {...backdropHandlers}
     >
       <div
         className="modal-container"

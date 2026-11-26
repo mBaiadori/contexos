@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Send, Sparkles, AlertCircle, ChevronDown, ChevronRight, FileText, X } from "lucide-react";
-import { Button, FormField, Input, Textarea, Spinner } from "../ui";
+import { Button, FormField, Input, Textarea, Spinner, useBackdropClose } from "../ui";
 import { DiffViewer } from "../common";
 import { VisualMarkdownDiff } from "../editor/VisualMarkdownDiff";
 import { API } from "../../services/api";
@@ -45,6 +45,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
   existingProposal,
   onCreated,
 }) => {
+  const backdropHandlers = useBackdropClose(onClose);
   const [sourceBranch, setSourceBranch] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -342,7 +343,7 @@ export const CreatePublicationModal: React.FC<CreatePublicationModalProps> = ({
         display: "flex",
         justifyContent: "flex-end",
       }}
-      onClick={onClose}
+      {...backdropHandlers}
     >
       <div
         role="dialog"

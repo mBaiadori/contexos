@@ -904,11 +904,18 @@ body.is-resizing .pane-resizer {
   margin: 0;
 }
 
+.tree-flat-list,
+.tree-flat-list-virtualized {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .tree-folder {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 5px 8px;
   margin: 0;
   border-radius: var(--radius-sm, 6px);
   cursor: pointer;
@@ -916,7 +923,8 @@ body.is-resizing .pane-resizer {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-heading);
-  min-height: 24px;
+  min-height: 28px;
+  box-sizing: border-box;
   transition: background 0.12s ease;
 }
 
@@ -1003,15 +1011,16 @@ body.is-resizing .pane-resizer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
-  margin: 1px 0;
+  padding: 5px 8px;
+  margin: 0;
   border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   font-size: 12.5px;
   color: var(--text-main);
   transition: all 0.12s ease;
-  min-height: 30px;
+  min-height: 28px;
   height: auto;
+  box-sizing: border-box;
 }
 
 .tree-file-item:hover {
@@ -9296,11 +9305,17 @@ input[type="text"].icon-picker-search-input:focus {
   transition: background 0.12s ease;
 }
 
+.tree-repos-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .tree-repo-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   user-select: none;
@@ -9308,6 +9323,7 @@ input[type="text"].icon-picker-search-input:focus {
   font-weight: 600;
   color: var(--text-heading, #0f172a);
   min-height: 28px;
+  box-sizing: border-box;
   transition: background 0.12s ease;
 }
 
@@ -9408,7 +9424,7 @@ input[type="text"].icon-picker-search-input:focus {
 .tree-repo-children-container {
   padding-left: 8px;
   border-left: 1px solid #e2e8f0;
-  margin-left: 9px;
+  margin-left: 13px;
   margin-top: 2px;
   margin-bottom: 4px;
 }
