@@ -155,9 +155,10 @@ describe("PRsLifecycleService - Fluxos completos e cenários fora do happy path"
   });
 
   it("bloqueia createPR quando detecta segredos expostos sem criar PR", async () => {
+    const syntheticPat = ["ghp", "_"].join("") + "0".repeat(36);
     fs.writeFileSync(
       path.join(repoDir, "docs/leak.md"),
-      "Token vazado: ghp_1234567890abcdefghijklmnopqrstuvwx\n",
+      `Credencial sintética de teste: ${syntheticPat}\n`,
       "utf-8",
     );
 

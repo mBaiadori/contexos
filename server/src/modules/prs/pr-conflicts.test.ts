@@ -226,7 +226,7 @@ describe("PRConflictsService & PRWorktreeService - Conflitos reais, worktrees e 
         is_local: false,
         is_cloned_locally: true,
       },
-      activeToken: "ghp_fake_token_for_local_bare_remote",
+      activeToken: "test-bearer-token",
       isRemoteGitHub: true,
     });
     (prConflictsService as any).resolveRemoteTarget = remoteMock;
